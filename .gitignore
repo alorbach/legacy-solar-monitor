@@ -1,0 +1,80 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Native / C++ build artifacts
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+**/obj/
+
+# Generated files
+bin/
+gen/
+out/
+release/
+
+# Gradle files
+.gradle/
+build/
+**/build/
+
+# Local configuration (SDK path, machine-specific)
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+.kotlin/
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Signing / secrets
+*.jks
+*.keystore
+*.pem
+google-services.json
+**/secrets.*
+**/credentials.*
+
+# Local inverter config with credentials (use .example instead)
+_legacy/SBFspot.cfg
+
+# Nested upstream SBFspot clone (has its own .git history)
+_legacy/SBFspot/
+
+# Historical plant CSV/SQLite dumps (not source; keep local only)
+_legacy/smadata/
+
+# Local Gradle distribution downloads (wrapper fetches these)
+gradle-8.*/
+gradle-*-bin.zip
+
+# IDE Java-upgrade tooling
+.github/java-upgrade/
+
+# Log / temp
+*.log
+*.tmp
+*.swp
+*~

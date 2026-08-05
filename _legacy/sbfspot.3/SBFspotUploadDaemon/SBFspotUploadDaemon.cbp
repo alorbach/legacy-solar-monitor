@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="SBFspotUploadDaemon" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug_SQLite">
+				<Option output="bin/Debug_SQLite/SBFspotUploadDaemon" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug_SQLite/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+					<Add option="-DUSE_SQLITE" />
+				</Compiler>
+				<Linker>
+					<Add library="curl" />
+				</Linker>
+			</Target>
+			<Target title="Release_SQLite">
+				<Option output="bin/Release_SQLite/SBFspotUploadDaemon" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release_SQLite/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+					<Add option="-DUSE_SQLITE" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+					<Add library="curl" />
+				</Linker>
+			</Target>
+			<Target title="Debug_MySQL">
+				<Option output="bin/Debug_MySQL/SBFspotUploadDaemon" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug_MySQL/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-DUSE_MYSQL" />
+				</Compiler>
+				<Linker>
+					<Add library="curl" />
+					<Add library="mysqlclient" />
+				</Linker>
+			</Target>
+			<Target title="Release_MySQL">
+				<Option output="bin/Release_MySQL/SBFspotUploadDaemon" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug_MySQL/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-DUSE_MYSQL" />
+				</Compiler>
+				<Linker>
+					<Add library="curl" />
+					<Add library="mysqlclient" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+			<Add option="-fexceptions" />
+		</Compiler>
+		<Unit filename="../SBFspot/db_MySQL.cpp">
+			<Option target="Debug_MySQL" />
+			<Option target="Release_MySQL" />
+		</Unit>
+		<Unit filename="../SBFspot/db_MySQL.h">
+			<Option target="Debug_MySQL" />
+			<Option target="Release_MySQL" />
+		</Unit>
+		<Unit filename="../SBFspot/db_SQLite.cpp">
+			<Option target="Debug_SQLite" />
+			<Option target="Release_SQLite" />
+		</Unit>
+		<Unit filename="../SBFspot/db_SQLite.h">
+			<Option target="Debug_SQLite" />
+			<Option target="Release_SQLite" />
+		</Unit>
+		<Unit filename="../SBFspot/oslinux.h" />
+		<Unit filename="../SBFspot/osselect.h" />
+		<Unit filename="../SBFspotUploadCommon/CommonServiceCode.cpp" />
+		<Unit filename="../SBFspotUploadCommon/CommonServiceCode.h" />
+		<Unit filename="../SBFspotUploadCommon/Configuration.cpp" />
+		<Unit filename="../SBFspotUploadCommon/Configuration.h" />
+		<Unit filename="../SBFspotUploadCommon/PVOutput.cpp" />
+		<Unit filename="../SBFspotUploadCommon/PVOutput.h" />
+		<Unit filename="../SBFspotUploadCommon/PVOutput_x.cpp" />
+		<Unit filename="main.cpp" />
+		<Extensions>
+			<code_completion />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

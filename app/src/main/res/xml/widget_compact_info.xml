@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_compact_name"
+    android:initialLayout="@android:layout/simple_list_item_1"
+    android:minWidth="110dp"
+    android:minHeight="72dp"
+    android:previewImage="@android:drawable/ic_menu_info_details"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />
