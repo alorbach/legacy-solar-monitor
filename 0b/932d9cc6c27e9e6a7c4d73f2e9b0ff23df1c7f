@@ -1,0 +1,282 @@
+.gitignore
+  s_3fcaec8707af71::t_db86a4ca3b1dbd 58-60
+  s_3fcaec8707af71::t_8b3d1c6bde4205 55-57
+  s_3fcaec8707af71::t_59b6b6b202b609 61-63
+  s_3fcaec8707af71::t_2e19f49ed6f4c6 1-54,64-72
+_legacy/SBFspot.cfg.example
+  s_3fcaec8707af71::t_d5fd8279811298 1-175
+_legacy/sbfspot.3/SBFspot.sln
+  s_3fcaec8707af71::t_3f685abc24f4c1 1-84
+_legacy/sbfspot.3/SBFspot/ArchData.cpp
+  s_3fcaec8707af71::t_f5552c75c3466f 1-452
+_legacy/sbfspot.3/SBFspot/ArchData.h
+  s_3fcaec8707af71::t_71accab99db5fd 1-52
+_legacy/sbfspot.3/SBFspot/Bluetooth.cpp
+  s_3fcaec8707af71::t_715d91e483b795 1-430
+_legacy/sbfspot.3/SBFspot/CSVexport.cpp
+  s_3fcaec8707af71::t_9757ea36ef653b 1-978
+_legacy/sbfspot.3/SBFspot/CSVexport.h
+  s_3fcaec8707af71::t_e5130034a65610 1-57
+_legacy/sbfspot.3/SBFspot/CreateMySQLDB.sql
+  s_3fcaec8707af71::t_2bca921f22efda 1-233
+_legacy/sbfspot.3/SBFspot/CreateMySQLUser.sql
+  s_3fcaec8707af71::t_28d570c378fb40 1-4
+_legacy/sbfspot.3/SBFspot/CreateSQLiteDB.sql
+  s_3fcaec8707af71::t_9a18c24d4800b9 1-230
+_legacy/sbfspot.3/SBFspot/Ethernet.cpp
+  s_3fcaec8707af71::t_0f5bd7778001e7 1-214
+_legacy/sbfspot.3/SBFspot/Ethernet.h
+  s_3fcaec8707af71::t_0b27447af2527e 1-94
+_legacy/sbfspot.3/SBFspot/EventData.cpp
+  s_3fcaec8707af71::t_197a987e9dffb0 1-85
+_legacy/sbfspot.3/SBFspot/EventData.h
+  s_3fcaec8707af71::t_da70f4acda5a29 1-133
+_legacy/sbfspot.3/SBFspot/Rec40S32.h
+  s_3fcaec8707af71::t_95b80b952940aa 1-83
+_legacy/sbfspot.3/SBFspot/SBFNet.cpp
+  s_3fcaec8707af71::t_a5694980488266 1-295
+_legacy/sbfspot.3/SBFspot/SBFNet.h
+  s_3fcaec8707af71::t_67f7577f611f86 1-65
+_legacy/sbfspot.3/SBFspot/SBFspot.cbp
+  s_3fcaec8707af71::t_4346a60b88ba25 1-184
+_legacy/sbfspot.3/SBFspot/SBFspot.cfg
+  s_3fcaec8707af71::t_a6ebd1d4d72de9 1-173
+_legacy/sbfspot.3/SBFspot/SBFspot.cpp
+  s_3fcaec8707af71::t_700cd8f54922c2 1-3329
+_legacy/sbfspot.3/SBFspot/SBFspot.h
+  s_3fcaec8707af71::t_31784b68dbd735 1-489
+_legacy/sbfspot.3/SBFspot/SBFspot.vcxproj
+  s_3fcaec8707af71::t_e1a956b35bba85 1-394
+_legacy/sbfspot.3/SBFspot/SBFspot.vcxproj.filters
+  s_3fcaec8707af71::t_3cb9122df12c2d 1-182
+_legacy/sbfspot.3/SBFspot/SQLselect.h
+  s_3fcaec8707af71::t_e57ed53d8fc493 1-48
+_legacy/sbfspot.3/SBFspot/TagDefs.cpp
+  s_3fcaec8707af71::t_210c3b81d3f03a 1-173
+_legacy/sbfspot.3/SBFspot/TagDefs.h
+  s_3fcaec8707af71::t_3e6d4a0b659c0f 1-101
+_legacy/sbfspot.3/SBFspot/TagListDE-DE.txt
+  s_3fcaec8707af71::t_e26f5bc8f0c161 1-3845
+_legacy/sbfspot.3/SBFspot/TagListEN-US.txt
+  s_3fcaec8707af71::t_3d821c78b06e62 1-3845
+_legacy/sbfspot.3/SBFspot/TagListES-ES.txt
+  s_3fcaec8707af71::t_6b97fb69d75056 1-3845
+_legacy/sbfspot.3/SBFspot/TagListFR-FR.txt
+  s_3fcaec8707af71::t_fddaa3ff69db93 1-3845
+_legacy/sbfspot.3/SBFspot/TagListIT-IT.txt
+  s_3fcaec8707af71::t_3045e4fb32d808 1-3845
+_legacy/sbfspot.3/SBFspot/TagListNL-NL.txt
+  s_3fcaec8707af71::t_ac8ee9c5f149e6 1-3845
+_legacy/sbfspot.3/SBFspot/Update_300_301_MySQL.sql
+  s_3fcaec8707af71::t_11cfa87d5379f9 1-8
+_legacy/sbfspot.3/SBFspot/Update_300_301_SQLite.sql
+  s_3fcaec8707af71::t_eae2a9812cf747 1-8
+_legacy/sbfspot.3/SBFspot/Update_30x_302_MySQL.sql
+  s_3fcaec8707af71::t_0ce7e175910573 1-40
+_legacy/sbfspot.3/SBFspot/Update_30x_302_SQLite.sql
+  s_3fcaec8707af71::t_b6745e1d873c05 1-40
+_legacy/sbfspot.3/SBFspot/bluetooth.h
+  s_3fcaec8707af71::t_7539b77b500bb4 1-111
+_legacy/sbfspot.3/SBFspot/boost_ext.cpp
+  s_3fcaec8707af71::t_77813a48b5f181 1-52
+_legacy/sbfspot.3/SBFspot/boost_ext.h
+  s_3fcaec8707af71::t_c223a91117bb9c 1-45
+_legacy/sbfspot.3/SBFspot/date_time_zonespec.csv
+  s_3fcaec8707af71::t_88edce6622bd92 1-383
+_legacy/sbfspot.3/SBFspot/db_MySQL.cpp
+  s_3fcaec8707af71::t_6459f2511e28c0 1-363
+_legacy/sbfspot.3/SBFspot/db_MySQL.h
+  s_3fcaec8707af71::t_f5ca9096239634 1-98
+_legacy/sbfspot.3/SBFspot/db_MySQL_Export.cpp
+  s_3fcaec8707af71::t_89d4fdd4db09fd 1-442
+_legacy/sbfspot.3/SBFspot/db_MySQL_Export.h
+  s_3fcaec8707af71::t_81b0bc6e8af315 1-54
+_legacy/sbfspot.3/SBFspot/db_SQLite.cpp
+  s_3fcaec8707af71::t_acbb0e0395dd96 1-410
+_legacy/sbfspot.3/SBFspot/db_SQLite.h
+  s_3fcaec8707af71::t_eaa11389fe348d 1-96
+_legacy/sbfspot.3/SBFspot/db_SQLite_Export.cpp
+  s_3fcaec8707af71::t_7f32fa92529f0d 1-310
+_legacy/sbfspot.3/SBFspot/db_SQLite_Export.h
+  s_3fcaec8707af71::t_0c2baa944d3573 1-54
+_legacy/sbfspot.3/SBFspot/endianness.h
+  s_3fcaec8707af71::t_da3b0d099a3c94 1-59
+_legacy/sbfspot.3/SBFspot/makefile
+  s_3fcaec8707af71::t_543b0982781585 1-270
+_legacy/sbfspot.3/SBFspot/misc.cpp
+  s_3fcaec8707af71::t_94d889b5685f9d 1-243
+_legacy/sbfspot.3/SBFspot/misc.h
+  s_3fcaec8707af71::t_77079900b08c6e 1-76
+_legacy/sbfspot.3/SBFspot/oslinux.h
+  s_3fcaec8707af71::t_a18c0d93c62165 1-70
+_legacy/sbfspot.3/SBFspot/osselect.h
+  s_3fcaec8707af71::t_2a3bf4c02891a8 1-46
+_legacy/sbfspot.3/SBFspot/oswindows.h
+  s_3fcaec8707af71::t_f58b1efdfa70e9 1-76
+_legacy/sbfspot.3/SBFspot/strptime.cpp
+  s_3fcaec8707af71::t_d62b81dd30bdc9 1-445
+_legacy/sbfspot.3/SBFspot/sunrise_sunset.cpp
+  s_3fcaec8707af71::t_0ef5ba7a0650f1 1-184
+_legacy/sbfspot.3/SBFspot/sunrise_sunset.h
+  s_3fcaec8707af71::t_0ad378d56ecfe8 1-52
+_legacy/sbfspot.3/SBFspotUploadCommon/CommonServiceCode.cpp
+  s_3fcaec8707af71::t_d66d7b7dbaeb46 1-172
+_legacy/sbfspot.3/SBFspotUploadCommon/CommonServiceCode.h
+  s_3fcaec8707af71::t_fabedec7c10089 1-58
+_legacy/sbfspot.3/SBFspotUploadCommon/Configuration.cpp
+  s_3fcaec8707af71::t_79dc06c581f3d2 1-218
+_legacy/sbfspot.3/SBFspotUploadCommon/Configuration.h
+  s_3fcaec8707af71::t_54b4b2dafa1a2f 1-118
+_legacy/sbfspot.3/SBFspotUploadCommon/PVOutput.cpp
+  s_3fcaec8707af71::t_0ba71c6c0d77a0 1-311
+_legacy/sbfspot.3/SBFspotUploadCommon/PVOutput.h
+  s_3fcaec8707af71::t_f45fb9655e6a05 1-127
+_legacy/sbfspot.3/SBFspotUploadCommon/PVOutput_x.cpp
+  s_3fcaec8707af71::t_4a1e2c4666aa1b 1-59
+_legacy/sbfspot.3/SBFspotUploadDaemon/SBFspotUpload.cfg
+  s_3fcaec8707af71::t_3cc6114289d6cb 1-50
+_legacy/sbfspot.3/SBFspotUploadDaemon/SBFspotUpload.default.cfg
+  s_3fcaec8707af71::t_0ac6d2abaab06b 1-51
+_legacy/sbfspot.3/SBFspotUploadDaemon/SBFspotUploadDaemon.cbp
+  s_3fcaec8707af71::t_35db3961f28a3e 1-98
+_legacy/sbfspot.3/SBFspotUploadDaemon/main.cpp
+  s_3fcaec8707af71::t_703e9622bfd8ee 1-179
+_legacy/sbfspot.3/SBFspotUploadDaemon/makefile
+  s_3fcaec8707af71::t_648ff63288970d 1-167
+_legacy/sbfspot.3/SBFspotUploadService/SBFspotUpload.cfg
+  s_3fcaec8707af71::t_604a1d3521580e 1-50
+_legacy/sbfspot.3/SBFspotUploadService/SBFspotUpload.default.cfg
+  s_3fcaec8707af71::t_875e41bcf47735 1-51
+_legacy/sbfspot.3/SBFspotUploadService/SBFspotUploadService.cpp
+  s_3fcaec8707af71::t_e85fffc371b770 1-147
+_legacy/sbfspot.3/SBFspotUploadService/SBFspotUploader.vcxproj
+  s_3fcaec8707af71::t_d83c3a7638be4d 1-222
+_legacy/sbfspot.3/SBFspotUploadService/SBFspotUploader.vcxproj.filters
+  s_3fcaec8707af71::t_722d7abb878675 1-85
+_legacy/sbfspot.3/SBFspotUploadService/SBFspotUploader.vcxproj.user
+  s_3fcaec8707af71::t_e5c3196550725f 1-3
+_legacy/sbfspot.3/SBFspotUploadService/ServiceBase.cpp
+  s_3fcaec8707af71::t_8e8d710cf727ce 1-562
+_legacy/sbfspot.3/SBFspotUploadService/ServiceBase.h
+  s_3fcaec8707af71::t_c88d8a66310b7d 1-122
+_legacy/sbfspot.3/SBFspotUploadService/ServiceInstaller.cpp
+  s_3fcaec8707af71::t_59d1ead7ac56f9 1-205
+_legacy/sbfspot.3/SBFspotUploadService/ServiceInstaller.h
+  s_3fcaec8707af71::t_b3b192121001ce 1-62
+_legacy/sbfspot.3/SBFspotUploadService/ThreadPool.h
+  s_3fcaec8707af71::t_4351c86c74c00e 1-80
+_legacy/sbfspot.3/SBFspotUploadService/UploadService.cpp
+  s_3fcaec8707af71::t_8b7b880402149c 1-230
+_legacy/sbfspot.3/SBFspotUploadService/UploadService.h
+  s_3fcaec8707af71::t_6390b85d738d4b 1-46
+_legacy/sbfspot.sh
+  s_3fcaec8707af71::t_bb36ec04cb9edc 1-4
+_legacy/vsftpd.conf
+  s_3fcaec8707af71::t_9149bcce25230e 1-144
+app/build.gradle.kts
+  s_3fcaec8707af71::t_bcb1357bf14ab4 1-94
+app/proguard-rules.pro
+  s_3fcaec8707af71::t_08f41dd804d935 1
+app/src/main/AndroidManifest.xml
+  s_3fcaec8707af71::t_cbb5c38e93bd2e 1-71
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_3fcaec8707af71::t_5878ff8128e007 1-1018
+app/src/main/java/com/alorbach/solarmonitor/SolarMonitorApplication.kt
+  s_3fcaec8707af71::t_334cc31eb0245a 1-18
+app/src/main/java/com/alorbach/solarmonitor/data/AppContainer.kt
+  s_3fcaec8707af71::t_ce9f54b3715e06 1-42
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleCloudStorageBackupRepository.kt
+  s_3fcaec8707af71::t_9de0923ed65e2d 1-36
+app/src/main/java/com/alorbach/solarmonitor/data/importing/ImportManager.kt
+  s_3fcaec8707af71::t_89b873e970476c 1-49
+app/src/main/java/com/alorbach/solarmonitor/data/importing/ImportModels.kt
+  s_3fcaec8707af71::t_b00e158d332d10 1-67
+app/src/main/java/com/alorbach/solarmonitor/data/importing/LegacySbfspotImporters.kt
+  s_3fcaec8707af71::t_0a96ef03413ec5 1-63
+app/src/main/java/com/alorbach/solarmonitor/data/importing/LegacySqliteImporter.kt
+  s_3fcaec8707af71::t_a5ae6184e71f3e 1-134
+app/src/main/java/com/alorbach/solarmonitor/data/importing/RemoteImportClients.kt
+  s_3fcaec8707af71::t_9d09be5960d996 1-70
+app/src/main/java/com/alorbach/solarmonitor/data/importing/SbfspotCsvParser.kt
+  s_3fcaec8707af71::t_8b2e37c8a0108f 1-139
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDao.kt
+  s_3fcaec8707af71::t_2fca6582642464 1-110
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDatabase.kt
+  s_3fcaec8707af71::t_cd3dcc75002cb4 1-41
+app/src/main/java/com/alorbach/solarmonitor/data/model/Models.kt
+  s_3fcaec8707af71::t_c19d06cf14d96c 1-252
+app/src/main/java/com/alorbach/solarmonitor/data/repository/LiveMonitoringRepository.kt
+  s_3fcaec8707af71::t_50919c1b336d41 1-122
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_3fcaec8707af71::t_29b1eace630865 1-204
+app/src/main/java/com/alorbach/solarmonitor/data/settings/AppSettingsStore.kt
+  s_3fcaec8707af71::t_1c59acf86682bb 1-58
+app/src/main/java/com/alorbach/solarmonitor/device/SmaLegacyBluetoothGateway.kt
+  s_3fcaec8707af71::t_54b7d0943d4d30 1-1116
+app/src/main/java/com/alorbach/solarmonitor/domain/Analytics.kt
+  s_3fcaec8707af71::t_59ee86017ba3bb 1-41
+app/src/main/java/com/alorbach/solarmonitor/domain/ReportExporter.kt
+  s_3fcaec8707af71::t_743240e0fac496 1-58
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_3fcaec8707af71::t_9a53e6be1786fa 1-84
+app/src/main/java/com/alorbach/solarmonitor/widget/SolarWidgets.kt
+  s_3fcaec8707af71::t_76e8ec622dde0d 1-99
+app/src/main/java/com/alorbach/solarmonitor/work/ScheduledImportWorker.kt
+  s_3fcaec8707af71::t_371859f24d0b8c 1-57
+app/src/main/res/drawable/ic_launcher_foreground.xml
+  s_3fcaec8707af71::t_2de49ec8390578 1-15
+app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+  s_3fcaec8707af71::t_9532252603f530 1-5
+app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+  s_3fcaec8707af71::t_7210a6808ada38 1-5
+app/src/main/res/values/colors.xml
+  s_3fcaec8707af71::t_2b18c7afe43752 1-8
+app/src/main/res/values/ic_launcher_background.xml
+  s_3fcaec8707af71::t_9dc1772509671f 1-3
+app/src/main/res/values/strings.xml
+  s_3fcaec8707af71::t_c55ccb6484df6f 1-6
+app/src/main/res/values/themes.xml
+  s_3fcaec8707af71::t_3b78da57b13d9d 1-5
+app/src/main/res/xml/backup_rules.xml
+  s_3fcaec8707af71::t_47e0aa97494415 1-2
+app/src/main/res/xml/data_extraction_rules.xml
+  s_3fcaec8707af71::t_ccdc5b045387ba 1-2
+app/src/main/res/xml/widget_compact_info.xml
+  s_3fcaec8707af71::t_26e23cef804523 1-10
+app/src/main/res/xml/widget_medium_info.xml
+  s_3fcaec8707af71::t_514f85d682757a 1-10
+app/src/main/res/xml/widget_top_devices_info.xml
+  s_3fcaec8707af71::t_32a5cac2282e99 1-10
+app/src/test/java/com/alorbach/solarmonitor/EarningsCalculatorTest.kt
+  s_3fcaec8707af71::t_0fec97ea207a5b 1-45
+app/src/test/java/com/alorbach/solarmonitor/SbfspotCsvParserTest.kt
+  s_3fcaec8707af71::t_c34ec8894e2cab 1-43
+build.gradle.kts
+  s_3fcaec8707af71::t_516fc88d9b57e6 1-6
+gradle.properties
+  s_3fcaec8707af71::t_ad2a332a87edf4 1-4
+gradle/wrapper/gradle-wrapper.properties
+  s_3fcaec8707af71::t_5f13538849c7cc 1-7
+gradlew
+  s_3fcaec8707af71::t_810baf1f3d4858 1-252
+gradlew.bat
+  s_3fcaec8707af71::t_9414a6e2391845 1-94
+settings.gradle.kts
+  s_3fcaec8707af71::t_c7628514edfa18 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0b932d9cc6c27e9e6a7c4d73f2e9b0ff23df1c7f",
+  "prompts": {},
+  "sessions": {
+    "s_3fcaec8707af71": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3cfcd4c9-18f0-4213-a5e1-e69946dc4ab3",
+        "model": "grok-4.5"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
