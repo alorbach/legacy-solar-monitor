@@ -26,10 +26,16 @@ class CredentialStore(context: Context) {
     }
 
     fun putSecret(value: String, existingId: String? = null): String {
-        val id = existingId?.takeIf { it.isNotBlank() && prefs.contains(it) } ?: newId()
-        prefs.edit().putString(id, value).apply()
+        val id = existingId?.takeIf { it.isNotBlank() } ?: newId()
+        // commit() so Room job rows that reference this id cannot outlive an unflushed apply().
+        check(prefs.edit().putString(id, value).commit()) {
+            "Failed to persist credential"
+        }
         return id
     }
+
+    /** Pre-allocate an id so Room can reference a secret before the value is written. */
+    fun allocateSecretId(): String = newId()
 
     fun getSecret(id: String?): String? {
         if (id.isNullOrBlank()) return null

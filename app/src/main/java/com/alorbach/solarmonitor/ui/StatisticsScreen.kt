@@ -91,7 +91,21 @@ fun StatisticsScreen(
         }
     }
 
-    LaunchedEffect(granularity, selectedDeviceId, anchorDate, dataEpoch, devices) {
+    val deviceIdsKey = devices.map { it.id }.joinToString(separator = ",")
+    // Hour/day charts refresh when live/archive samples land; year/month stay keyed by
+    // ids + dataEpoch to avoid reloading full-history yearly series on every live tick.
+    val liveRevision = if (
+        granularity == StatsGranularity.HOUR || granularity == StatsGranularity.DAY
+    ) {
+        devices
+            .filter { selectedDeviceId == null || it.id == selectedDeviceId }
+            .joinToString(separator = ",") {
+                "${it.id}:${it.lastLiveReadAtEpochSeconds}:${it.lastArchiveSyncAtEpochSeconds}:${it.timezone}"
+            }
+    } else {
+        ""
+    }
+    LaunchedEffect(granularity, selectedDeviceId, anchorDate, dataEpoch, deviceIdsKey, liveRevision) {
         val ids = if (selectedDeviceId == null) {
             devices.map { it.id }
         } else {

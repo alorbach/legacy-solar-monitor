@@ -81,8 +81,35 @@ object CloudBackupPolicy {
             // is supported (user must sign that exact path).
             candidates.filter { it == DATABASE_BACKUP_FILENAME }
         } else {
-            val objectName = path.substringAfterLast('/').substringBefore('?')
-            candidates.filter { it == objectName }
+            // Signed URLs cover one object path. Prefer the longest candidate suffix so a
+            // nested key like device-1/day.csv wins over a bare day.csv basename match.
+            val exact = candidates.filter { candidate ->
+                val name = candidate.trim('/')
+                path.endsWith("/$name") || path == name
+            }
+            if (exact.isNotEmpty()) {
+                val bestLen = exact.maxOf { it.trim('/').length }
+                val chosen = exact.filter { it.trim('/').length == bestLen }
+                val basename = path.substringAfterLast('/')
+                // Prefer nested device-* copies over a legacy flat file when both exist.
+                if (basename.isNotBlank() && chosen.all { !it.contains('/') }) {
+                    val nested = candidates.filter {
+                        it.contains('/') && it.substringAfterLast('/') == basename
+                    }
+                    if (nested.size == 1) return nested
+                }
+                return chosen
+            }
+            // Upgraded installs may still have a pre-nested signature for .../day.csv while
+            // local copies are now device-N/day.csv. Only fall back for legacy flat object
+            // paths (parent segment is not device-*), never for a nested device-N/ URL that
+            // would otherwise silently upload another device's file.
+            val basename = path.substringAfterLast('/')
+            if (basename.isBlank()) return emptyList()
+            val parentSegment = path.substringBeforeLast('/').substringAfterLast('/')
+            if (parentSegment.startsWith("device-")) return emptyList()
+            val byBase = candidates.filter { it.substringAfterLast('/') == basename }
+            if (byBase.size == 1) byBase else emptyList()
         }
     }
 

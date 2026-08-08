@@ -32,6 +32,7 @@ class AppContainer(context: Context) {
         appContext = appContext,
         db = database,
         settingsStore = settingsStore,
+        credentialStore = credentialStore,
     )
     val importers = LegacySbfspotImporters(appContext, repository)
     val importManager = ImportManager(

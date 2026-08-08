@@ -152,6 +152,65 @@ class CloudBackupPolicyTest {
     }
 
     @Test
+    fun selectableBackupFilenames_matchesNestedDeviceImportPaths() {
+        val template =
+            "https://storage.googleapis.com/bucket/imports/device-1/day.csv?X-Goog-Signature=abc"
+        assertEquals(
+            listOf("device-1/day.csv"),
+            CloudBackupPolicy.selectableBackupFilenames(
+                template,
+                listOf("solar-monitor.db", "device-1/day.csv", "device-2/day.csv", "day.csv"),
+            ),
+        )
+    }
+
+    @Test
+    fun selectableBackupFilenames_fallsBackToUniqueBasenameForLegacySignedUrl() {
+        val template =
+            "https://storage.googleapis.com/bucket/imports/day.csv?X-Goog-Signature=abc"
+        assertEquals(
+            listOf("device-1/day.csv"),
+            CloudBackupPolicy.selectableBackupFilenames(
+                template,
+                listOf("solar-monitor.db", "device-1/day.csv"),
+            ),
+        )
+        assertEquals(
+            emptyList<String>(),
+            CloudBackupPolicy.selectableBackupFilenames(
+                template,
+                listOf("device-1/day.csv", "device-2/day.csv"),
+            ),
+        )
+    }
+
+    @Test
+    fun selectableBackupFilenames_prefersNestedOverLegacyFlatCopy() {
+        val template =
+            "https://storage.googleapis.com/bucket/imports/day.csv?X-Goog-Signature=abc"
+        assertEquals(
+            listOf("device-1/day.csv"),
+            CloudBackupPolicy.selectableBackupFilenames(
+                template,
+                listOf("day.csv", "device-1/day.csv"),
+            ),
+        )
+    }
+
+    @Test
+    fun selectableBackupFilenames_doesNotCrossMatchNestedDeviceUrls() {
+        val template =
+            "https://storage.googleapis.com/bucket/imports/device-1/day.csv?X-Goog-Signature=abc"
+        assertEquals(
+            emptyList<String>(),
+            CloudBackupPolicy.selectableBackupFilenames(
+                template,
+                listOf("device-2/day.csv"),
+            ),
+        )
+    }
+
+    @Test
     fun isUploadConfigured_rejectsBlankAndPlaceholderDefault() {
         assertFalse(CloudBackupPolicy.isUploadConfigured(""))
         assertFalse(CloudBackupPolicy.isUploadConfigured(CloudBackupPolicy.DEFAULT_SIGNED_URL_TEMPLATE))

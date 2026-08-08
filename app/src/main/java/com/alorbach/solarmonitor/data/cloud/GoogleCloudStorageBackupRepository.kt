@@ -63,6 +63,7 @@ class GoogleCloudStorageBackupRepository(
                 )
             }
 
+            val importsRoot = context.getDir("imports", Context.MODE_PRIVATE)
             val staged = mutableListOf<File>()
             try {
                 if (settings.backupIncludeDatabase) {
@@ -71,11 +72,12 @@ class GoogleCloudStorageBackupRepository(
                 if (settings.backupIncludeImportCopies) {
                     staged += listImportCopies()
                 }
+                val stagedNames = staged.map { backupObjectName(importsRoot, it) }
                 val allowedNames = CloudBackupPolicy.selectableBackupFilenames(
                     settings.gcsSignedUrl,
-                    staged.map { it.name },
+                    stagedNames,
                 ).toSet()
-                val uploadable = staged.filter { it.name in allowedNames }
+                val uploadable = staged.filter { backupObjectName(importsRoot, it) in allowedNames }
                 if (uploadable.isEmpty()) {
                     return@withContext persistResult(
                         settings = settings,
@@ -92,9 +94,10 @@ class GoogleCloudStorageBackupRepository(
                 var uploaded = 0
                 val errors = mutableListOf<String>()
                 for (file in uploadable) {
-                    runCatching { uploadFile(settings, file) }
+                    val objectName = backupObjectName(importsRoot, file)
+                    runCatching { uploadFile(settings, file, objectName) }
                         .onSuccess { uploaded++ }
-                        .onFailure { errors += "${file.name}: ${it.message ?: "upload failed"}" }
+                        .onFailure { errors += "$objectName: ${it.message ?: "upload failed"}" }
                 }
                 val ok = errors.isEmpty()
                 val message = if (ok) {
@@ -147,16 +150,16 @@ class GoogleCloudStorageBackupRepository(
             require(allowed.isNotEmpty()) {
                 "Signed URL does not cover ${file.name}"
             }
-            uploadFile(settings, file)
+            uploadFile(settings, file, file.name)
         }
     }
 
-    private fun uploadFile(settings: AppSettings, file: File) {
+    private fun uploadFile(settings: AppSettings, file: File, objectName: String) {
         val url = CloudBackupPolicy.buildUploadUrl(
             template = settings.gcsSignedUrl,
             bucket = settings.gcsBucket,
             prefix = settings.gcsPrefix,
-            filename = file.name,
+            filename = objectName,
         )
         require(url.startsWith("https://", ignoreCase = true)) {
             "Cloud backup URL must use HTTPS"
@@ -230,14 +233,23 @@ class GoogleCloudStorageBackupRepository(
 
     private fun listImportCopies(): List<File> {
         val dir = context.getDir("imports", Context.MODE_PRIVATE)
-        return dir.listFiles()
-            ?.filter {
-                it.isFile &&
-                    it.length() > 0L &&
-                    !it.name.equals(CloudBackupPolicy.DATABASE_BACKUP_FILENAME, ignoreCase = true)
+        return dir.walkTopDown()
+            .filter { file ->
+                file.isFile &&
+                    file.length() > 0L &&
+                    !file.name.equals(CloudBackupPolicy.DATABASE_BACKUP_FILENAME, ignoreCase = true)
             }
-            .orEmpty()
-            .sortedBy { it.name }
+            .sortedBy { it.absolutePath }
+            .toList()
+    }
+
+    /** Prefer device-relative paths so same basenames from different devices stay unique in GCS. */
+    private fun backupObjectName(importsRoot: File, file: File): String {
+        if (file.name.equals(CloudBackupPolicy.DATABASE_BACKUP_FILENAME, ignoreCase = true)) {
+            return file.name
+        }
+        return runCatching { file.relativeTo(importsRoot).invariantSeparatorsPath }
+            .getOrDefault(file.name)
     }
 
     private suspend fun persistResult(

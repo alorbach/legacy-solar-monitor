@@ -98,6 +98,7 @@
     <string name="no_devices_yet">Noch keine Geräte</string>
     <string name="no_devices_body">Fügen Sie auf dem Geräte-Tab einen Bluetooth-SMA-Wechselrichter hinzu, um die Überwachung zu starten.</string>
     <string name="production_chart">Erzeugungsdiagramm</string>
+    <string name="production_chart_subtitle">Tagesertrag der letzten ~30 Tage (kWh)</string>
     <string name="bluetooth_discovery">Bluetooth-Suche</string>
     <string name="bluetooth_discovery_body">Geräte in der Nähe suchen und tippen, um ein Geräteprofil mit Name und MAC anzulegen.</string>
     <string name="bluetooth_nearby_paired">In der Nähe (ungepaart): %1$d · Gepaart: %2$d</string>
@@ -134,6 +135,25 @@
     <string name="url_import_failed">URL-Import fehlgeschlagen</string>
     <string name="no_imports_yet">Noch keine Importe</string>
     <string name="no_imports_body">Importierte Aufträge erscheinen hier mit Status und gespeicherten Dateipfaden.</string>
+    <string name="delete_import_job">Importversuch entfernen</string>
+    <string name="rerun_import_job">Import erneut ausführen</string>
+    <string name="rerun_import_title">Import erneut ausführen?</string>
+    <string name="rerun_import_body">Lädt dieselbe Quelle erneut und überschreibt passende CSV-/Tages-/Monatswerte. Bestehende Historie wird nicht vorher gelöscht.</string>
+    <string name="rerun_import_credentials_body">FTP/SFTP-Login für diese gespeicherte Quelle eingeben. Passende Zeilen werden überschrieben; die Historie wird nicht vorher gelöscht.</string>
+    <string name="rerun_import_confirm">Erneut importieren</string>
+    <string name="rerun_import_username">Benutzername</string>
+    <string name="rerun_import_password">Passwort</string>
+    <string name="rerun_import_password_optional">Passwort (leer = gespeichertes verwenden)</string>
+    <string name="rerun_import_port">Port (optional)</string>
+    <string name="rerun_import_url">Import-URL</string>
+    <string name="rerun_import_url_optional">Import-URL (leer = gespeicherte verwenden)</string>
+    <string name="rerun_import_url_body">Import-URL erneut eingeben. Passende Zeilen werden überschrieben; die Historie wird nicht vorher gelöscht.</string>
+    <string name="rerun_import_running">Erneuter Import läuft…</string>
+    <string name="rerun_import_succeeded">Erneuter Import erfolgreich</string>
+    <string name="clear_import_jobs">Importverlauf leeren</string>
+    <string name="clear_import_jobs_title">Importverlauf leeren?</string>
+    <string name="clear_import_jobs_body">Entfernt alle gelisteten Importversuche von diesem Bildschirm. Bereits importierte Solardaten bleiben in der Datenbank.</string>
+    <string name="clear_import_jobs_confirm">Liste leeren</string>
     <string name="cloud_backup">Cloud-Backup</string>
     <string name="gcs_bucket">GCS-Bucket</string>
     <string name="gcs_prefix">GCS-Präfix</string>

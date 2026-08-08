@@ -20,6 +20,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -48,6 +51,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -56,9 +60,11 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -95,6 +101,8 @@ import com.alorbach.solarmonitor.data.AppContainer
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import com.alorbach.solarmonitor.data.importing.ImportRequest
+import com.alorbach.solarmonitor.data.importing.canReplay
+import com.alorbach.solarmonitor.data.importing.replayConfig
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
@@ -114,8 +122,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
 private val SolarLightColors = lightColorScheme(
@@ -468,6 +478,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DashboardTab(
     modifier: Modifier,
@@ -499,10 +510,19 @@ private fun DashboardTab(
     ) {
         item {
             ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(),
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
                 shape = RoundedCornerShape(28.dp),
             ) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     Text(stringResource(R.string.portfolio), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         MetricTile(Modifier.weight(1f), stringResource(R.string.metric_power), YieldFormatting.wattsLabel(portfolio.currentPowerW))
@@ -520,7 +540,10 @@ private fun DashboardTab(
                         color = colors.onSurfaceVariant,
                     )
                     StatusBadge(liveMessage)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
                         Button(
                             enabled = selectedDeviceId != null && !liveActive,
                             onClick = { selectedDeviceId?.let { onStartLive(listOf(it)) } },
@@ -533,15 +556,39 @@ private fun DashboardTab(
                         ) {
                             Text(stringResource(R.string.start_all_live_monitors))
                         }
-                        Button(
-                            enabled = liveActive,
-                            onClick = onStopLive,
-                        ) {
-                            Icon(Icons.Rounded.Stop, contentDescription = stringResource(R.string.stop_live_monitor))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.stop_live_monitor))
+                        if (liveActive) {
+                            Button(onClick = onStopLive) {
+                                Icon(Icons.Rounded.Stop, contentDescription = stringResource(R.string.stop_live_monitor))
+                                Spacer(Modifier.width(6.dp))
+                                Text(stringResource(R.string.stop_live_monitor))
+                            }
                         }
                     }
+                }
+            }
+        }
+        item {
+            ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(),
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(stringResource(R.string.production_chart), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        stringResource(R.string.production_chart_subtitle),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    ProductionChart(chartData)
                 }
             }
         }
@@ -567,7 +614,10 @@ private fun DashboardTab(
                         containerColor = if (selectedDeviceId == device.id) colors.surfaceVariant else colors.surface,
                     ),
                     shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier.clickable { selectedDeviceId = device.id },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .clickable { selectedDeviceId = device.id },
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(device.name, fontWeight = FontWeight.Bold)
@@ -581,17 +631,6 @@ private fun DashboardTab(
                             color = colors.onSurfaceVariant,
                         )
                     }
-                }
-            }
-        }
-        item {
-            ElevatedCard(
-                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
-                shape = RoundedCornerShape(28.dp),
-            ) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.production_chart), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    ProductionChart(chartData)
                 }
             }
         }
@@ -1187,8 +1226,51 @@ private fun ImportTab(
     var importRunning by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
     var showRemoteWizard by rememberSaveable { mutableStateOf(false) }
+    var showClearImportJobsConfirm by remember { mutableStateOf(false) }
+    var rerunJob by remember { mutableStateOf<ImportJobEntity?>(null) }
+    var rerunUsername by remember { mutableStateOf("") }
+    var rerunPassword by remember { mutableStateOf("") }
+    var rerunPort by remember { mutableStateOf("") }
+    var rerunUrl by remember { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
     val remoteImportSucceededMessage = stringResource(R.string.remote_import_succeeded)
+    val rerunSucceededMessage = stringResource(R.string.rerun_import_succeeded)
+
+    fun startRerun(
+        job: ImportJobEntity,
+        usernameOverride: String? = null,
+        passwordOverride: String? = null,
+        portOverride: Int? = null,
+        urlOverride: String? = null,
+    ) {
+        scope.launch {
+            importRunning = true
+            importMessage = null
+            val result = runCatching {
+                withContext(Dispatchers.IO) {
+                    val request = container.importManager.replayRequest(
+                        job = job,
+                        usernameOverride = usernameOverride,
+                        passwordOverride = passwordOverride,
+                        portOverride = portOverride,
+                        urlOverride = urlOverride,
+                    )
+                    container.importManager.run(
+                        request = request,
+                        overwriteCopyPath = job.preservedCopyPath,
+                    ).getOrThrow()
+                }
+            }
+            importRunning = false
+            // Re-runs may persist partial data before failing; always refresh views.
+            onDataChanged()
+            importMessage = result.fold(
+                onSuccess = { rerunSucceededMessage },
+                onFailure = { it.message ?: "Import failed" },
+            )
+        }
+    }
+
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val deviceId = selectedDeviceId ?: return@rememberLauncherForActivityResult
         if (uri == null) return@rememberLauncherForActivityResult
@@ -1313,7 +1395,20 @@ private fun ImportTab(
         }
         if (importJobs.isEmpty()) {
             item {
-                EmptyStateCard("No imports yet", "Imported jobs will appear here with status and preserved file paths.")
+                EmptyStateCard(
+                    stringResource(R.string.no_imports_yet),
+                    stringResource(R.string.no_imports_body),
+                )
+            }
+        } else {
+            item {
+                OutlinedButton(
+                    onClick = { showClearImportJobsConfirm = true },
+                    enabled = !importRunning,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(R.string.clear_import_jobs))
+                }
             }
         }
         items(importJobs, key = { it.id }) { job ->
@@ -1325,7 +1420,48 @@ private fun ImportTab(
                     Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Text(job.sourceLabel, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            job.sourceLabel,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (job.canReplay() && devices.any { it.id == job.deviceId }) {
+                            IconButton(
+                                enabled = !importRunning,
+                                onClick = {
+                                    val config = job.replayConfig() ?: return@IconButton
+                                    rerunJob = job
+                                    rerunUsername = config.username.orEmpty()
+                                    rerunPassword = ""
+                                    rerunPort = config.port?.toString().orEmpty()
+                                    rerunUrl = config.url.orEmpty()
+                                },
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Refresh,
+                                    contentDescription = stringResource(R.string.rerun_import_job),
+                                )
+                            }
+                        }
+                        IconButton(
+                            enabled = !importRunning,
+                            onClick = {
+                                scope.launch {
+                                    container.repository.deleteImportJob(job.id)
+                                    container.cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                                }
+                            },
+                        ) {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = stringResource(R.string.delete_import_job),
+                            )
+                        }
+                    }
                     Text("${job.sourceType} • ${job.status}")
                     job.message?.let { Text(it) }
                     job.preservedCopyPath?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
@@ -1333,6 +1469,167 @@ private fun ImportTab(
             }
         }
     }
+
+        if (showClearImportJobsConfirm) {
+            AlertDialog(
+                onDismissRequest = { showClearImportJobsConfirm = false },
+                title = { Text(stringResource(R.string.clear_import_jobs_title)) },
+                text = { Text(stringResource(R.string.clear_import_jobs_body)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                container.repository.deleteAllImportJobs()
+                                container.cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                                showClearImportJobsConfirm = false
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.clear_import_jobs_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearImportJobsConfirm = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
+
+        rerunJob?.let { job ->
+            val config = job.replayConfig()
+            val isUrlKind = config?.kind == "URL"
+            val showCredentialFields = config?.kind != null && !isUrlKind
+            // EncryptedSharedPreferences init/read is slow — never do it during composition.
+            var hasStoredSecret by remember(job.id, job.passwordCredentialId) {
+                mutableStateOf<Boolean?>(null)
+            }
+            LaunchedEffect(job.id, job.passwordCredentialId) {
+                val credentialId = job.passwordCredentialId
+                hasStoredSecret = if (credentialId.isNullOrBlank()) {
+                    false
+                } else {
+                    withContext(Dispatchers.IO) {
+                        container.credentialStore.getSecret(credentialId) != null
+                    }
+                }
+            }
+            val secretReady = hasStoredSecret != null
+            val hasSecret = hasStoredSecret == true
+            val showUrlField = isUrlKind && (config.url.isNullOrBlank() || !hasSecret)
+            val canConfirmRerun = when {
+                !secretReady -> false
+                showUrlField && rerunUrl.isBlank() && !hasSecret -> false
+                else -> true
+            }
+            AlertDialog(
+                onDismissRequest = { if (!importRunning) rerunJob = null },
+                title = { Text(stringResource(R.string.rerun_import_title)) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            when {
+                                showCredentialFields ->
+                                    stringResource(R.string.rerun_import_credentials_body)
+                                showUrlField ->
+                                    stringResource(R.string.rerun_import_url_body)
+                                else ->
+                                    stringResource(R.string.rerun_import_body)
+                            },
+                        )
+                        Text(job.sourceLabel, fontWeight = FontWeight.SemiBold)
+                        if (showUrlField) {
+                            OutlinedTextField(
+                                value = rerunUrl,
+                                onValueChange = { rerunUrl = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = {
+                                    Text(
+                                        if (hasSecret) {
+                                            stringResource(R.string.rerun_import_url_optional)
+                                        } else {
+                                            stringResource(R.string.rerun_import_url)
+                                        },
+                                    )
+                                },
+                                singleLine = true,
+                            )
+                        }
+                        if (showCredentialFields) {
+                            OutlinedTextField(
+                                value = rerunUsername,
+                                onValueChange = { rerunUsername = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text(stringResource(R.string.rerun_import_username)) },
+                                singleLine = true,
+                            )
+                            OutlinedTextField(
+                                value = rerunPassword,
+                                onValueChange = { rerunPassword = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = {
+                                    Text(
+                                        if (hasSecret) {
+                                            stringResource(R.string.rerun_import_password_optional)
+                                        } else {
+                                            stringResource(R.string.rerun_import_password)
+                                        },
+                                    )
+                                },
+                                singleLine = true,
+                                visualTransformation = PasswordVisualTransformation(),
+                            )
+                            OutlinedTextField(
+                                value = rerunPort,
+                                onValueChange = { rerunPort = it.filter { ch -> ch.isDigit() }.take(5) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text(stringResource(R.string.rerun_import_port)) },
+                                singleLine = true,
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = !importRunning && canConfirmRerun,
+                        onClick = {
+                            val target = job
+                            rerunJob = null
+                            when {
+                                showCredentialFields ->
+                                    startRerun(
+                                        target,
+                                        usernameOverride = rerunUsername.trim(),
+                                        // Blank + stored secret → reuse; blank without → "".
+                                        passwordOverride = if (hasSecret && rerunPassword.isEmpty()) {
+                                            null
+                                        } else {
+                                            rerunPassword
+                                        },
+                                        portOverride = rerunPort.toIntOrNull()?.takeIf { it in 1..65535 },
+                                    )
+                                showUrlField ->
+                                    startRerun(
+                                        target,
+                                        urlOverride = rerunUrl.trim().takeIf { it.isNotEmpty() },
+                                    )
+                                else -> startRerun(target)
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.rerun_import_confirm))
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !importRunning,
+                        onClick = { rerunJob = null },
+                    ) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                },
+            )
+        }
 
         if (showRemoteWizard) {
             RemoteImportWizard(

@@ -81,6 +81,8 @@ class ScheduledImportWorker(
         const val KEY_PASSWORD_CREDENTIAL_ID = "password_credential_id"
         const val KEY_PATH = "path"
 
+        fun credentialTag(credentialId: String): String = "import_cred_$credentialId"
+
         fun enqueueUrlImport(
             context: Context,
             deviceId: Long,

@@ -26,20 +26,80 @@ class ImportManager(
 
     suspend fun run(
         request: ImportRequest,
+        overwriteCopyPath: String? = null,
         onProgress: ((current: Int, total: Int) -> Unit)? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val jobId = repository.recordImportJob(
-                ImportJobEntity(
-                    deviceId = request.deviceId,
-                    sourceLabel = request.sourceLabel,
-                    sourceType = request.sourceType,
-                    status = ImportJobStatus.RUNNING,
-                    createdAtEpochSeconds = System.currentTimeMillis() / 1000,
+            val deviceId = requireNotNull(request.deviceId) { "Device must be selected for import" }
+            val replay = ImportReplayConfig.fromRequest(request)?.let { config ->
+                if (request is ImportRequest.UrlRequest &&
+                    ImportReplayConfig.isSensitiveImportUrl(request.url)
+                ) {
+                    // Keep kind/device/label for re-run UI; secret URL lives in CredentialStore.
+                    config.copy(url = null)
+                } else {
+                    config
+                }
+            }
+            val needsNewSecret = when (request) {
+                is ImportRequest.FtpRequest -> request.password != null
+                is ImportRequest.SftpRequest -> request.password != null
+                is ImportRequest.UrlRequest -> ImportReplayConfig.isSensitiveImportUrl(request.url)
+                else -> false
+            }
+            val plannedCredentialId = when (request) {
+                is ImportRequest.FtpRequest -> when {
+                    request.password != null ->
+                        request.passwordCredentialId?.takeIf { it.isNotBlank() }
+                            ?: credentialStore.allocateSecretId()
+                    else -> request.passwordCredentialId?.takeIf { it.isNotBlank() }
+                }
+                is ImportRequest.SftpRequest -> when {
+                    request.password != null ->
+                        request.passwordCredentialId?.takeIf { it.isNotBlank() }
+                            ?: credentialStore.allocateSecretId()
+                    else -> request.passwordCredentialId?.takeIf { it.isNotBlank() }
+                }
+                is ImportRequest.UrlRequest ->
+                    if (ImportReplayConfig.isSensitiveImportUrl(request.url)) {
+                        credentialStore.allocateSecretId()
+                    } else {
+                        null
+                    }
+                else -> null
+            }
+            // Persist secrets before the history row so a crash cannot leave a job
+            // advertising a reusable credential that does not exist yet.
+            if (needsNewSecret && plannedCredentialId != null) {
+                when (request) {
+                    is ImportRequest.FtpRequest ->
+                        credentialStore.putSecret(requireNotNull(request.password), plannedCredentialId)
+                    is ImportRequest.SftpRequest ->
+                        credentialStore.putSecret(requireNotNull(request.password), plannedCredentialId)
+                    is ImportRequest.UrlRequest ->
+                        credentialStore.putSecret(request.url, plannedCredentialId)
+                    else -> Unit
+                }
+            }
+            val jobId = try {
+                repository.recordImportJob(
+                    ImportJobEntity(
+                        deviceId = deviceId,
+                        sourceLabel = request.sourceLabel,
+                        sourceType = request.sourceType,
+                        status = ImportJobStatus.RUNNING,
+                        createdAtEpochSeconds = System.currentTimeMillis() / 1000,
+                        replayConfigJson = replay?.toJson(),
+                        passwordCredentialId = plannedCredentialId,
+                    )
                 )
-            )
+            } catch (t: Throwable) {
+                if (needsNewSecret) {
+                    plannedCredentialId?.let { repository.reclaimOrphanImportCredential(it) }
+                }
+                throw t
+            }
             try {
-                val deviceId = requireNotNull(request.deviceId) { "Device must be selected for import" }
                 val outcome = when {
                     request is ImportRequest.FtpRequest && request.directory ->
                         importFolderSession(
@@ -75,7 +135,7 @@ class ImportManager(
                                 onFile = handle,
                             )
                         }
-                    else -> importSingleSources(deviceId, request, onProgress)
+                    else -> importSingleSources(deviceId, request, onProgress, overwriteCopyPath)
                 }
 
                 repository.completeImportJob(
@@ -204,6 +264,7 @@ class ImportManager(
         deviceId: Long,
         request: ImportRequest,
         onProgress: ((current: Int, total: Int) -> Unit)?,
+        overwriteCopyPath: String? = null,
     ): ImportOutcome {
         var fileCount = 0
         var spot = 0
@@ -245,7 +306,12 @@ class ImportManager(
                 }
                 require(fileCount > 0) { "No importable files found" }
                 for ((preservedName, staged) in stagedCopies) {
-                    lastPreserved = repository.storeImportedCopy(preservedName, staged.readBytes())
+                    lastPreserved = repository.storeImportedCopy(
+                        deviceId = deviceId,
+                        relativeName = preservedName,
+                        bytes = staged.readBytes(),
+                        overwritePath = overwriteCopyPath?.takeIf { stagedCopies.size == 1 },
+                    )
                 }
             } catch (t: Throwable) {
                 val prefix = buildString {
@@ -313,5 +379,47 @@ class ImportManager(
         if (inlinePassword != null) return inlinePassword
         return credentialStore.getSecret(credentialId)
             ?: error("Missing import password credential")
+    }
+
+    /**
+     * Build an [ImportRequest] from a history job for re-run.
+     * Prefer stored credentials; optional overrides cover legacy label-only jobs.
+     */
+    fun replayRequest(
+        job: ImportJobEntity,
+        usernameOverride: String? = null,
+        passwordOverride: String? = null,
+        portOverride: Int? = null,
+        urlOverride: String? = null,
+    ): ImportRequest {
+        val config = job.replayConfig() ?: error("Import job is not re-runnable")
+        val effective = if (usernameOverride != null) config.copy(username = usernameOverride) else config
+        return when {
+            passwordOverride != null ->
+                effective.toRequest(
+                    password = passwordOverride,
+                    passwordCredentialId = null,
+                    portOverride = portOverride,
+                )
+            effective.kind == "URL" -> {
+                val url = urlOverride?.takeIf { it.isNotBlank() }
+                    ?: effective.url
+                    ?: job.passwordCredentialId?.let { credentialStore.getSecret(it) }
+                    ?: error("URL missing")
+                ImportRequest.UrlRequest(
+                    deviceId = effective.deviceId,
+                    url = url,
+                    sourceLabel = effective.sourceLabel,
+                )
+            }
+            !job.passwordCredentialId.isNullOrBlank() &&
+                credentialStore.getSecret(job.passwordCredentialId) != null ->
+                effective.toRequest(
+                    password = null,
+                    passwordCredentialId = job.passwordCredentialId,
+                    portOverride = portOverride,
+                )
+            else -> error("Password required to re-run this import")
+        }
     }
 }

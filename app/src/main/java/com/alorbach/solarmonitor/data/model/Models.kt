@@ -214,6 +214,14 @@ data class StatsPoint(
     val earnings: Double,
 )
 
+/** Per-device yearly day yield projection (avoids loading every day row into memory). */
+data class DeviceYearYieldRow(
+    val deviceId: Long,
+    val yearKey: String,
+    val yieldWh: Long,
+    val peakPowerW: Int?,
+)
+
 data class DayArchiveResult(
     val dayAggregates: List<DayAggregateEntity>,
     val spotSamples: List<SpotSampleEntity>,
@@ -262,6 +270,10 @@ data class ImportJobEntity(
     val completedAtEpochSeconds: Long? = null,
     val message: String? = null,
     val preservedCopyPath: String? = null,
+    /** JSON replay payload for FTP/SFTP/URL (no password). Null = not re-runnable. */
+    val replayConfigJson: String? = null,
+    /** EncryptedSharedPreferences id for the import password. */
+    val passwordCredentialId: String? = null,
 )
 
 data class DeviceDashboardSummary(

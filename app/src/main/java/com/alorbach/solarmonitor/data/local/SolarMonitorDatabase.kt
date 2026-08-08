@@ -28,7 +28,7 @@ import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
         DeviceEventEntity::class,
         ImportJobEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class SolarMonitorDatabase : RoomDatabase() {
@@ -81,13 +81,20 @@ abstract class SolarMonitorDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE import_jobs ADD COLUMN replayConfigJson TEXT")
+                db.execSQL("ALTER TABLE import_jobs ADD COLUMN passwordCredentialId TEXT")
+            }
+        }
+
         fun create(context: Context): SolarMonitorDatabase =
             Room.databaseBuilder(
                 context,
                 SolarMonitorDatabase::class.java,
                 "solar-monitor.db",
             )
-                .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
                 // Pre-v3 installs used destructive upgrades with unknown intermediate schemas.
                 // Wipe those once; all future bumps must ship real Migration objects from v3 onward.
                 .fallbackToDestructiveMigrationFrom(1, 2)

@@ -1,6 +1,7 @@
 package com.alorbach.solarmonitor.data.repository
 
 import android.content.Context
+import androidx.work.WorkManager
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
@@ -18,8 +19,10 @@ import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettingsStore
+import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.domain.EarningsCalculator
 import com.alorbach.solarmonitor.domain.StatisticsAggregator
+import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Year
@@ -29,16 +32,19 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class SolarRepository(
     private val appContext: Context,
     private val db: SolarMonitorDatabase,
     private val settingsStore: AppSettingsStore,
+    private val credentialStore: CredentialStore? = null,
 ) {
     private val dao = db.dao()
     private val hourRecomputeMutexes = ConcurrentHashMap<Long, Mutex>()
@@ -255,6 +261,10 @@ class SolarRepository(
 
     suspend fun recordImportJob(job: ImportJobEntity): Long = dao.insertImportJob(job)
 
+    suspend fun setImportJobCredential(jobId: Long, credentialId: String?) {
+        dao.setImportJobCredential(jobId, credentialId)
+    }
+
     suspend fun completeImportJob(jobId: Long, success: Boolean, message: String?, copyPath: String?) {
         dao.completeImportJob(
             jobId = jobId,
@@ -276,6 +286,48 @@ class SolarRepository(
         createdBeforeEpochSeconds = processStartedAtEpochSeconds,
     )
 
+    suspend fun deleteImportJob(jobId: Long) {
+        val credentialId = dao.getImportJob(jobId)?.passwordCredentialId
+        dao.deleteImportJob(jobId)
+        if (!credentialId.isNullOrBlank()) {
+            reclaimOrphanImportCredentials(setOf(credentialId))
+        }
+    }
+
+    suspend fun deleteAllImportJobs() {
+        val credentialIds = dao.listImportPasswordCredentialIds()
+            .filter { it.isNotBlank() }
+            .toSet()
+        dao.deleteAllImportJobs()
+        reclaimOrphanImportCredentials(credentialIds)
+    }
+
+    /**
+     * Drop encrypted import passwords only when no history row and no tagged WorkManager
+     * job still references them. Untagged scheduled work cannot be inspected for input
+     * credential IDs; those secrets stay until jobs/tags clear.
+     */
+    suspend fun reclaimOrphanImportCredential(credentialId: String) {
+        reclaimOrphanImportCredentials(setOf(credentialId))
+    }
+
+    private suspend fun reclaimOrphanImportCredentials(candidates: Set<String>) {
+        val store = credentialStore ?: return
+        for (id in candidates) {
+            if (dao.countImportJobsWithCredential(id) > 0) continue
+            if (isCredentialReferencedByWork(id)) continue
+            store.deleteSecret(id)
+        }
+    }
+
+    private suspend fun isCredentialReferencedByWork(credentialId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            val tagged = WorkManager.getInstance(appContext)
+                .getWorkInfosByTag(ScheduledImportWorker.credentialTag(credentialId))
+                .get()
+            tagged.any { !it.state.isFinished }
+        }
+
     suspend fun getDeviceDashboard(deviceId: Long): DeviceDashboardSummary? {
         val device = dao.getDeviceById(deviceId) ?: return null
         val latest = dao.getLatestSpotSample(deviceId)
@@ -290,9 +342,18 @@ class SolarRepository(
         val monthYield = months.firstOrNull { it.monthKey == currentMonthKey }?.dayYieldWh
             ?: months.firstOrNull()?.dayYieldWh
         val yearPrefix = YearMonth.now(zoneId).year.toString()
-        val yearYield = months
+        val year = YearMonth.now(zoneId).year
+        val yearStart = LocalDate.of(year, 1, 1).toEpochDay()
+        val yearEnd = LocalDate.of(year, 12, 31).toEpochDay()
+        val monthYearYield = months
             .filter { it.monthKey.startsWith(yearPrefix) }
             .sumOf { it.dayYieldWh }
+        val dayYearYield = dao.sumDayYieldWh(deviceId, yearStart, yearEnd)
+        val yearYield = when {
+            dayYearYield > 0L && dayYearYield >= monthYearYield -> dayYearYield
+            monthYearYield > 0L -> monthYearYield
+            else -> null
+        }
         val earnings = days.sumOf { EarningsCalculator.earningsForDay(it, tariffs) }
 
         return DeviceDashboardSummary(
@@ -457,23 +518,78 @@ class SolarRepository(
     suspend fun getYearlySeries(deviceIds: List<Long>): List<StatsPoint> {
         if (deviceIds.isEmpty()) return emptyList()
         val months = dao.getAllMonthsForDevices(deviceIds)
+        val dayYears = dao.getYearlyDayYieldsForDevices(deviceIds)
         val tariffsByDevice = tariffsByDevice(deviceIds)
-        return months
-            .groupBy { it.monthKey.take(4) }
-            .toSortedMap()
-            .map { (year, items) ->
-                val yieldWh = items.sumOf { it.dayYieldWh }
-                val earnings = items.sumOf { month ->
-                    EarningsCalculator.earningsForMonth(month, tariffsByDevice[month.deviceId].orEmpty())
+        val monthsByDeviceYear = months.groupBy { it.deviceId to it.monthKey.take(4) }
+        val daysByDeviceYear = dayYears.associateBy { it.deviceId to it.yearKey }
+        val years = (
+            months.map { it.monthKey.take(4) } + dayYears.map { it.yearKey }
+            ).toSortedSet()
+        // Only load day rows for device/year pairs that actually use day fallback + tariffs.
+        val dayFallbackKeys = buildList {
+            for (deviceId in deviceIds) {
+                if (tariffsByDevice[deviceId].orEmpty().isEmpty()) continue
+                for (year in years) {
+                    val key = deviceId to year
+                    val monthYield = monthsByDeviceYear[key].orEmpty().sumOf { it.dayYieldWh }
+                    val dayRow = daysByDeviceYear[key]
+                    val dayYield = dayRow?.yieldWh ?: 0L
+                    if (dayRow != null && dayYield >= monthYield && dayYield > 0L) {
+                        add(key)
+                    }
                 }
-                StatsPoint(
-                    label = year,
-                    bucketKey = year,
-                    yieldWh = yieldWh,
-                    peakPowerW = null,
-                    earnings = earnings,
-                )
             }
+        }
+        val daysForEarnings = if (dayFallbackKeys.isEmpty()) {
+            emptyList()
+        } else {
+            dayFallbackKeys
+                .groupBy({ it.second }) { it.first }
+                .flatMap { (yearKey, ids) ->
+                    val year = yearKey.toInt()
+                    val startDay = LocalDate.of(year, 1, 1).toEpochDay()
+                    val endDay = LocalDate.of(year, 12, 31).toEpochDay()
+                    dao.getDayRangeForDevices(ids.distinct(), startDay, endDay)
+                }
+        }
+        val earningsDaysByDeviceYear = daysForEarnings.groupBy {
+            it.deviceId to LocalDate.ofEpochDay(it.dateEpochDay).year.toString()
+        }
+        return years.map { year ->
+            var yieldWh = 0L
+            var earnings = 0.0
+            var peak: Int? = null
+            for (deviceId in deviceIds) {
+                val key = deviceId to year
+                val monthItems = monthsByDeviceYear[key].orEmpty()
+                val dayRow = daysByDeviceYear[key]
+                val monthYield = monthItems.sumOf { it.dayYieldWh }
+                val dayYield = dayRow?.yieldWh ?: 0L
+                val useDays = dayRow != null && dayYield >= monthYield && dayYield > 0L
+                if (useDays) {
+                    yieldWh += dayYield
+                    peak = listOfNotNull(peak, dayRow.peakPowerW).maxOrNull()
+                    val tariffs = tariffsByDevice[deviceId].orEmpty()
+                    if (tariffs.isNotEmpty()) {
+                        earnings += earningsDaysByDeviceYear[key].orEmpty().sumOf { day ->
+                            EarningsCalculator.earningsForDay(day, tariffs)
+                        }
+                    }
+                } else if (monthItems.isNotEmpty()) {
+                    yieldWh += monthYield
+                    earnings += monthItems.sumOf { month ->
+                        EarningsCalculator.earningsForMonth(month, tariffsByDevice[deviceId].orEmpty())
+                    }
+                }
+            }
+            StatsPoint(
+                label = year,
+                bucketKey = year,
+                yieldWh = yieldWh,
+                peakPowerW = peak,
+                earnings = earnings,
+            )
+        }.filter { it.yieldWh > 0L || it.peakPowerW != null || it.earnings != 0.0 }
     }
 
     suspend fun getRecentEvents(deviceId: Long, limit: Int = 25): List<DeviceEventEntity> =
@@ -484,30 +600,56 @@ class SolarRepository(
 
     fun observeCloudBackupEnabled(): Flow<Boolean> = settingsStore.settings.map { it.cloudBackupEnabled }
 
-    suspend fun storeImportedCopy(relativeName: String, bytes: ByteArray): String {
-        val targetDir = appContext.getDir("imports", Context.MODE_PRIVATE)
+    suspend fun storeImportedCopy(
+        deviceId: Long,
+        relativeName: String,
+        bytes: ByteArray,
+        overwritePath: String? = null,
+    ): String {
+        val importsRoot = appContext.getDir("imports", Context.MODE_PRIVATE)
+        val targetDir = importsRoot.resolve("device-$deviceId")
+        targetDir.mkdirs()
+        if (!overwritePath.isNullOrBlank()) {
+            val overwrite = java.io.File(overwritePath)
+            require(overwrite.isInside(importsRoot)) {
+                "Invalid import path"
+            }
+            // Legacy copies lived directly under imports/; migrate into device-<id>/.
+            // Use Path component checks so device-10 is not treated as inside device-1.
+            val target = if (overwrite.isInside(targetDir)) {
+                overwrite
+            } else {
+                targetDir.resolve(overwrite.name)
+            }
+            require(target.isInside(targetDir)) {
+                "Invalid import path"
+            }
+            target.parentFile?.mkdirs()
+            target.writeBytes(bytes)
+            if (target.canonicalPath != overwrite.canonicalPath && overwrite.exists()) {
+                runCatching { overwrite.delete() }
+            }
+            return target.absolutePath
+        }
         val safeName = relativeName
             .substringAfterLast('/')
             .substringAfterLast('\\')
             .replace("..", "")
             .ifBlank { "import.bin" }
-        var file = targetDir.resolve(safeName)
-        if (file.exists()) {
-            val dot = safeName.lastIndexOf('.')
-            val base = if (dot > 0) safeName.substring(0, dot) else safeName
-            val ext = if (dot > 0) safeName.substring(dot) else ""
-            var index = 1
-            do {
-                file = targetDir.resolve("$base-$index$ext")
-                index++
-            } while (file.exists())
+        val dot = safeName.lastIndexOf('.')
+        val base = if (dot > 0) safeName.substring(0, dot) else safeName
+        val ext = if (dot > 0) safeName.substring(dot) else ""
+        var candidate = targetDir.resolve(safeName)
+        var suffix = 1
+        while (candidate.exists()) {
+            candidate = targetDir.resolve("$base-$suffix$ext")
+            suffix++
         }
-        require(file.canonicalPath.startsWith(targetDir.canonicalPath)) {
+        require(candidate.isInside(targetDir)) {
             "Invalid import path"
         }
-        file.parentFile?.mkdirs()
-        file.writeBytes(bytes)
-        return file.absolutePath
+        candidate.writeBytes(bytes)
+        return candidate.absolutePath
     }
 
     suspend fun updateDeviceStatus(
@@ -544,4 +686,11 @@ class SolarRepository(
 
     private suspend fun tariffsByDevice(deviceIds: List<Long>): Map<Long, List<TariffPeriodEntity>> =
         dao.getTariffsForDevices(deviceIds).groupBy { it.deviceId }
+}
+
+/** True when [this] is [directory] or a descendant; component-aware (not raw string prefix). */
+private fun java.io.File.isInside(directory: java.io.File): Boolean {
+    val dirPath = directory.canonicalFile.toPath()
+    val filePath = canonicalFile.toPath()
+    return filePath.startsWith(dirPath)
 }

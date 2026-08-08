@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
+import com.alorbach.solarmonitor.data.model.DeviceYearYieldRow
 import com.alorbach.solarmonitor.data.model.HourAggregateEntity
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportSourceEntity
@@ -168,6 +169,28 @@ interface SolarMonitorDao {
         createdBeforeEpochSeconds: Long,
     ): Int
 
+    @Query(
+        "UPDATE import_jobs SET passwordCredentialId = :credentialId WHERE id = :jobId",
+    )
+    suspend fun setImportJobCredential(jobId: Long, credentialId: String?)
+
+    @Query("SELECT * FROM import_jobs WHERE id = :jobId")
+    suspend fun getImportJob(jobId: Long): ImportJobEntity?
+
+    @Query("DELETE FROM import_jobs WHERE id = :jobId")
+    suspend fun deleteImportJob(jobId: Long)
+
+    @Query("DELETE FROM import_jobs")
+    suspend fun deleteAllImportJobs()
+
+    @Query("SELECT passwordCredentialId FROM import_jobs WHERE passwordCredentialId IS NOT NULL")
+    suspend fun listImportPasswordCredentialIds(): List<String>
+
+    @Query(
+        "SELECT COUNT(*) FROM import_jobs WHERE passwordCredentialId = :credentialId",
+    )
+    suspend fun countImportJobsWithCredential(credentialId: String): Int
+
     @Query("SELECT * FROM day_aggregates WHERE deviceId = :deviceId AND dateEpochDay BETWEEN :startDay AND :endDay ORDER BY dateEpochDay")
     suspend fun getDayRange(deviceId: Long, startDay: Long, endDay: Long): List<DayAggregateEntity>
 
@@ -180,6 +203,28 @@ interface SolarMonitorDao {
         startDay: Long,
         endDay: Long,
     ): List<DayAggregateEntity>
+
+    @Query("SELECT * FROM day_aggregates WHERE deviceId IN (:deviceIds) ORDER BY dateEpochDay")
+    suspend fun getAllDaysForDevices(deviceIds: List<Long>): List<DayAggregateEntity>
+
+    @Query(
+        "SELECT COALESCE(SUM(totalYieldWh), 0) FROM day_aggregates " +
+            "WHERE deviceId = :deviceId AND dateEpochDay BETWEEN :startDay AND :endDay",
+    )
+    suspend fun sumDayYieldWh(deviceId: Long, startDay: Long, endDay: Long): Long
+
+    @Query(
+        """
+        SELECT deviceId AS deviceId,
+               strftime('%Y', dateEpochDay * 86400, 'unixepoch') AS yearKey,
+               SUM(totalYieldWh) AS yieldWh,
+               MAX(powerW) AS peakPowerW
+        FROM day_aggregates
+        WHERE deviceId IN (:deviceIds)
+        GROUP BY deviceId, yearKey
+        """,
+    )
+    suspend fun getYearlyDayYieldsForDevices(deviceIds: List<Long>): List<DeviceYearYieldRow>
 
     @Query("SELECT * FROM month_aggregates WHERE deviceId = :deviceId ORDER BY monthKey")
     suspend fun getAllMonths(deviceId: Long): List<MonthAggregateEntity>
