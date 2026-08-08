@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
+import com.alorbach.solarmonitor.data.model.HourAggregateEntity
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportSourceEntity
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
@@ -39,6 +40,9 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM tariff_periods WHERE deviceId = :deviceId ORDER BY validFromEpochDay")
     suspend fun getTariffs(deviceId: Long): List<TariffPeriodEntity>
 
+    @Query("SELECT * FROM tariff_periods WHERE deviceId IN (:deviceIds) ORDER BY deviceId, validFromEpochDay")
+    suspend fun getTariffsForDevices(deviceIds: List<Long>): List<TariffPeriodEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertTariffs(tariffs: List<TariffPeriodEntity>)
 
@@ -61,6 +65,9 @@ interface SolarMonitorDao {
     suspend fun upsertMonthAggregates(items: List<MonthAggregateEntity>)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertHourAggregates(items: List<HourAggregateEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEvents(items: List<DeviceEventEntity>)
 
     @Query("SELECT * FROM spot_samples WHERE deviceId = :deviceId ORDER BY timestampEpochSeconds DESC LIMIT 1")
@@ -68,6 +75,37 @@ interface SolarMonitorDao {
 
     @Query("SELECT * FROM spot_samples WHERE deviceId = :deviceId ORDER BY timestampEpochSeconds DESC LIMIT :limit")
     suspend fun getRecentSpotSamples(deviceId: Long, limit: Int): List<SpotSampleEntity>
+
+    @Query(
+        "SELECT * FROM spot_samples WHERE deviceId = :deviceId " +
+            "AND timestampEpochSeconds BETWEEN :fromEpochSeconds AND :toEpochSeconds " +
+            "ORDER BY timestampEpochSeconds",
+    )
+    suspend fun getSpotSamplesInRange(
+        deviceId: Long,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+    ): List<SpotSampleEntity>
+
+    @Query("SELECT * FROM spot_samples WHERE deviceId = :deviceId ORDER BY timestampEpochSeconds")
+    suspend fun getAllSpotSamples(deviceId: Long): List<SpotSampleEntity>
+
+    @Query(
+        "DELETE FROM hour_aggregates WHERE deviceId = :deviceId " +
+            "AND hourEpochSeconds BETWEEN :fromHour AND :toHour",
+    )
+    suspend fun deleteHourAggregatesInRange(deviceId: Long, fromHour: Long, toHour: Long)
+
+    @Query(
+        "SELECT * FROM hour_aggregates WHERE deviceId IN (:deviceIds) " +
+            "AND hourEpochSeconds BETWEEN :fromHour AND :toHour " +
+            "ORDER BY hourEpochSeconds",
+    )
+    suspend fun getHourRange(
+        deviceIds: List<Long>,
+        fromHour: Long,
+        toHour: Long,
+    ): List<HourAggregateEntity>
 
     @Query("SELECT * FROM day_aggregates WHERE deviceId = :deviceId ORDER BY dateEpochDay DESC LIMIT :limit")
     suspend fun getRecentDayAggregates(deviceId: Long, limit: Int): List<DayAggregateEntity>
@@ -86,7 +124,7 @@ interface SolarMonitorDao {
 
     @Query(
         "UPDATE import_jobs SET status = :status, completedAtEpochSeconds = :completedAt, " +
-            "message = :message, preservedCopyPath = :copyPath WHERE id = :jobId"
+            "message = :message, preservedCopyPath = :copyPath WHERE id = :jobId",
     )
     suspend fun completeImportJob(
         jobId: Long,
@@ -99,8 +137,31 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM day_aggregates WHERE deviceId = :deviceId AND dateEpochDay BETWEEN :startDay AND :endDay ORDER BY dateEpochDay")
     suspend fun getDayRange(deviceId: Long, startDay: Long, endDay: Long): List<DayAggregateEntity>
 
+    @Query(
+        "SELECT * FROM day_aggregates WHERE deviceId IN (:deviceIds) " +
+            "AND dateEpochDay BETWEEN :startDay AND :endDay ORDER BY dateEpochDay",
+    )
+    suspend fun getDayRangeForDevices(
+        deviceIds: List<Long>,
+        startDay: Long,
+        endDay: Long,
+    ): List<DayAggregateEntity>
+
     @Query("SELECT * FROM month_aggregates WHERE deviceId = :deviceId ORDER BY monthKey")
     suspend fun getAllMonths(deviceId: Long): List<MonthAggregateEntity>
+
+    @Query(
+        "SELECT * FROM month_aggregates WHERE deviceId IN (:deviceIds) " +
+            "AND monthKey >= :fromKey AND monthKey <= :toKey ORDER BY monthKey",
+    )
+    suspend fun getMonthRangeForDevices(
+        deviceIds: List<Long>,
+        fromKey: String,
+        toKey: String,
+    ): List<MonthAggregateEntity>
+
+    @Query("SELECT * FROM month_aggregates WHERE deviceId IN (:deviceIds) ORDER BY monthKey")
+    suspend fun getAllMonthsForDevices(deviceIds: List<Long>): List<MonthAggregateEntity>
 
     @Query("SELECT * FROM device_profiles ORDER BY name")
     suspend fun getAllDevices(): List<DeviceProfileEntity>

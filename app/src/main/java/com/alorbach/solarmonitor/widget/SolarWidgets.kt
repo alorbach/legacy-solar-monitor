@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.appwidget.GlanceAppWidget
@@ -15,14 +16,14 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
-import androidx.glance.text.Text
 import androidx.glance.text.FontWeight
+import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.SolarMonitorApplication
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
 import com.alorbach.solarmonitor.domain.YieldFormatting
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
 
 @Composable
@@ -42,9 +43,9 @@ class CompactStatsWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val summary = loadSummaries(context).firstOrNull()
         provideContent {
-            WidgetFrame(title = summary?.deviceName ?: "No device") {
+            WidgetFrame(title = summary?.deviceName ?: context.getString(R.string.widget_no_device)) {
                 Text(YieldFormatting.wattsLabel(summary?.currentPowerW))
-                Text("Today ${YieldFormatting.whToKwhLabel(summary?.todayYieldWh)}")
+                Text(context.getString(R.string.widget_today, YieldFormatting.whToKwhLabel(summary?.todayYieldWh)))
             }
         }
     }
@@ -54,11 +55,16 @@ class MediumStatsWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val summary = loadSummaries(context).firstOrNull()
         provideContent {
-            WidgetFrame(title = summary?.deviceName ?: "No device") {
-                Text("Power ${YieldFormatting.wattsLabel(summary?.currentPowerW)}")
-                Text("Today ${YieldFormatting.whToKwhLabel(summary?.todayYieldWh)}")
-                Text("Month ${YieldFormatting.whToKwhLabel(summary?.monthYieldWh)}")
-                Text("Earnings ${summary?.estimatedEarnings?.let { "%.2f".format(it) } ?: "--"} ${summary?.currency ?: ""}")
+            WidgetFrame(title = summary?.deviceName ?: context.getString(R.string.widget_no_device)) {
+                Text(context.getString(R.string.widget_power, YieldFormatting.wattsLabel(summary?.currentPowerW)))
+                Text(context.getString(R.string.widget_today, YieldFormatting.whToKwhLabel(summary?.todayYieldWh)))
+                Text(context.getString(R.string.widget_month, YieldFormatting.whToKwhLabel(summary?.monthYieldWh)))
+                Text(
+                    context.getString(
+                        R.string.widget_earnings,
+                        YieldFormatting.earningsLabel(summary?.estimatedEarnings ?: 0.0, summary?.currency),
+                    )
+                )
             }
         }
     }
@@ -68,7 +74,7 @@ class TopDevicesWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val summaries = loadSummaries(context).sortedByDescending { it.currentPowerW ?: 0 }.take(3)
         provideContent {
-            WidgetFrame(title = "Top devices") {
+            WidgetFrame(title = context.getString(R.string.widget_top_devices)) {
                 summaries.forEach { summary ->
                     Row(modifier = GlanceModifier.fillMaxWidth()) {
                         Text(summary.deviceName)

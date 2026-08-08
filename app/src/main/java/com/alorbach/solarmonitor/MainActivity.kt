@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor
 
 import android.Manifest
 import android.bluetooth.BluetoothManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,12 +14,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,6 +45,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
@@ -73,13 +73,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -99,7 +95,10 @@ import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
 import com.alorbach.solarmonitor.domain.YieldFormatting
+import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.service.LiveMonitorService
+import com.alorbach.solarmonitor.ui.ProductionChart
+import com.alorbach.solarmonitor.ui.StatisticsScreen
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -162,6 +161,10 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleController.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -214,7 +217,7 @@ class MainActivity : ComponentActivity() {
 
 enum class BannerAction { APP_SETTINGS, LOCATION_SETTINGS }
 
-private enum class AppTab { DASHBOARD, DEVICES, IMPORT, SETTINGS }
+private enum class AppTab { DASHBOARD, STATISTICS, DEVICES, IMPORT, SETTINGS }
 
 @Composable
 private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
@@ -320,6 +323,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                             icon = {
                                 when (tab) {
                                     AppTab.DASHBOARD -> Icon(Icons.Rounded.Dashboard, contentDescription = stringResource(R.string.tab_dashboard))
+                                    AppTab.STATISTICS -> Icon(Icons.Rounded.BarChart, contentDescription = stringResource(R.string.tab_statistics))
                                     AppTab.DEVICES -> Icon(Icons.Rounded.Devices, contentDescription = stringResource(R.string.tab_devices))
                                     AppTab.IMPORT -> Icon(Icons.Rounded.FileDownload, contentDescription = stringResource(R.string.tab_import))
                                     AppTab.SETTINGS -> Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.tab_settings))
@@ -329,6 +333,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                 Text(
                                     when (tab) {
                                         AppTab.DASHBOARD -> stringResource(R.string.tab_dashboard)
+                                        AppTab.STATISTICS -> stringResource(R.string.tab_statistics)
                                         AppTab.DEVICES -> stringResource(R.string.tab_devices)
                                         AppTab.IMPORT -> stringResource(R.string.tab_import)
                                         AppTab.SETTINGS -> stringResource(R.string.tab_settings)
@@ -374,16 +379,23 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     liveMessage = liveState.message,
                     liveActive = liveState.active,
                     dataEpoch = localDataEpoch,
-                    onStartLive = { deviceId ->
+                    onStartLive = { deviceIds ->
                         ContextCompat.startForegroundService(
                             activity,
-                            Intent(activity, LiveMonitorService::class.java)
-                                .putExtra(LiveMonitorService.EXTRA_DEVICE_ID, deviceId),
+                            LiveMonitorService.startIntent(activity, deviceIds.toLongArray()),
                         )
                     },
                     onStopLive = {
                         activity.startService(LiveMonitorService.stopIntent(activity))
                     },
+                )
+
+                AppTab.STATISTICS -> StatisticsScreen(
+                    modifier = Modifier.padding(padding),
+                    devices = devices,
+                    container = container,
+                    settings = settings,
+                    dataEpoch = localDataEpoch,
                 )
 
                 AppTab.DEVICES -> DevicesTab(
@@ -453,7 +465,7 @@ private fun DashboardTab(
     liveMessage: String,
     liveActive: Boolean,
     dataEpoch: Long,
-    onStartLive: (Long) -> Unit,
+    onStartLive: (List<Long>) -> Unit,
     onStopLive: () -> Unit,
 ) {
     var selectedDeviceId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -479,26 +491,35 @@ private fun DashboardTab(
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Portfolio", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.portfolio), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        MetricTile(Modifier.weight(1f), "Power", YieldFormatting.wattsLabel(portfolio.currentPowerW))
-                        MetricTile(Modifier.weight(1f), "Today", YieldFormatting.whToKwhLabel(portfolio.todayYieldWh))
+                        MetricTile(Modifier.weight(1f), stringResource(R.string.metric_power), YieldFormatting.wattsLabel(portfolio.currentPowerW))
+                        MetricTile(Modifier.weight(1f), stringResource(R.string.metric_today), YieldFormatting.whToKwhLabel(portfolio.todayYieldWh))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        MetricTile(Modifier.weight(1f), "Month", YieldFormatting.whToKwhLabel(portfolio.monthYieldWh))
-                        MetricTile(Modifier.weight(1f), "Year", YieldFormatting.whToKwhLabel(portfolio.yearYieldWh))
+                        MetricTile(Modifier.weight(1f), stringResource(R.string.metric_month), YieldFormatting.whToKwhLabel(portfolio.monthYieldWh))
+                        MetricTile(Modifier.weight(1f), stringResource(R.string.metric_year), YieldFormatting.whToKwhLabel(portfolio.yearYieldWh))
                     }
                     Text(
-                        "Earnings (~): ${String.format(Locale.US, "%.2f", portfolio.estimatedEarnings)} ${portfolio.currency ?: ""}",
+                        stringResource(
+                            R.string.earnings_approx,
+                            YieldFormatting.earningsLabel(portfolio.estimatedEarnings, portfolio.currency),
+                        ),
                         color = colors.onSurfaceVariant,
                     )
                     StatusBadge(liveMessage)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
                             enabled = selectedDeviceId != null && !liveActive,
-                            onClick = { selectedDeviceId?.let(onStartLive) },
+                            onClick = { selectedDeviceId?.let { onStartLive(listOf(it)) } },
                         ) {
                             Text(stringResource(R.string.start_live_monitor))
+                        }
+                        Button(
+                            enabled = devices.isNotEmpty() && !liveActive,
+                            onClick = { onStartLive(devices.map { it.id }) },
+                        ) {
+                            Text(stringResource(R.string.start_all_live_monitors))
                         }
                         Button(
                             enabled = liveActive,
@@ -515,8 +536,8 @@ private fun DashboardTab(
         if (devices.isEmpty()) {
             item {
                 EmptyStateCard(
-                    title = "No devices yet",
-                    body = "Add a Bluetooth SMA inverter on the Devices tab to start monitoring.",
+                    title = stringResource(R.string.no_devices_yet),
+                    body = stringResource(R.string.no_devices_body),
                 )
             }
         } else {
@@ -538,9 +559,13 @@ private fun DashboardTab(
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(device.name, fontWeight = FontWeight.Bold)
-                        Text(summary?.status ?: device.lastConnectionStatus ?: "Idle", color = colors.onSurfaceVariant)
+                        Text(summary?.status ?: device.lastConnectionStatus ?: stringResource(R.string.idle), color = colors.onSurfaceVariant)
                         Text(
-                            "Now ${YieldFormatting.wattsLabel(summary?.currentPowerW)} • Today ${YieldFormatting.whToKwhLabel(summary?.todayYieldWh)}",
+                            stringResource(
+                                R.string.device_now_today,
+                                YieldFormatting.wattsLabel(summary?.currentPowerW),
+                                YieldFormatting.whToKwhLabel(summary?.todayYieldWh),
+                            ),
                             color = colors.onSurfaceVariant,
                         )
                     }
@@ -553,7 +578,7 @@ private fun DashboardTab(
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Production chart", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.production_chart), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     ProductionChart(chartData)
                 }
             }
@@ -720,10 +745,11 @@ private fun DeviceEditorCard(
     var actionMac by remember { mutableStateOf<String?>(null) }
     val anyActionRunning = testRunning || liveRunning || syncRunning
     val colors = MaterialTheme.colorScheme
+    val context = androidx.compose.ui.platform.LocalContext.current
     val operationLabel = when {
-        testRunning -> "Testing connection..."
-        liveRunning -> "Reading live data..."
-        syncRunning -> "Syncing history..."
+        testRunning -> stringResource(R.string.testing_connection)
+        liveRunning -> stringResource(R.string.reading_live_data)
+        syncRunning -> stringResource(R.string.syncing_history)
         else -> null
     }
 
@@ -745,7 +771,7 @@ private fun DeviceEditorCard(
         )
         if (!container.repository.saveEditedDevice(updated)) {
             testSuccess = false
-            testMessage = "Another device profile already uses $mac"
+            testMessage = context.getString(R.string.duplicate_mac, mac)
             return null
         }
         actionMac = updated.btMac
@@ -1234,6 +1260,7 @@ private fun SettingsTab(
     settings: AppSettings,
 ) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var bucket by rememberSaveable { mutableStateOf(settings.gcsBucket) }
     var prefix by rememberSaveable { mutableStateOf(settings.gcsPrefix) }
     // The signed URL is a credential kept in encrypted storage; saved instance state is not
@@ -1261,10 +1288,42 @@ private fun SettingsTab(
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.language), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        listOf(
+                            "" to stringResource(R.string.language_system),
+                            "de" to stringResource(R.string.language_german),
+                            "en" to stringResource(R.string.language_english),
+                        ).forEach { (tag, label) ->
+                            DeviceChip(
+                                label = label,
+                                selected = settings.languageTag == tag,
+                                onClick = {
+                                    scope.launch {
+                                        container.settingsStore.update { it.copy(languageTag = tag) }
+                                        LocaleController.apply(context, tag)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                    Text(stringResource(R.string.language_restart_hint), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.tab_settings))
                         Spacer(Modifier.width(10.dp))
-                        Text("Cloud backup", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.cloud_backup), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
                     OutlinedTextField(
                         value = bucket,
@@ -1272,7 +1331,7 @@ private fun SettingsTab(
                             bucket = it
                             bucketDirty = true
                         },
-                        label = { Text("GCS bucket") },
+                        label = { Text(stringResource(R.string.gcs_bucket)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
@@ -1281,7 +1340,7 @@ private fun SettingsTab(
                             prefix = it
                             prefixDirty = true
                         },
-                        label = { Text("GCS prefix") },
+                        label = { Text(stringResource(R.string.gcs_prefix)) },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     OutlinedTextField(
@@ -1290,15 +1349,13 @@ private fun SettingsTab(
                             signedUrl = it
                             signedUrlDirty = true
                         },
-                        label = { Text("Signed URL template") },
+                        label = { Text(stringResource(R.string.signed_url_template)) },
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = PasswordVisualTransformation(),
                     )
                     Button(onClick = {
                         scope.launch {
                             container.settingsStore.update { stored ->
-                                // Only write fields the user actually edited; the in-memory copy can
-                                // still be the pre-hydration default and would wipe the stored URL.
                                 val url = if (signedUrlDirty) signedUrl else stored.gcsSignedUrl
                                 stored.copy(
                                     cloudBackupEnabled = url.isNotBlank(),
@@ -1312,7 +1369,7 @@ private fun SettingsTab(
                             signedUrlDirty = false
                         }
                     }) {
-                        Text("Save backup settings")
+                        Text(stringResource(R.string.save_backup_settings))
                     }
                 }
             }
@@ -1371,52 +1428,6 @@ private fun EmptyStateCard(title: String, body: String) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(body, color = colors.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable
-private fun ProductionChart(points: List<DailyPoint>) {
-    val colors = MaterialTheme.colorScheme
-    val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).toFloat()
-    val description = if (points.isEmpty()) {
-        "No production data"
-    } else {
-        "Production chart with ${points.size} days, peak ${YieldFormatting.whToKwhLabel(points.maxOfOrNull { it.yieldWh })}"
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(210.dp)
-            .background(colors.surface, RoundedCornerShape(22.dp))
-            .padding(16.dp)
-            .semantics { contentDescription = description },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (points.isEmpty()) {
-            Text("Import or sync data to render charts.")
-        } else {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val step = size.width / (points.size - 1).coerceAtLeast(1)
-                val offsets = points.mapIndexed { index, point ->
-                    Offset(
-                        x = index * step,
-                        y = size.height - ((point.yieldWh / maxYield) * size.height),
-                    )
-                }
-                offsets.zipWithNext().forEach { (start, end) ->
-                    drawLine(
-                        brush = Brush.linearGradient(listOf(Color(0xFFF4B400), Color(0xFF17212B))),
-                        start = start,
-                        end = end,
-                        strokeWidth = 10f,
-                        cap = StrokeCap.Round,
-                    )
-                }
-                offsets.forEach { offset ->
-                    drawCircle(Color(0xFFF4B400), radius = 7f, center = offset)
-                }
-            }
         }
     }
 }

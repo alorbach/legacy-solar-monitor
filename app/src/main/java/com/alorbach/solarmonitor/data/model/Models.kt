@@ -30,7 +30,10 @@ enum class ImportJobStatus {
     FAILED,
 }
 
-@Entity(tableName = "device_profiles")
+@Entity(
+    tableName = "device_profiles",
+    indices = [Index(value = ["btMac"], unique = true)],
+)
 data class DeviceProfileEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
@@ -174,6 +177,52 @@ data class MonthAggregateEntity(
     val dayYieldWh: Long,
     val sourceType: String = "month_csv",
 )
+
+@Entity(
+    tableName = "hour_aggregates",
+    foreignKeys = [
+        ForeignKey(
+            entity = DeviceProfileEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["deviceId"],
+            onDelete = ForeignKey.CASCADE,
+        )
+    ],
+    indices = [Index(value = ["deviceId", "hourEpochSeconds"], unique = true)]
+)
+data class HourAggregateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val deviceId: Long,
+    val hourEpochSeconds: Long,
+    val yieldWh: Long,
+    val maxPowerW: Int? = null,
+    val sourceType: String = "derived",
+)
+
+enum class StatsGranularity {
+    HOUR,
+    DAY,
+    MONTH,
+    YEAR,
+}
+
+data class StatsPoint(
+    val label: String,
+    val bucketKey: String,
+    val yieldWh: Long,
+    val peakPowerW: Int?,
+    val earnings: Double,
+)
+
+data class DayArchiveResult(
+    val dayAggregates: List<DayAggregateEntity>,
+    val spotSamples: List<SpotSampleEntity>,
+)
+
+sealed class SaveDeviceResult {
+    data class Success(val deviceId: Long) : SaveDeviceResult()
+    data class DuplicateMac(val existingDeviceId: Long, val mac: String) : SaveDeviceResult()
+}
 
 @Entity(
     tableName = "device_events",

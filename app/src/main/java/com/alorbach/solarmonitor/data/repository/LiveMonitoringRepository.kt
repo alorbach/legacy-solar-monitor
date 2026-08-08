@@ -11,22 +11,49 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
-data class LiveMonitoringState(
-    val deviceId: Long? = null,
+data class DeviceLiveState(
+    val deviceId: Long,
     val active: Boolean = false,
     val message: String = "Idle",
     val latest: SpotSampleEntity? = null,
 )
+
+data class LiveMonitoringState(
+    val devices: Map<Long, DeviceLiveState> = emptyMap(),
+    val activeDeviceIds: Set<Long> = emptySet(),
+) {
+    val active: Boolean get() = activeDeviceIds.isNotEmpty()
+    val deviceId: Long? get() = activeDeviceIds.firstOrNull() ?: devices.keys.firstOrNull()
+    val message: String
+        get() {
+            if (activeDeviceIds.isEmpty()) {
+                return devices.values.lastOrNull()?.message ?: "Idle"
+            }
+            val activeStates = activeDeviceIds.mapNotNull { devices[it] }
+            val connected = activeStates.count {
+                it.message.contains("OK", ignoreCase = true) ||
+                    it.message.contains("Connected", ignoreCase = true) ||
+                    it.latest != null
+            }
+            return if (activeDeviceIds.size == 1) {
+                activeStates.firstOrNull()?.message ?: "Idle"
+            } else {
+                "${activeDeviceIds.size} inverters, $connected connected"
+            }
+        }
+    val latest: SpotSampleEntity? get() = devices[deviceId]?.latest
+}
 
 class LiveMonitoringRepository(
     private val repository: SolarRepository,
     private val bluetoothGateway: SmaLegacyBluetoothGateway,
 ) {
     private val _state = MutableStateFlow(LiveMonitoringState())
-    val state: StateFlow<LiveMonitoringState> = _state
-    /** True while LiveMonitorService owns a continuous polling session. */
-    private var continuousSession = false
+    val state: StateFlow<LiveMonitoringState> = _state.asStateFlow()
+
     /**
      * One tracked Bluetooth operation. Operations on different devices may overlap, so the abort
      * outcome lives on the operation itself: neither a later operation nor another device can clear
@@ -38,10 +65,12 @@ class LiveMonitoringRepository(
 
     /** In-flight one-shot operations per MAC. */
     private val oneShotOps = ConcurrentHashMap<String, CopyOnWriteArrayList<Operation>>()
-    /** The running LiveMonitorService poll, or null between polls. */
-    @Volatile private var continuousOp: Operation? = null
-    /** MAC the service polls; kept between polls so Stop still knows the device. */
-    @Volatile private var continuousMac: String? = null
+    /** Running continuous polls per MAC. */
+    private val continuousOps = ConcurrentHashMap<String, Operation>()
+    /** Device ids currently owned by LiveMonitorService. */
+    private val continuousDeviceIds = ConcurrentHashMap.newKeySet<Long>()
+    /** deviceId -> MAC for continuous sessions. */
+    private val continuousMacByDevice = ConcurrentHashMap<Long, String>()
 
     private suspend fun <T> withOperation(
         mac: String?,
@@ -51,18 +80,50 @@ class LiveMonitoringRepository(
         val op = Operation(mac?.uppercase())
         val key = op.key
         if (key != null) {
-            if (continuous) continuousOp = op else oneShotOps.computeIfAbsent(key) { CopyOnWriteArrayList() }.add(op)
+            if (continuous) continuousOps[key] = op else oneShotOps.computeIfAbsent(key) { CopyOnWriteArrayList() }.add(op)
         }
         return try {
             block(op)
         } finally {
             if (key != null) {
                 if (continuous) {
-                    if (continuousOp === op) continuousOp = null
+                    continuousOps.remove(key, op)
                 } else {
                     oneShotOps[key]?.remove(op)
                 }
             }
+        }
+    }
+
+    private fun publishDevice(
+        deviceId: Long,
+        active: Boolean,
+        message: String,
+        latest: SpotSampleEntity? = null,
+        keepLatest: Boolean = false,
+    ) {
+        _state.update { current ->
+            val previous = current.devices[deviceId]
+            val nextDevices = current.devices + (
+                deviceId to DeviceLiveState(
+                    deviceId = deviceId,
+                    active = active,
+                    message = message,
+                    latest = when {
+                        latest != null -> latest
+                        keepLatest -> previous?.latest
+                        else -> previous?.latest
+                    },
+                )
+            )
+            current.copy(
+                devices = nextDevices,
+                activeDeviceIds = if (active) {
+                    current.activeDeviceIds + deviceId
+                } else {
+                    current.activeDeviceIds - deviceId
+                },
+            )
         }
     }
 
@@ -72,18 +133,22 @@ class LiveMonitoringRepository(
      * @param continuous true when called from LiveMonitorService so UI shows an active session.
      */
     suspend fun start(deviceId: Long, continuous: Boolean = false): Result<SpotSampleEntity> {
-        if (continuous) continuousSession = true
-        // One-shot reads must not overwrite the dashboard live badge while the FGS polls another device.
-        val publishState = continuous || !continuousSession
+        val device = repository.getDevice(deviceId)
+        if (continuous) {
+            continuousDeviceIds.add(deviceId)
+            device?.btMac?.uppercase()?.let { continuousMacByDevice[deviceId] = it }
+        }
+        val continuousActive = continuousDeviceIds.contains(deviceId)
+        // One-shot reads must not overwrite the dashboard live badge while the FGS polls this device.
+        val publishState = continuous || !continuousActive
         if (publishState) {
-            _state.value = LiveMonitoringState(
+            publishDevice(
                 deviceId = deviceId,
-                active = continuousSession,
-                message = if (continuous) (_state.value.message.takeIf { it.isNotBlank() && it != "Idle" } ?: "Opening socket") else "Opening socket",
+                active = continuousActive || continuous,
+                message = "Opening socket",
+                keepLatest = true,
             )
         }
-        val device = repository.getDevice(deviceId)
-        if (continuous) continuousMac = device?.btMac
         var aborted = false
         val result = withOperation(device?.btMac, continuous) { op ->
             bluetoothGateway.connectAndReadLive(device).also { aborted = op.aborted }
@@ -99,9 +164,9 @@ class LiveMonitoringRepository(
                 diagnostics = gatewayResult.diagnostics,
             )
             if (publishState) {
-                _state.value = LiveMonitoringState(
+                publishDevice(
                     deviceId = deviceId,
-                    active = continuousSession,
+                    active = continuousDeviceIds.contains(deviceId),
                     message = snapshot.status ?: "Connected",
                     latest = snapshot,
                 )
@@ -112,11 +177,11 @@ class LiveMonitoringRepository(
             val message = if (aborted) "Cancelled" else it.message ?: "Connection failed"
             repository.updateDeviceStatus(deviceId, message)
             if (publishState) {
-                _state.value = LiveMonitoringState(
+                publishDevice(
                     deviceId = deviceId,
-                    active = continuousSession,
+                    active = continuousDeviceIds.contains(deviceId),
                     message = message,
-                    latest = _state.value.latest,
+                    keepLatest = true,
                 )
             }
         }
@@ -192,12 +257,15 @@ class LiveMonitoringRepository(
             else -> "Archive sync partial ($failedPart archive: ${failure.message ?: "failed"})"
         }
         return runCatching {
-            val dayItems = dayGatewayResult?.value.orEmpty()
+            val dayArchive = dayGatewayResult?.value
+            val dayItems = dayArchive?.dayAggregates.orEmpty()
+            val spotSamples = dayArchive?.spotSamples.orEmpty()
             val monthItems = monthGatewayResult?.value.orEmpty()
             repository.saveArchiveSync(
                 deviceId = device.id,
                 dayItems = dayItems,
                 monthItems = monthItems,
+                spotSamples = spotSamples,
                 status = status,
             )
             repository.updateDeviceStatus(
@@ -210,7 +278,7 @@ class LiveMonitoringRepository(
                     .filter { it.isNotBlank() }
                     .joinToString("\n---\n"),
             )
-            "$status: ${dayItems.size} day records, ${monthItems.size} month records"
+            "$status: ${dayItems.size} day records, ${monthItems.size} month records, ${spotSamples.size} samples"
         }.onFailure {
             repository.updateDeviceStatus(device.id, it.message ?: "Archive sync failed")
         }.let { saved ->
@@ -231,20 +299,54 @@ class LiveMonitoringRepository(
     fun cancelInFlight(mac: String?) {
         val key = mac?.uppercase() ?: return
         val running = oneShotOps[key]?.toList().orEmpty()
-        if (running.isEmpty() || continuousOp?.key == key) return
+        if (running.isEmpty() || continuousOps.containsKey(key)) return
         running.forEach { it.aborted = true }
         bluetoothGateway.abortSession(key)
     }
 
-    fun stop() {
-        continuousSession = false
-        // Between polls the socket for that MAC may belong to a one-shot, which Stop must not close.
-        val poll = continuousOp
-        if (poll != null && poll.key == continuousMac?.uppercase()) {
-            poll.aborted = true
-            bluetoothGateway.abortSession(poll.key)
+    fun stop(deviceId: Long? = null) {
+        if (deviceId != null) {
+            continuousDeviceIds.remove(deviceId)
+            val key = continuousMacByDevice.remove(deviceId)
+            if (key != null) {
+                continuousOps[key]?.aborted = true
+                bluetoothGateway.abortSession(key)
+            }
+            publishDevice(deviceId, active = false, message = "Stopped", keepLatest = true)
+            return
         }
-        continuousMac = null
-        _state.value = LiveMonitoringState(message = "Stopped")
+        stopAll()
+    }
+
+    fun stopAll() {
+        continuousDeviceIds.clear()
+        continuousMacByDevice.clear()
+        val keys = continuousOps.keys.toList()
+        keys.forEach { key ->
+            continuousOps[key]?.aborted = true
+            bluetoothGateway.abortSession(key)
+        }
+        continuousOps.clear()
+        _state.update { current ->
+            current.copy(
+                activeDeviceIds = emptySet(),
+                devices = current.devices.mapValues { (_, state) ->
+                    state.copy(active = false, message = "Stopped")
+                },
+            )
+        }
+    }
+
+    suspend fun stopDevice(deviceId: Long) {
+        continuousDeviceIds.remove(deviceId)
+        val key = continuousMacByDevice.remove(deviceId)
+            ?: repository.getDevice(deviceId)?.btMac?.uppercase()
+        if (key != null) {
+            continuousOps[key]?.let {
+                it.aborted = true
+                bluetoothGateway.abortSession(key)
+            }
+        }
+        publishDevice(deviceId, active = false, message = "Stopped", keepLatest = true)
     }
 }

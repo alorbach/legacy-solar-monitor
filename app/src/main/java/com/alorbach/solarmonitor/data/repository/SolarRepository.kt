@@ -7,26 +7,33 @@ import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
 import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
+import com.alorbach.solarmonitor.data.model.HourAggregateEntity
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportSourceEntity
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
 import com.alorbach.solarmonitor.data.model.MonthlyPoint
 import com.alorbach.solarmonitor.data.model.PortfolioSummary
+import com.alorbach.solarmonitor.data.model.SaveDeviceResult
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
+import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.domain.EarningsCalculator
+import com.alorbach.solarmonitor.domain.StatisticsAggregator
+import java.time.Instant
 import java.time.LocalDate
+import java.time.Year
 import java.time.YearMonth
 import java.time.ZoneId
-import kotlin.math.roundToInt
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-/** Outcome of [SolarRepository.saveDeviceForMac]: the profile id and whether it was just inserted. */
-data class DeviceProfileUpsert(val id: Long, val created: Boolean)
 
 class SolarRepository(
     private val appContext: Context,
@@ -34,46 +41,56 @@ class SolarRepository(
     private val settingsStore: AppSettingsStore,
 ) {
     private val dao = db.dao()
-    private val deviceCreationMutex = Mutex()
+    private val hourRecomputeMutexes = ConcurrentHashMap<Long, Mutex>()
+
+    private fun hourRecomputeMutex(deviceId: Long): Mutex =
+        hourRecomputeMutexes.getOrPut(deviceId) { Mutex() }
 
     fun observeDevices(): Flow<List<DeviceProfileEntity>> = dao.observeDevices()
 
     fun observeImportJobs(): Flow<List<ImportJobEntity>> = dao.observeImportJobs()
 
-    suspend fun saveDevice(device: DeviceProfileEntity): Long = dao.upsertDevice(device)
+    data class DeviceUpsert(
+        val id: Long,
+        val created: Boolean,
+    )
+
+    suspend fun saveDevice(device: DeviceProfileEntity): SaveDeviceResult {
+        val normalizedMac = device.btMac?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()
+        if (normalizedMac != null) {
+            val existing = dao.getDeviceByMac(normalizedMac)
+            if (existing != null && existing.id != device.id) {
+                return SaveDeviceResult.DuplicateMac(existing.id, normalizedMac)
+            }
+        }
+        val id = dao.upsertDevice(device.copy(btMac = normalizedMac))
+        return SaveDeviceResult.Success(if (device.id == 0L) id else device.id)
+    }
+
+    /**
+     * Insert-or-return for Bluetooth discovery: if the MAC already has a profile, return that id
+     * without creating a duplicate.
+     */
+    suspend fun saveDeviceForMac(device: DeviceProfileEntity): DeviceUpsert {
+        val normalizedMac = device.btMac?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()
+        if (normalizedMac != null) {
+            dao.getDeviceByMac(normalizedMac)?.let { return DeviceUpsert(it.id, created = false) }
+        }
+        return when (val result = saveDevice(device.copy(btMac = normalizedMac))) {
+            is SaveDeviceResult.Success -> DeviceUpsert(result.deviceId, created = true)
+            is SaveDeviceResult.DuplicateMac -> DeviceUpsert(result.existingDeviceId, created = false)
+        }
+    }
+
+    /** Update an existing profile. Returns false when the MAC belongs to another profile. */
+    suspend fun saveEditedDevice(device: DeviceProfileEntity): Boolean =
+        saveDevice(device) is SaveDeviceResult.Success
 
     suspend fun deleteDevice(deviceId: Long) = dao.deleteDevice(deviceId)
 
     suspend fun getDevice(deviceId: Long): DeviceProfileEntity? = dao.getDeviceById(deviceId)
 
     suspend fun getDeviceByMac(mac: String): DeviceProfileEntity? = dao.getDeviceByMac(mac)
-
-    /**
-     * Insert [device] unless its MAC is already profiled, and return the profile id either way.
-     * btMac has no unique index, so the lookup and the insert are serialised here to keep racing
-     * callers (a scan tap and the add button, for example) from creating duplicate profiles.
-     */
-    /**
-     * Save an edited profile. Returns false without writing when another profile already claims the
-     * same MAC, which the missing unique index on btMac would otherwise allow.
-     */
-    suspend fun saveEditedDevice(device: DeviceProfileEntity): Boolean = deviceCreationMutex.withLock {
-        val mac = device.btMac?.takeIf { it.isNotBlank() }
-        if (mac != null) {
-            val owner = dao.getDeviceByMac(mac)
-            if (owner != null && owner.id != device.id) return@withLock false
-        }
-        dao.upsertDevice(device)
-        true
-    }
-
-    suspend fun saveDeviceForMac(device: DeviceProfileEntity): DeviceProfileUpsert =
-        deviceCreationMutex.withLock {
-            device.btMac?.takeIf { it.isNotBlank() }?.let { mac ->
-                dao.getDeviceByMac(mac)?.let { return@withLock DeviceProfileUpsert(it.id, created = false) }
-            }
-            DeviceProfileUpsert(dao.upsertDevice(device), created = true)
-        }
 
     suspend fun saveTariffs(deviceId: Long, tariffs: List<TariffPeriodEntity>) {
         dao.replaceTariffs(deviceId, tariffs.map { it.copy(deviceId = deviceId) })
@@ -96,6 +113,9 @@ class SolarRepository(
             status = status,
             liveAtEpochSeconds = sample.timestampEpochSeconds,
         )
+        val zoneId = deviceZone(deviceId)
+        val hourStart = StatisticsAggregator.hourStartEpochSeconds(sample.timestampEpochSeconds, zoneId)
+        recomputeHourAggregates(deviceId, hourStart - 3600, hourStart + 3599)
     }
 
     suspend fun saveDayAggregates(items: List<DayAggregateEntity>) {
@@ -110,10 +130,17 @@ class SolarRepository(
         deviceId: Long,
         dayItems: List<DayAggregateEntity>,
         monthItems: List<MonthAggregateEntity>,
+        spotSamples: List<SpotSampleEntity> = emptyList(),
         status: String,
     ) {
+        if (spotSamples.isNotEmpty()) dao.insertSpotSamples(spotSamples)
         if (dayItems.isNotEmpty()) dao.upsertDayAggregates(dayItems)
         if (monthItems.isNotEmpty()) dao.upsertMonthAggregates(monthItems)
+        if (spotSamples.isNotEmpty()) {
+            val from = spotSamples.minOf { it.timestampEpochSeconds }
+            val to = spotSamples.maxOf { it.timestampEpochSeconds }
+            recomputeHourAggregates(deviceId, from, to)
+        }
         updateDeviceStatus(
             deviceId = deviceId,
             status = status,
@@ -132,6 +159,63 @@ class SolarRepository(
         events: List<DeviceEventEntity>,
     ) {
         dao.importBundle(spotSamples, dayAggregates, monthAggregates, events)
+        spotSamples.groupBy { it.deviceId }.forEach { (deviceId, samples) ->
+            if (samples.isNotEmpty()) {
+                recomputeHourAggregates(
+                    deviceId = deviceId,
+                    fromEpochSeconds = samples.minOf { it.timestampEpochSeconds },
+                    toEpochSeconds = samples.maxOf { it.timestampEpochSeconds },
+                )
+            }
+        }
+    }
+
+    suspend fun recomputeHourAggregates(
+        deviceId: Long,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+    ) {
+        hourRecomputeMutex(deviceId).withLock {
+            val zoneId = deviceZone(deviceId)
+            val fromHour = StatisticsAggregator.hourStartEpochSeconds(fromEpochSeconds, zoneId)
+            val toHour = StatisticsAggregator.hourStartEpochSeconds(toEpochSeconds, zoneId)
+            // Include one hour of lookback so the first bucket has a baseline total.
+            val lookback = fromHour - 3600
+            val samples = dao.getSpotSamplesInRange(deviceId, lookback, toHour + 3599)
+            val aggregates = StatisticsAggregator.hourAggregatesFromSamples(
+                deviceId = deviceId,
+                samples = samples,
+                zoneId = zoneId,
+            ).filter { it.hourEpochSeconds in fromHour..toHour }
+            dao.deleteHourAggregatesInRange(deviceId, fromHour, toHour)
+            if (aggregates.isNotEmpty()) {
+                dao.upsertHourAggregates(aggregates)
+            }
+        }
+    }
+
+    suspend fun backfillHourAggregatesIfNeeded() {
+        val settings = settingsStore.settings.first()
+        if (settings.hourAggregatesBackfilled) return
+        dao.getAllDevices().forEach { device ->
+            hourRecomputeMutex(device.id).withLock {
+                val samples = dao.getAllSpotSamples(device.id)
+                if (samples.isEmpty()) return@withLock
+                val zoneId = runCatching { ZoneId.of(device.timezone) }.getOrDefault(ZoneId.systemDefault())
+                val aggregates = StatisticsAggregator.hourAggregatesFromSamples(
+                    deviceId = device.id,
+                    samples = samples,
+                    zoneId = zoneId,
+                )
+                if (aggregates.isNotEmpty()) {
+                    val from = aggregates.minOf { it.hourEpochSeconds }
+                    val to = aggregates.maxOf { it.hourEpochSeconds }
+                    dao.deleteHourAggregatesInRange(device.id, from, to)
+                    dao.upsertHourAggregates(aggregates)
+                }
+            }
+        }
+        settingsStore.update { it.copy(hourAggregatesBackfilled = true) }
     }
 
     suspend fun recordImportJob(job: ImportJobEntity): Long = dao.insertImportJob(job)
@@ -221,6 +305,131 @@ class SolarRepository(
         }
     }
 
+    suspend fun getHourlySeries(deviceIds: List<Long>, date: LocalDate): List<StatsPoint> {
+        if (deviceIds.isEmpty()) return emptyList()
+        val tariffsByDevice = tariffsByDevice(deviceIds)
+        val locale = Locale.getDefault()
+        val labelFormatter = DateTimeFormatter.ofPattern("HH:mm", locale)
+        // Query each device in its own timezone day window, then merge by local clock hour.
+        data class HourRow(
+            val localHour: Int,
+            val hourEpochSeconds: Long,
+            val yieldWh: Long,
+            val maxPowerW: Int?,
+            val earnings: Double,
+        )
+        val rows = mutableListOf<HourRow>()
+        for (deviceId in deviceIds) {
+            val zoneId = deviceZone(deviceId)
+            val start = date.atStartOfDay(zoneId).toEpochSecond()
+            val end = date.plusDays(1).atStartOfDay(zoneId).toEpochSecond() - 1
+            dao.getHourRange(listOf(deviceId), start, end).forEach { hour ->
+                val localHour = Instant.ofEpochSecond(hour.hourEpochSeconds).atZone(zoneId).hour
+                rows += HourRow(
+                    localHour = localHour,
+                    hourEpochSeconds = hour.hourEpochSeconds,
+                    yieldWh = hour.yieldWh,
+                    maxPowerW = hour.maxPowerW,
+                    earnings = EarningsCalculator.earningsForHour(
+                        hourEpochSeconds = hour.hourEpochSeconds,
+                        yieldWh = hour.yieldWh,
+                        tariffs = tariffsByDevice[deviceId].orEmpty(),
+                        zoneId = zoneId,
+                    ),
+                )
+            }
+        }
+        return rows
+            .groupBy { it.localHour }
+            .toSortedMap()
+            .map { (localHour, items) ->
+                val label = String.format(locale, "%02d:00", localHour)
+                StatsPoint(
+                    label = label,
+                    bucketKey = localHour.toString(),
+                    yieldWh = items.sumOf { it.yieldWh },
+                    peakPowerW = items.mapNotNull { it.maxPowerW }.maxOrNull(),
+                    earnings = items.sumOf { it.earnings },
+                )
+            }
+    }
+
+    suspend fun getDailySeries(deviceIds: List<Long>, yearMonth: YearMonth): List<StatsPoint> {
+        if (deviceIds.isEmpty()) return emptyList()
+        val zoneId = primaryZone(deviceIds)
+        val start = yearMonth.atDay(1).toEpochDay()
+        val end = yearMonth.atEndOfMonth().toEpochDay()
+        val days = dao.getDayRangeForDevices(deviceIds, start, end)
+        val tariffsByDevice = tariffsByDevice(deviceIds)
+        val locale = Locale.getDefault()
+        val labelFormatter = DateTimeFormatter.ofPattern("dd", locale)
+        return days
+            .groupBy { it.dateEpochDay }
+            .toSortedMap()
+            .map { (epochDay, items) ->
+                val yieldWh = items.sumOf { it.totalYieldWh }
+                val peak = items.mapNotNull { it.powerW }.maxOrNull()
+                val earnings = items.sumOf { day ->
+                    EarningsCalculator.earningsForDay(day, tariffsByDevice[day.deviceId].orEmpty())
+                }
+                StatsPoint(
+                    label = LocalDate.ofEpochDay(epochDay).format(labelFormatter),
+                    bucketKey = epochDay.toString(),
+                    yieldWh = yieldWh,
+                    peakPowerW = peak,
+                    earnings = earnings,
+                )
+            }
+    }
+
+    suspend fun getMonthlySeries(deviceIds: List<Long>, year: Int): List<StatsPoint> {
+        if (deviceIds.isEmpty()) return emptyList()
+        val fromKey = "%04d-01".format(year)
+        val toKey = "%04d-12".format(year)
+        val months = dao.getMonthRangeForDevices(deviceIds, fromKey, toKey)
+        val tariffsByDevice = tariffsByDevice(deviceIds)
+        val locale = Locale.getDefault()
+        return months
+            .groupBy { it.monthKey }
+            .toSortedMap()
+            .map { (monthKey, items) ->
+                val yieldWh = items.sumOf { it.dayYieldWh }
+                val earnings = items.sumOf { month ->
+                    EarningsCalculator.earningsForMonth(month, tariffsByDevice[month.deviceId].orEmpty())
+                }
+                val yearMonth = YearMonth.parse(monthKey)
+                StatsPoint(
+                    label = yearMonth.month.getDisplayName(TextStyle.SHORT, locale),
+                    bucketKey = monthKey,
+                    yieldWh = yieldWh,
+                    peakPowerW = null,
+                    earnings = earnings,
+                )
+            }
+    }
+
+    suspend fun getYearlySeries(deviceIds: List<Long>): List<StatsPoint> {
+        if (deviceIds.isEmpty()) return emptyList()
+        val months = dao.getAllMonthsForDevices(deviceIds)
+        val tariffsByDevice = tariffsByDevice(deviceIds)
+        return months
+            .groupBy { it.monthKey.take(4) }
+            .toSortedMap()
+            .map { (year, items) ->
+                val yieldWh = items.sumOf { it.dayYieldWh }
+                val earnings = items.sumOf { month ->
+                    EarningsCalculator.earningsForMonth(month, tariffsByDevice[month.deviceId].orEmpty())
+                }
+                StatsPoint(
+                    label = year,
+                    bucketKey = year,
+                    yieldWh = yieldWh,
+                    peakPowerW = null,
+                    earnings = earnings,
+                )
+            }
+    }
+
     suspend fun getRecentEvents(deviceId: Long, limit: Int = 25): List<DeviceEventEntity> =
         dao.getRecentEvents(deviceId, limit)
 
@@ -264,4 +473,19 @@ class SolarRepository(
             )
         )
     }
+
+    private suspend fun deviceZone(deviceId: Long): ZoneId {
+        val device = dao.getDeviceById(deviceId)
+        return runCatching { ZoneId.of(device?.timezone ?: ZoneId.systemDefault().id) }
+            .getOrDefault(ZoneId.systemDefault())
+    }
+
+    private suspend fun primaryZone(deviceIds: List<Long>): ZoneId {
+        val first = deviceIds.firstOrNull()?.let { dao.getDeviceById(it) }
+        return runCatching { ZoneId.of(first?.timezone ?: ZoneId.systemDefault().id) }
+            .getOrDefault(ZoneId.systemDefault())
+    }
+
+    private suspend fun tariffsByDevice(deviceIds: List<Long>): Map<Long, List<TariffPeriodEntity>> =
+        dao.getTariffsForDevices(deviceIds).groupBy { it.deviceId }
 }

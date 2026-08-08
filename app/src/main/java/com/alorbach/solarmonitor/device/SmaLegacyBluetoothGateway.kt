@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
+import com.alorbach.solarmonitor.data.model.DayArchiveResult
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
@@ -101,7 +102,7 @@ interface SmaLegacyBluetoothGateway {
     fun abortActiveSessions()
     suspend fun testConnection(device: DeviceProfileEntity?): Result<SmaGatewayResult<SmaConnectionTestResult>>
     suspend fun connectAndReadLive(device: DeviceProfileEntity?): Result<SmaGatewayResult<SpotSampleEntity>>
-    suspend fun syncDayArchive(device: DeviceProfileEntity?, fromDate: LocalDate): Result<SmaGatewayResult<List<DayAggregateEntity>>>
+    suspend fun syncDayArchive(device: DeviceProfileEntity?, fromDate: LocalDate): Result<SmaGatewayResult<DayArchiveResult>>
     suspend fun syncMonthArchive(device: DeviceProfileEntity?, fromMonth: YearMonth): Result<SmaGatewayResult<List<MonthAggregateEntity>>>
 }
 
@@ -255,16 +256,23 @@ class SmaLegacyBluetoothGatewayImpl(
     override suspend fun syncDayArchive(
         device: DeviceProfileEntity?,
         fromDate: LocalDate,
-    ): Result<SmaGatewayResult<List<DayAggregateEntity>>> = runCatching {
+    ): Result<SmaGatewayResult<DayArchiveResult>> = runCatching {
         withSession(device) { session, socketStrategy, trace ->
             val today = LocalDate.now(zoneId)
-            val items = generateSequence(fromDate) { current ->
+            val dayAggregates = mutableListOf<DayAggregateEntity>()
+            val spotSamples = mutableListOf<SpotSampleEntity>()
+            generateSequence(fromDate) { current ->
                 current.plusDays(1).takeIf { !it.isAfter(today) }
-            }.mapNotNull { day ->
-                session.readDayArchive(device!!.id, day)
-            }.toList()
+            }.forEach { day ->
+                val parsed = session.readDayArchive(device!!.id, day) ?: return@forEach
+                dayAggregates += parsed.dayAggregate
+                spotSamples += parsed.spotSamples
+            }
             SmaGatewayResult(
-                value = items,
+                value = DayArchiveResult(
+                    dayAggregates = dayAggregates,
+                    spotSamples = spotSamples,
+                ),
                 socketStrategy = socketStrategy,
                 diagnostics = trace.render(),
             )
@@ -604,7 +612,12 @@ private class SmaBluetoothSession(
         )
     }
 
-    fun readDayArchive(deviceId: Long, date: LocalDate): DayAggregateEntity? {
+    data class DayArchiveParse(
+        val dayAggregate: DayAggregateEntity,
+        val spotSamples: List<SpotSampleEntity>,
+    )
+
+    fun readDayArchive(deviceId: Long, date: LocalDate): DayArchiveParse? {
         trace.record("phase:reading-day-archive $date")
         val startOfDay = date.atStartOfDay(zoneId).toEpochSecond()
         val requestStart = startOfDay - 300
@@ -616,6 +629,7 @@ private class SmaBluetoothSession(
         var firstTotalWh: Long? = null
         var lastTotalWh = 0L
         var maxPower = 0
+        val spotSamples = mutableListOf<SpotSampleEntity>()
 
         for (packet in packets) {
             var offset = 41
@@ -625,10 +639,19 @@ private class SmaBluetoothSession(
                 if (totalWh != U64_NAN && totalWh >= 0) {
                     if (firstTotalWh == null) firstTotalWh = totalWh
                     lastTotalWh = totalWh
+                    var watts: Int? = null
                     if (previousTotalWh > 0L && timestamp > previousTimestamp) {
-                        val watts = ((totalWh - previousTotalWh) * 3600L / (timestamp - previousTimestamp)).toInt()
+                        watts = ((totalWh - previousTotalWh) * 3600L / (timestamp - previousTimestamp)).toInt()
                         maxPower = maxOf(maxPower, watts)
                     }
+                    spotSamples += SpotSampleEntity(
+                        deviceId = deviceId,
+                        timestampEpochSeconds = timestamp,
+                        totalPac = watts,
+                        eTotalWh = totalWh,
+                        status = "Archive",
+                        sourceType = "bluetooth_day_archive",
+                    )
                     previousTotalWh = totalWh
                     previousTimestamp = timestamp
                 }
@@ -645,12 +668,15 @@ private class SmaBluetoothSession(
         // totalYieldWh is the yield of this day, never the lifetime meter reading: a day without
         // production is a real zero-yield record, not the inverter's cumulative total.
         return if (firstTotalWh != null) {
-            DayAggregateEntity(
-                deviceId = deviceId,
-                dateEpochDay = date.toEpochDay(),
-                totalYieldWh = dayYield,
-                powerW = maxPower.takeIf { it > 0 },
-                sourceType = "bluetooth_day_archive",
+            DayArchiveParse(
+                dayAggregate = DayAggregateEntity(
+                    deviceId = deviceId,
+                    dateEpochDay = date.toEpochDay(),
+                    totalYieldWh = dayYield,
+                    powerW = maxPower.takeIf { it > 0 },
+                    sourceType = "bluetooth_day_archive",
+                ),
+                spotSamples = spotSamples,
             )
         } else {
             null
