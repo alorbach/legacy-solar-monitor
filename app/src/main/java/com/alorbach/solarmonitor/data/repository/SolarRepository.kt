@@ -18,9 +18,15 @@ import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.domain.EarningsCalculator
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+/** Outcome of [SolarRepository.saveDeviceForMac]: the profile id and whether it was just inserted. */
+data class DeviceProfileUpsert(val id: Long, val created: Boolean)
 
 class SolarRepository(
     private val appContext: Context,
@@ -28,6 +34,7 @@ class SolarRepository(
     private val settingsStore: AppSettingsStore,
 ) {
     private val dao = db.dao()
+    private val deviceCreationMutex = Mutex()
 
     fun observeDevices(): Flow<List<DeviceProfileEntity>> = dao.observeDevices()
 
@@ -38,6 +45,35 @@ class SolarRepository(
     suspend fun deleteDevice(deviceId: Long) = dao.deleteDevice(deviceId)
 
     suspend fun getDevice(deviceId: Long): DeviceProfileEntity? = dao.getDeviceById(deviceId)
+
+    suspend fun getDeviceByMac(mac: String): DeviceProfileEntity? = dao.getDeviceByMac(mac)
+
+    /**
+     * Insert [device] unless its MAC is already profiled, and return the profile id either way.
+     * btMac has no unique index, so the lookup and the insert are serialised here to keep racing
+     * callers (a scan tap and the add button, for example) from creating duplicate profiles.
+     */
+    /**
+     * Save an edited profile. Returns false without writing when another profile already claims the
+     * same MAC, which the missing unique index on btMac would otherwise allow.
+     */
+    suspend fun saveEditedDevice(device: DeviceProfileEntity): Boolean = deviceCreationMutex.withLock {
+        val mac = device.btMac?.takeIf { it.isNotBlank() }
+        if (mac != null) {
+            val owner = dao.getDeviceByMac(mac)
+            if (owner != null && owner.id != device.id) return@withLock false
+        }
+        dao.upsertDevice(device)
+        true
+    }
+
+    suspend fun saveDeviceForMac(device: DeviceProfileEntity): DeviceProfileUpsert =
+        deviceCreationMutex.withLock {
+            device.btMac?.takeIf { it.isNotBlank() }?.let { mac ->
+                dao.getDeviceByMac(mac)?.let { return@withLock DeviceProfileUpsert(it.id, created = false) }
+            }
+            DeviceProfileUpsert(dao.upsertDevice(device), created = true)
+        }
 
     suspend fun saveTariffs(deviceId: Long, tariffs: List<TariffPeriodEntity>) {
         dao.replaceTariffs(deviceId, tariffs.map { it.copy(deviceId = deviceId) })
@@ -89,6 +125,15 @@ class SolarRepository(
         if (items.isNotEmpty()) dao.upsertEvents(items)
     }
 
+    suspend fun importBundle(
+        spotSamples: List<SpotSampleEntity>,
+        dayAggregates: List<DayAggregateEntity>,
+        monthAggregates: List<MonthAggregateEntity>,
+        events: List<DeviceEventEntity>,
+    ) {
+        dao.importBundle(spotSamples, dayAggregates, monthAggregates, events)
+    }
+
     suspend fun recordImportJob(job: ImportJobEntity): Long = dao.insertImportJob(job)
 
     suspend fun completeImportJob(jobId: Long, success: Boolean, message: String?, copyPath: String?) {
@@ -104,13 +149,20 @@ class SolarRepository(
     suspend fun getDeviceDashboard(deviceId: Long): DeviceDashboardSummary? {
         val device = dao.getDeviceById(deviceId) ?: return null
         val latest = dao.getLatestSpotSample(deviceId)
+        val zoneId = runCatching { ZoneId.of(device.timezone) }.getOrDefault(ZoneId.systemDefault())
+        val todayEpochDay = LocalDate.now(zoneId).toEpochDay()
+        val todayAggregate = dao.getDayRange(deviceId, todayEpochDay, todayEpochDay).firstOrNull()
         val days = dao.getRecentDayAggregates(deviceId, 32)
         val months = dao.getRecentMonthAggregates(deviceId, 12)
         val tariffs = dao.getTariffs(deviceId)
 
-        val today = days.firstOrNull()
-        val monthYield = months.firstOrNull()?.dayYieldWh
-        val yearYield = months.filter { it.monthKey.startsWith(YearMonth.now().year.toString()) }.sumOf { it.dayYieldWh }
+        val currentMonthKey = YearMonth.now(zoneId).toString()
+        val monthYield = months.firstOrNull { it.monthKey == currentMonthKey }?.dayYieldWh
+            ?: months.firstOrNull()?.dayYieldWh
+        val yearPrefix = YearMonth.now(zoneId).year.toString()
+        val yearYield = months
+            .filter { it.monthKey.startsWith(yearPrefix) }
+            .sumOf { it.dayYieldWh }
         val earnings = days.sumOf { EarningsCalculator.earningsForDay(it, tariffs) }
 
         return DeviceDashboardSummary(
@@ -118,7 +170,7 @@ class SolarRepository(
             deviceName = device.name,
             model = device.model,
             currentPowerW = latest?.totalPac,
-            todayYieldWh = latest?.eTodayWh ?: today?.totalYieldWh,
+            todayYieldWh = latest?.eTodayWh ?: todayAggregate?.totalYieldWh,
             monthYieldWh = monthYield,
             yearlyYieldWh = yearYield,
             estimatedEarnings = earnings,
@@ -143,8 +195,11 @@ class SolarRepository(
     }
 
     suspend fun getDailyChart(deviceId: Long, days: Int = 30): List<DailyPoint> {
-        val end = LocalDate.now().toEpochDay()
-        val start = LocalDate.now().minusDays(days.toLong()).toEpochDay()
+        val device = dao.getDeviceById(deviceId)
+        val zoneId = runCatching { ZoneId.of(device?.timezone ?: ZoneId.systemDefault().id) }
+            .getOrDefault(ZoneId.systemDefault())
+        val end = LocalDate.now(zoneId).toEpochDay()
+        val start = LocalDate.now(zoneId).minusDays(days.toLong()).toEpochDay()
         val tariffs = dao.getTariffs(deviceId)
         return dao.getDayRange(deviceId, start, end).map {
             DailyPoint(
@@ -176,7 +231,15 @@ class SolarRepository(
 
     suspend fun storeImportedCopy(relativeName: String, bytes: ByteArray): String {
         val targetDir = appContext.getDir("imports", Context.MODE_PRIVATE)
-        val file = targetDir.resolve(relativeName)
+        val safeName = relativeName
+            .substringAfterLast('/')
+            .substringAfterLast('\\')
+            .replace("..", "")
+            .ifBlank { "import.bin" }
+        val file = targetDir.resolve(safeName)
+        require(file.canonicalPath.startsWith(targetDir.canonicalPath)) {
+            "Invalid import path"
+        }
         file.parentFile?.mkdirs()
         file.writeBytes(bytes)
         return file.absolutePath

@@ -7,19 +7,17 @@ import com.alorbach.solarmonitor.data.importing.LegacySbfspotImporters
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
 import com.alorbach.solarmonitor.data.repository.LiveMonitoringRepository
 import com.alorbach.solarmonitor.data.repository.SolarRepository
+import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGatewayImpl
 import com.alorbach.solarmonitor.domain.ReportExporter
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    val settingsStore = AppSettingsStore(appContext)
+    val credentialStore = CredentialStore(appContext)
+    val settingsStore = AppSettingsStore(appContext, credentialStore)
     val database = SolarMonitorDatabase.create(appContext)
     val bluetoothGateway: SmaLegacyBluetoothGateway = SmaLegacyBluetoothGatewayImpl(appContext)
     val reportExporter = ReportExporter(appContext)
@@ -33,10 +31,14 @@ class AppContainer(context: Context) {
         appContext = appContext,
         repository = repository,
         importers = LegacySbfspotImporters(appContext, repository),
+        credentialStore = credentialStore,
     )
     val liveMonitoringRepository = LiveMonitoringRepository(
         repository = repository,
         bluetoothGateway = bluetoothGateway,
-        scope = applicationScope,
     )
+
+    fun close() {
+        bluetoothGateway.release()
+    }
 }

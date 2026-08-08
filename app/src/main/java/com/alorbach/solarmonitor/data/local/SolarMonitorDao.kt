@@ -24,6 +24,9 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM device_profiles WHERE id = :id")
     suspend fun getDeviceById(id: Long): DeviceProfileEntity?
 
+    @Query("SELECT * FROM device_profiles WHERE btMac = :mac COLLATE NOCASE LIMIT 1")
+    suspend fun getDeviceByMac(mac: String): DeviceProfileEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDevice(device: DeviceProfileEntity): Long
 
@@ -101,6 +104,19 @@ interface SolarMonitorDao {
 
     @Query("SELECT * FROM device_profiles ORDER BY name")
     suspend fun getAllDevices(): List<DeviceProfileEntity>
+
+    @Transaction
+    suspend fun importBundle(
+        spotSamples: List<SpotSampleEntity>,
+        dayAggregates: List<DayAggregateEntity>,
+        monthAggregates: List<MonthAggregateEntity>,
+        events: List<DeviceEventEntity>,
+    ) {
+        if (spotSamples.isNotEmpty()) insertSpotSamples(spotSamples)
+        if (dayAggregates.isNotEmpty()) upsertDayAggregates(dayAggregates)
+        if (monthAggregates.isNotEmpty()) upsertMonthAggregates(monthAggregates)
+        if (events.isNotEmpty()) upsertEvents(events)
+    }
 
     @Transaction
     suspend fun replaceTariffs(deviceId: Long, tariffs: List<TariffPeriodEntity>) {

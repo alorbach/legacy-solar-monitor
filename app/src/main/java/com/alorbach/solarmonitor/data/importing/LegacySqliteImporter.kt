@@ -7,8 +7,13 @@ import com.alorbach.solarmonitor.data.model.ImportSourceType
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.YearMonth
 
-class LegacySqliteImporter {
+class LegacySqliteImporter(
+    private val zoneId: ZoneId = ZoneId.systemDefault(),
+) {
     fun parse(deviceId: Long, dbFile: File): ParsedImportBundle {
         val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         db.use {
@@ -47,10 +52,14 @@ class LegacySqliteImporter {
                 val cursor = it.rawQuery("SELECT TimeStamp,TotalYield,Power FROM DayData", null)
                 cursor.use { c ->
                     while (c.moveToNext()) {
+                        val epochDay = Instant.ofEpochSecond(c.getLong(0))
+                            .atZone(zoneId)
+                            .toLocalDate()
+                            .toEpochDay()
                         add(
                             DayAggregateEntity(
                                 deviceId = deviceId,
-                                dateEpochDay = java.time.LocalDate.ofEpochDay(c.getLong(0) / 86400).toEpochDay(),
+                                dateEpochDay = epochDay,
                                 totalYieldWh = c.getLong(1),
                                 powerW = c.getIntOrNull(2),
                                 sourceType = "sqlite",
@@ -64,11 +73,10 @@ class LegacySqliteImporter {
                 val cursor = it.rawQuery("SELECT TimeStamp,TotalYield,DayYield FROM MonthData", null)
                 cursor.use { c ->
                     while (c.moveToNext()) {
-                        val monthKey = java.time.Instant.ofEpochSecond(c.getLong(0))
-                            .atZone(java.time.ZoneId.systemDefault())
+                        val monthKey = Instant.ofEpochSecond(c.getLong(0))
+                            .atZone(zoneId)
                             .toLocalDate()
-                            .withDayOfMonth(1)
-                            .let(java.time.YearMonth::from)
+                            .let(YearMonth::from)
                             .toString()
                         add(
                             MonthAggregateEntity(

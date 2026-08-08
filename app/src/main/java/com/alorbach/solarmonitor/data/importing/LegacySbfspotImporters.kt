@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import com.alorbach.solarmonitor.data.model.ImportSourceType
 import com.alorbach.solarmonitor.data.repository.SolarRepository
-import okhttp3.OkHttpClient
 import java.io.File
 import java.time.ZoneId
 
@@ -12,33 +11,41 @@ class LegacySbfspotImporters(
     private val context: Context,
     private val repository: SolarRepository,
 ) {
-    private val csvParser = SbfspotCsvParser(ZoneId.systemDefault())
-    private val sqliteImporter = LegacySqliteImporter()
-    private val urlClient = UrlImportClient(OkHttpClient())
+    private val urlClient = UrlImportClient()
     private val ftpClient = FtpImportClient()
-    private val sftpClient = SftpImportClient()
+    private val sftpClient = SftpImportClient(File(context.filesDir, "known_hosts"))
 
-    fun parseFile(deviceId: Long, name: String, bytes: ByteArray): ParsedImportBundle {
+    suspend fun parseFile(deviceId: Long, name: String, bytes: ByteArray): ParsedImportBundle {
+        val device = repository.getDevice(deviceId)
+        val zoneId = runCatching { ZoneId.of(device?.timezone ?: ZoneId.systemDefault().id) }
+            .getOrDefault(ZoneId.systemDefault())
+        val csvParser = SbfspotCsvParser(
+            CsvParseOptions(
+                zoneId = zoneId,
+                decimalPoint = device?.decimalPoint ?: "comma",
+                delimiter = device?.delimiter ?: "semicolon",
+                dateFormat = device?.dateFormat,
+            )
+        )
+        val sqliteImporter = LegacySqliteImporter(zoneId)
+
         return when {
             name.endsWith(".zip", ignoreCase = true) -> {
-                ZipImportReader.flatten(bytes)
-                    .map { parseFile(deviceId, it.name, it.bytes) }
-                    .fold(ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.ZIP)) { acc, item ->
-                        ParsedImportBundle(
-                            spotSamples = acc.spotSamples + item.spotSamples,
-                            dayAggregates = acc.dayAggregates + item.dayAggregates,
-                            monthAggregates = acc.monthAggregates + item.monthAggregates,
-                            events = acc.events + item.events,
-                            preservedName = name,
-                            sourceType = ImportSourceType.ZIP,
-                        )
-                    }
+                var combined = ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.ZIP)
+                for (entry in ZipImportReader.flatten(bytes)) {
+                    combined += parseFile(deviceId, entry.name, entry.bytes)
+                }
+                combined.copy(preservedName = name, sourceType = ImportSourceType.ZIP)
             }
 
             name.endsWith(".db", ignoreCase = true) -> {
                 val temp = File.createTempFile("legacy-", ".db", context.cacheDir)
-                temp.writeBytes(bytes)
-                sqliteImporter.parse(deviceId, temp).copy(preservedName = name)
+                try {
+                    temp.writeBytes(bytes)
+                    sqliteImporter.parse(deviceId, temp).copy(preservedName = name)
+                } finally {
+                    temp.delete()
+                }
             }
 
             else -> csvParser.parse(deviceId, name, bytes.inputStream())

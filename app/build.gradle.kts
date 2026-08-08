@@ -18,6 +18,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
+
+        ksp {
+            arg("room.schemaLocation", "$projectDir/schemas")
+        }
     }
 
     buildTypes {
@@ -73,6 +77,8 @@ dependencies {
     implementation("commons-net:commons-net:3.11.1")
     implementation("com.github.mwiede:jsch:0.2.20")
     implementation("com.google.android.material:material:1.12.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
 
     implementation(composeBom)
     androidTestImplementation(composeBom)

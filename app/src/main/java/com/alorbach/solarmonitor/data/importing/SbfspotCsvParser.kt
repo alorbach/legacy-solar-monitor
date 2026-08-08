@@ -16,81 +16,182 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-class SbfspotCsvParser(
-    private val zoneId: ZoneId = ZoneId.systemDefault(),
-) {
-    fun parse(deviceId: Long, name: String, inputStream: InputStream): ParsedImportBundle {
-        val text = inputStream.bufferedReader(Charset.forName("UTF-8")).use(BufferedReader::readLines)
-            .ifEmpty { emptyList() }
+data class CsvParseOptions(
+    val zoneId: ZoneId = ZoneId.systemDefault(),
+    val decimalPoint: String = "comma",
+    val delimiter: String = "semicolon",
+    val dateFormat: String? = null,
+)
 
+class SbfspotCsvParser(
+    private val options: CsvParseOptions = CsvParseOptions(),
+) {
+    constructor(zoneId: ZoneId) : this(CsvParseOptions(zoneId = zoneId))
+
+    fun parse(deviceId: Long, name: String, inputStream: InputStream): ParsedImportBundle {
+        val text = readLines(inputStream)
         if (text.isEmpty()) {
             return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
         }
 
+        val metadata = detectMetadata(text)
         val normalized = text.filter { it.isNotBlank() }
         return when {
-            normalized.any { it.startsWith("DeviceType;DeviceLocation;SusyId;SerNo") } -> parseEvents(deviceId, name, normalized)
-            normalized.any { it.startsWith("dd/MM/yyyy;") || it.startsWith("dd.MM.yyyy;") } -> parseMonth(deviceId, name, normalized)
-            normalized.any { it.startsWith("dd/MM/yyyy HH:mm;") || it.startsWith("dd.MM.yyyy HH:mm;") } -> parseDay(deviceId, name, normalized)
+            normalized.any { it.startsWith("DeviceType;DeviceLocation;SusyId;SerNo") ||
+                it.startsWith("DeviceType,DeviceLocation,SusyId,SerNo") } ->
+                parseEvents(deviceId, name, normalized, metadata)
+            normalized.any { headerDatePattern(it, withTime = true) != null } ->
+                parseDay(deviceId, name, normalized, metadata)
+            normalized.any { headerDatePattern(it, withTime = false) != null } ->
+                parseMonth(deviceId, name, normalized, metadata)
             else -> ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
         }
     }
 
-    private fun parseMonth(deviceId: Long, name: String, lines: List<String>): ParsedImportBundle {
-        val headerIndex = lines.indexOfFirst { it.startsWith("dd/MM/yyyy;") || it.startsWith("dd.MM.yyyy;") }
-        if (headerIndex < 0) return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
-        val dateFormatter = if (lines[headerIndex].startsWith("dd.MM")) {
-            DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMANY)
-        } else {
-            DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.US)
+    /**
+     * SBFspot writes its configured date pattern into the first header cell, so the export
+     * describes its own date format instead of it having to be guessed. Returns that pattern when
+     * the line is the header of a date-keyed table, or null otherwise.
+     */
+    private fun headerDatePattern(line: String, withTime: Boolean): String? {
+        val first = line.split(';', ',').firstOrNull()?.trim().orEmpty()
+        if (!first.contains("yyyy")) return null
+        if (first.contains("HH") != withTime) return null
+        return first
+    }
+
+    /** Falls back to the profile's configured format for exports Java cannot compile a pattern from. */
+    private fun dateFormatter(headerPattern: String): DateTimeFormatter? =
+        compilePattern(headerPattern) ?: options.dateFormat?.let { compilePattern(it) }
+
+    private fun compilePattern(pattern: String): DateTimeFormatter? =
+        runCatching { DateTimeFormatter.ofPattern(pattern, Locale.ROOT) }.getOrNull()
+
+    private fun readLines(inputStream: InputStream): List<String> {
+        val bytes = readBounded(inputStream, MAX_CSV_BYTES)
+        val utf8 = runCatching {
+            bytes.inputStream().bufferedReader(Charset.forName("UTF-8")).use(BufferedReader::readLines)
+        }.getOrDefault(emptyList())
+        if (utf8.isNotEmpty() && utf8.none { it.contains('\uFFFD') }) return utf8
+        return bytes.inputStream().bufferedReader(Charset.forName("Windows-1252")).use(BufferedReader::readLines)
+    }
+
+    private fun readBounded(inputStream: InputStream, maxBytes: Int): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0
+        while (true) {
+            val n = inputStream.read(buf)
+            if (n < 0) break
+            total += n
+            require(total <= maxBytes) {
+                "CSV import exceeds ${maxBytes / (1024 * 1024)} MiB limit"
+            }
+            out.write(buf, 0, n)
         }
+        return out.toByteArray()
+    }
+
+    private fun detectMetadata(lines: List<String>): CsvMetadata {
+        val header = lines.firstOrNull { it.startsWith("Version CSV") }.orEmpty()
+        val decimalFromHeader = when {
+            header.contains("Decimalpoint comma", ignoreCase = true) -> "comma"
+            header.contains("Decimalpoint point", ignoreCase = true) -> "point"
+            else -> options.decimalPoint
+        }
+        val delimiterFromHeader = when {
+            header.contains("Delimiter semicolon", ignoreCase = true) -> ';'
+            header.contains("Delimiter comma", ignoreCase = true) -> ','
+            options.delimiter.equals("comma", ignoreCase = true) -> ','
+            else -> ';'
+        }
+        return CsvMetadata(
+            decimalPoint = decimalFromHeader,
+            delimiter = delimiterFromHeader,
+            zoneId = options.zoneId,
+        )
+    }
+
+    private fun parseMonth(
+        deviceId: Long,
+        name: String,
+        lines: List<String>,
+        metadata: CsvMetadata,
+    ): ParsedImportBundle {
+        val headerIndex = lines.indexOfFirst { headerDatePattern(it, withTime = false) != null }
+        if (headerIndex < 0) return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
+        val dateFormatter = headerDatePattern(lines[headerIndex], withTime = false)
+            ?.let { dateFormatter(it) }
+            ?: return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
         val entries = lines.drop(headerIndex + 1).mapNotNull { line ->
-            val parts = line.split(';')
+            val parts = line.split(metadata.delimiter)
             if (parts.size < 3) return@mapNotNull null
-            val date = LocalDate.parse(parts[0], dateFormatter)
-            MonthAggregateEntity(
-                deviceId = deviceId,
-                monthKey = YearMonth.from(date).toString(),
-                totalYieldWh = parseDecimalKwh(parts[1]),
-                dayYieldWh = parseDecimalKwh(parts[2]),
+            val date = runCatching { LocalDate.parse(parts[0], dateFormatter) }.getOrNull()
+                ?: return@mapNotNull null
+            MonthRow(
+                date = date,
+                totalYieldWh = parseDecimalKwh(parts[1], metadata.decimalPoint),
+                dayYieldWh = parseDecimalKwh(parts[2], metadata.decimalPoint),
             )
-        }.distinctBy { it.monthKey }
+        }
+        // Keep the latest day row per month (cumulative total + sum of day yields)
+        val monthAggregates = entries
+            .groupBy { YearMonth.from(it.date) }
+            .map { (month, rows) ->
+                val ordered = rows.sortedBy { it.date }
+                MonthAggregateEntity(
+                    deviceId = deviceId,
+                    monthKey = month.toString(),
+                    totalYieldWh = ordered.last().totalYieldWh,
+                    dayYieldWh = ordered.sumOf { it.dayYieldWh },
+                )
+            }
         return ParsedImportBundle(
-            monthAggregates = entries,
+            monthAggregates = monthAggregates,
             preservedName = name,
             sourceType = ImportSourceType.FILE,
         )
     }
 
-    private fun parseDay(deviceId: Long, name: String, lines: List<String>): ParsedImportBundle {
-        val headerIndex = lines.indexOfFirst { it.startsWith("dd/MM/yyyy HH:mm;") || it.startsWith("dd.MM.yyyy HH:mm;") }
+    private fun parseDay(
+        deviceId: Long,
+        name: String,
+        lines: List<String>,
+        metadata: CsvMetadata,
+    ): ParsedImportBundle {
+        val headerIndex = lines.indexOfFirst { headerDatePattern(it, withTime = true) != null }
         if (headerIndex < 0) return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
-        val formatter = if (lines[headerIndex].startsWith("dd.MM")) {
-            DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm", Locale.GERMANY)
-        } else {
-            DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.US)
-        }
+        val formatter = headerDatePattern(lines[headerIndex], withTime = true)
+            ?.let { dateFormatter(it) }
+            ?: return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
         val spotSamples = lines.drop(headerIndex + 1).mapNotNull { line ->
-            val parts = line.split(';')
+            val parts = line.split(metadata.delimiter)
             if (parts.size < 3) return@mapNotNull null
-            val dateTime = LocalDateTime.parse(parts[0], formatter)
-            val eTotalWh = parseDecimalKwh(parts[1])
-            val totalPac = parseDecimalKw(parts[2])
+            val dateTime = runCatching { LocalDateTime.parse(parts[0], formatter) }.getOrNull()
+                ?: return@mapNotNull null
+            val eTotalWh = parseDecimalKwh(parts[1], metadata.decimalPoint)
+            val totalPac = parseDecimalKw(parts[2], metadata.decimalPoint)
             SpotSampleEntity(
                 deviceId = deviceId,
-                timestampEpochSeconds = dateTime.atZone(zoneId).toEpochSecond(),
+                timestampEpochSeconds = dateTime.atZone(metadata.zoneId).toEpochSecond(),
                 totalPac = totalPac,
                 eTotalWh = eTotalWh,
                 status = "Imported",
                 sourceType = "day_csv",
             )
         }
-        val grouped = spotSamples.groupBy { Instant.ofEpochSecond(it.timestampEpochSeconds).atZone(zoneId).toLocalDate() }
+        val grouped = spotSamples.groupBy {
+            Instant.ofEpochSecond(it.timestampEpochSeconds).atZone(metadata.zoneId).toLocalDate()
+        }
         val days = grouped.map { (date, items) ->
+            val ordered = items.sortedBy { it.timestampEpochSeconds }
+            val first = ordered.firstOrNull()?.eTotalWh
+            val last = ordered.lastOrNull()?.eTotalWh
+            val dayYield = if (first != null && last != null && last >= first) last - first else 0L
             DayAggregateEntity(
                 deviceId = deviceId,
                 dateEpochDay = date.toEpochDay(),
-                totalYieldWh = items.maxOfOrNull { it.eTotalWh ?: 0 } ?: 0,
+                totalYieldWh = dayYield,
                 powerW = items.maxOfOrNull { it.totalPac ?: 0 },
             )
         }
@@ -102,18 +203,32 @@ class SbfspotCsvParser(
         )
     }
 
-    private fun parseEvents(deviceId: Long, name: String, lines: List<String>): ParsedImportBundle {
-        val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale.US)
-        val headerIndex = lines.indexOfFirst { it.startsWith("DeviceType;DeviceLocation;SusyId;SerNo") }
+    private fun parseEvents(
+        deviceId: Long,
+        name: String,
+        lines: List<String>,
+        metadata: CsvMetadata,
+    ): ParsedImportBundle {
+        val headerIndex = lines.indexOfFirst {
+            it.startsWith("DeviceType;DeviceLocation;SusyId;SerNo") ||
+                it.startsWith("DeviceType,DeviceLocation,SusyId,SerNo")
+        }
         if (headerIndex < 0) return ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.FILE)
+        val sample = lines.getOrNull(headerIndex + 1).orEmpty()
+        val formatter = when {
+            sample.contains('.') && sample.indexOf('.') < 3 ->
+                DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss", Locale.GERMANY)
+            else -> DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss", Locale.US)
+        }
         val events = lines.drop(headerIndex + 1).mapNotNull { line ->
-            val parts = line.split(';')
+            val parts = line.split(metadata.delimiter)
             if (parts.size < 14) return@mapNotNull null
-            val ts = LocalDateTime.parse(parts[4], formatter)
+            val ts = runCatching { LocalDateTime.parse(parts[4], formatter) }.getOrNull()
+                ?: return@mapNotNull null
             DeviceEventEntity(
                 deviceId = deviceId,
                 entryId = parts[5].toLongOrNull() ?: return@mapNotNull null,
-                timestampEpochSeconds = ts.atZone(zoneId).toEpochSecond(),
+                timestampEpochSeconds = ts.atZone(metadata.zoneId).toEpochSecond(),
                 eventCode = parts[6].toIntOrNull() ?: 0,
                 eventType = parts[7],
                 category = parts[8],
@@ -131,9 +246,37 @@ class SbfspotCsvParser(
         )
     }
 
-    private fun parseDecimalKwh(value: String): Long =
-        ((value.trim().replace(".", "").replace(',', '.').toDoubleOrNull() ?: 0.0) * 1000.0).toLong()
+    private fun parseDecimalKwh(value: String, decimalPoint: String): Long =
+        ((parseDecimal(value, decimalPoint) ?: 0.0) * 1000.0).toLong()
 
-    private fun parseDecimalKw(value: String): Int =
-        ((value.trim().replace(".", "").replace(',', '.').toDoubleOrNull() ?: 0.0) * 1000.0).toInt()
+    private fun parseDecimalKw(value: String, decimalPoint: String): Int =
+        ((parseDecimal(value, decimalPoint) ?: 0.0) * 1000.0).toInt()
+
+    private fun parseDecimal(value: String, decimalPoint: String): Double? {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty()) return null
+        val normalized = when {
+            decimalPoint.equals("comma", ignoreCase = true) ->
+                trimmed.replace(".", "").replace(',', '.')
+            else ->
+                trimmed.replace(",", "")
+        }
+        return normalized.toDoubleOrNull()
+    }
+
+    private data class CsvMetadata(
+        val decimalPoint: String,
+        val delimiter: Char,
+        val zoneId: ZoneId,
+    )
+
+    private data class MonthRow(
+        val date: LocalDate,
+        val totalYieldWh: Long,
+        val dayYieldWh: Long,
+    )
+
+    private companion object {
+        private const val MAX_CSV_BYTES = 20 * 1024 * 1024
+    }
 }

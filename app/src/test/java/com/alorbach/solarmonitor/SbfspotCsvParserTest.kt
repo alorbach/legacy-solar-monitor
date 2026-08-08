@@ -21,6 +21,9 @@ class SbfspotCsvParserTest {
         assertTrue(result.spotSamples.isNotEmpty())
         assertTrue(result.dayAggregates.isNotEmpty())
         assertEquals("MeinePVAnlage-20120401.csv", result.preservedName)
+        // Day CSV column is cumulative meter reading; daily yield is end - start
+        // 69.228 kWh - 29.933 kWh = 39.295 kWh
+        assertEquals(39_295L, result.dayAggregates.first().totalYieldWh)
     }
 
     @Test
@@ -29,7 +32,11 @@ class SbfspotCsvParserTest {
         val result = parser.parse(1L, file.name, file.inputStream())
 
         assertTrue(result.monthAggregates.isNotEmpty())
+        assertEquals(1, result.monthAggregates.size)
         assertEquals("2012-04", result.monthAggregates.first().monthKey)
+        // Latest cumulative total for April and sum of daily day-yield column
+        assertEquals(691_737L, result.monthAggregates.first().totalYieldWh)
+        assertTrue(result.monthAggregates.first().dayYieldWh > 600_000L)
     }
 
     @Test

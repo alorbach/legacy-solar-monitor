@@ -26,7 +26,7 @@ class ReportExporter(
                         summary.currency ?: "",
                         summary.status ?: "",
                         summary.lastUpdateEpochSeconds ?: "",
-                    ).joinToString(",")
+                    ).joinToString(",") { csvEscape(it.toString()) }
                 )
             }
         )
@@ -54,5 +54,13 @@ class ReportExporter(
         file.outputStream().use(pdf::writeTo)
         pdf.close()
         return file
+    }
+
+    private fun csvEscape(value: String): String {
+        return if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+            "\"${value.replace("\"", "\"\"")}\""
+        } else {
+            value
+        }
     }
 }

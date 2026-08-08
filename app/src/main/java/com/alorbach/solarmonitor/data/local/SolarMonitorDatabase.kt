@@ -25,7 +25,7 @@ import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
         ImportJobEntity::class,
     ],
     version = 3,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class SolarMonitorDatabase : RoomDatabase() {
     abstract fun dao(): SolarMonitorDao
@@ -36,6 +36,11 @@ abstract class SolarMonitorDatabase : RoomDatabase() {
                 context,
                 SolarMonitorDatabase::class.java,
                 "solar-monitor.db",
-            ).fallbackToDestructiveMigration().build()
+            )
+                // Pre-v3 installs used destructive upgrades with unknown intermediate schemas.
+                // Wipe those once; all future bumps must ship real Migration objects from v3 onward.
+                .fallbackToDestructiveMigrationFrom(1, 2)
+                .fallbackToDestructiveMigrationOnDowngrade()
+                .build()
     }
 }

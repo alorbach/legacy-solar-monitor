@@ -73,6 +73,9 @@ gradle-*-bin.zip
 # IDE Java-upgrade tooling
 .github/java-upgrade/
 
+# Local portable toolchains (not part of the project)
+.tools/
+
 # Log / temp
 *.log
 *.tmp
