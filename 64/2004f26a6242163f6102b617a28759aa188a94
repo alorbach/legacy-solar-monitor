@@ -1,0 +1,48 @@
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupCoordinator.kt
+  s_1e4618dd4fcc6c::t_b3e9218d73d6b9 1-29
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleCloudStorageBackupRepository.kt
+  s_1e4618dd4fcc6c::t_f3d800add015fc 5-6,11-12,14-17,22,24,26-122,127-129,131-146,148-158,160-187,189-194
+  s_1e4618dd4fcc6c::t_a95ee317ae8467 195
+app/src/main/java/com/alorbach/solarmonitor/data/repository/LiveMonitoringRepository.kt
+  s_1e4618dd4fcc6c::t_5d5be6ecd9feaf 3-4
+  s_1e4618dd4fcc6c::t_aec620d17704f5 55
+  s_1e4618dd4fcc6c::t_d2fb4a2f633b94 291-293
+app/src/main/java/com/alorbach/solarmonitor/data/importing/ImportManager.kt
+  s_1e4618dd4fcc6c::t_8d52b8634c1a30 4-5,18,60
+app/src/main/res/values-de/strings.xml
+  s_1e4618dd4fcc6c::t_39c7df59eddf3d 92-100
+app/src/test/java/com/alorbach/solarmonitor/CloudBackupPolicyTest.kt
+  s_1e4618dd4fcc6c::t_e6bd21f1b99203 1-99
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_1e4618dd4fcc6c::t_f88525c2c2661b 62,86,88-89,91-92
+  s_1e4618dd4fcc6c::t_4717bc5b1290d4 1278-1281,1283-1294,1296-1302,1306-1307,1386-1453,1463-1464,1470-1471,1476-1503
+app/src/main/java/com/alorbach/solarmonitor/work/CloudBackupWorker.kt
+  s_1e4618dd4fcc6c::t_9ee74ef0809001 22
+  s_1e4618dd4fcc6c::t_494ae747017b5e 19-21
+  s_1e4618dd4fcc6c::t_ec579c499ac093 23-25
+  s_1e4618dd4fcc6c::t_3dd0110d91cb83 1-18
+app/src/main/res/values/strings.xml
+  s_1e4618dd4fcc6c::t_9de6aa645e9d30 92-100
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt
+  s_1e4618dd4fcc6c::t_105c89212cbdda 1-42
+app/src/main/java/com/alorbach/solarmonitor/data/settings/AppSettingsStore.kt
+  s_1e4618dd4fcc6c::t_4c712e3763303a 25-30,71-88,118-123,137-142
+app/src/main/java/com/alorbach/solarmonitor/data/AppContainer.kt
+  s_1e4618dd4fcc6c::t_4d35e5d9c9b73a 4,25-30,41,46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "642004f26a6242163f6102b617a28759aa188a94",
+  "prompts": {},
+  "sessions": {
+    "s_1e4618dd4fcc6c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d5bb93a-5fc9-4faa-98aa-8c233d9dbe70",
+        "model": "grok-4.5"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
