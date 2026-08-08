@@ -48,10 +48,13 @@ sealed interface ImportRequest {
     data class FtpRequest(
         override val deviceId: Long?,
         val host: String,
+        val port: Int = FtpImportClient.DEFAULT_PORT,
         val username: String,
         val password: String? = null,
         val passwordCredentialId: String? = null,
         val path: String,
+        /** When true, [path] is a directory and all CSV files under it are imported. */
+        val directory: Boolean = false,
         override val sourceLabel: String,
         override val sourceType: ImportSourceType = ImportSourceType.FTP,
     ) : ImportRequest
@@ -59,10 +62,13 @@ sealed interface ImportRequest {
     data class SftpRequest(
         override val deviceId: Long?,
         val host: String,
+        val port: Int = SftpImportClient.DEFAULT_PORT,
         val username: String,
         val password: String? = null,
         val passwordCredentialId: String? = null,
         val path: String,
+        /** When true, [path] is a directory and all CSV files under it are imported. */
+        val directory: Boolean = false,
         override val sourceLabel: String,
         override val sourceType: ImportSourceType = ImportSourceType.SFTP,
     ) : ImportRequest

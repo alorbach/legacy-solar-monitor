@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Power
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -59,6 +60,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -82,8 +84,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.alorbach.solarmonitor.data.AppContainer
+import com.alorbach.solarmonitor.data.cloud.BackupTrigger
+import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import com.alorbach.solarmonitor.data.importing.ImportRequest
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
@@ -98,6 +105,7 @@ import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.service.LiveMonitorService
 import com.alorbach.solarmonitor.ui.ProductionChart
+import com.alorbach.solarmonitor.ui.RemoteImportWizard
 import com.alorbach.solarmonitor.ui.StatisticsScreen
 import java.time.Instant
 import java.time.LocalDate
@@ -1118,7 +1126,9 @@ private fun ImportTab(
     var importUrl by rememberSaveable { mutableStateOf("") }
     var importRunning by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    var showRemoteWizard by rememberSaveable { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
+    val remoteImportSucceededMessage = stringResource(R.string.remote_import_succeeded)
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val deviceId = selectedDeviceId ?: return@rememberLauncherForActivityResult
         if (uri == null) return@rememberLauncherForActivityResult
@@ -1141,6 +1151,20 @@ private fun ImportTab(
                 onFailure = { it.message ?: "Import failed" },
             )
         }
+    }
+
+    if (showRemoteWizard) {
+        RemoteImportWizard(
+            devices = devices,
+            importers = container.importers,
+            importManager = container.importManager,
+            initialDeviceId = selectedDeviceId,
+            onDismiss = { showRemoteWizard = false },
+            onImportSucceeded = {
+                onDataChanged()
+                importMessage = remoteImportSucceededMessage
+            },
+        )
     }
 
     LazyColumn(
@@ -1184,6 +1208,14 @@ private fun ImportTab(
                             Icon(Icons.Rounded.FileDownload, contentDescription = stringResource(R.string.import_from_file))
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.import_from_file))
+                        }
+                        Button(
+                            enabled = !importRunning,
+                            onClick = { showRemoteWizard = true },
+                        ) {
+                            Icon(Icons.Rounded.Folder, contentDescription = stringResource(R.string.import_from_remote))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.import_from_remote))
                         }
                         OutlinedTextField(
                             value = importUrl,
@@ -1265,16 +1297,76 @@ private fun SettingsTab(
     var prefix by rememberSaveable { mutableStateOf(settings.gcsPrefix) }
     // The signed URL is a credential kept in encrypted storage; saved instance state is not
     // encrypted, so it is only held in memory and re-read from the store after process death.
-    var signedUrl by remember { mutableStateOf(settings.gcsSignedUrl) }
+    // Empty storage shows a path built from bucket/prefix; signature query is still required.
+    var signedUrl by remember {
+        mutableStateOf(
+            CloudBackupPolicy.displaySignedUrlTemplate(
+                settings.gcsSignedUrl,
+                settings.gcsBucket,
+                settings.gcsPrefix,
+            ),
+        )
+    }
     var bucketDirty by rememberSaveable { mutableStateOf(false) }
     var prefixDirty by rememberSaveable { mutableStateOf(false) }
     var signedUrlDirty by remember { mutableStateOf(false) }
+    var signedUrlPathLocked by remember { mutableStateOf(false) }
+    var includeDatabase by rememberSaveable { mutableStateOf(settings.backupIncludeDatabase) }
+    var includeImports by rememberSaveable { mutableStateOf(settings.backupIncludeImportCopies) }
+    var includeDatabaseDirty by rememberSaveable { mutableStateOf(false) }
+    var includeImportsDirty by rememberSaveable { mutableStateOf(false) }
+    var showSignedUrl by rememberSaveable { mutableStateOf(false) }
     val colors = MaterialTheme.colorScheme
+    val neverLabel = stringResource(R.string.backup_never)
+    val backupRunning by produceState(initialValue = false, context) {
+        val liveData = WorkManager.getInstance(context)
+            .getWorkInfosForUniqueWorkLiveData(CloudBackupPolicy.UNIQUE_WORK_NAME)
+        val observer = Observer<List<WorkInfo>> { infos ->
+            value = infos.any { it.state == WorkInfo.State.RUNNING }
+        }
+        liveData.observeForever(observer)
+        awaitDispose { liveData.removeObserver(observer) }
+    }
 
-    LaunchedEffect(settings.gcsBucket, settings.gcsPrefix, settings.gcsSignedUrl) {
+    fun refreshAutoPath(nextBucket: String = bucket, nextPrefix: String = prefix) {
+        if (signedUrlPathLocked) return
+        signedUrl = CloudBackupPolicy.withAutoPath(signedUrl, nextBucket, nextPrefix)
+        signedUrlDirty = true
+    }
+
+    fun normalizeStoredSignedUrl(raw: String, nextBucket: String, nextPrefix: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isBlank()) return ""
+        if (trimmed == CloudBackupPolicy.DEFAULT_SIGNED_URL_TEMPLATE) return ""
+        if (trimmed == CloudBackupPolicy.buildPathTemplate(nextBucket, nextPrefix)) return ""
+        if (trimmed == CloudBackupPolicy.buildDatabaseObjectUrl(nextBucket, nextPrefix)) return ""
+        return trimmed
+    }
+
+    val signedUrlCoversOnlyDatabase = CloudBackupPolicy.selectableBackupFilenames(
+        signedUrl,
+        listOf(CloudBackupPolicy.DATABASE_BACKUP_FILENAME, "example.csv"),
+    ) == listOf(CloudBackupPolicy.DATABASE_BACKUP_FILENAME)
+
+    LaunchedEffect(
+        settings.gcsBucket,
+        settings.gcsPrefix,
+        settings.gcsSignedUrl,
+        settings.backupIncludeDatabase,
+        settings.backupIncludeImportCopies,
+    ) {
         if (!bucketDirty) bucket = settings.gcsBucket
         if (!prefixDirty) prefix = settings.gcsPrefix
-        if (!signedUrlDirty) signedUrl = settings.gcsSignedUrl
+        if (!signedUrlDirty) {
+            signedUrl = CloudBackupPolicy.displaySignedUrlTemplate(
+                settings.gcsSignedUrl,
+                if (bucketDirty) bucket else settings.gcsBucket,
+                if (prefixDirty) prefix else settings.gcsPrefix,
+            )
+            signedUrlPathLocked = false
+        }
+        if (!includeDatabaseDirty) includeDatabase = settings.backupIncludeDatabase
+        if (!includeImportsDirty) includeImports = settings.backupIncludeImportCopies
     }
 
     LazyColumn(
@@ -1330,6 +1422,7 @@ private fun SettingsTab(
                         onValueChange = {
                             bucket = it
                             bucketDirty = true
+                            refreshAutoPath(nextBucket = it)
                         },
                         label = { Text(stringResource(R.string.gcs_bucket)) },
                         modifier = Modifier.fillMaxWidth(),
@@ -1339,6 +1432,7 @@ private fun SettingsTab(
                         onValueChange = {
                             prefix = it
                             prefixDirty = true
+                            refreshAutoPath(nextPrefix = it)
                         },
                         label = { Text(stringResource(R.string.gcs_prefix)) },
                         modifier = Modifier.fillMaxWidth(),
@@ -1348,28 +1442,167 @@ private fun SettingsTab(
                         onValueChange = {
                             signedUrl = it
                             signedUrlDirty = true
+                            signedUrlPathLocked = true
                         },
                         label = { Text(stringResource(R.string.signed_url_template)) },
+                        supportingText = { Text(stringResource(R.string.signed_url_template_hint)) },
                         modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = false,
+                        minLines = 2,
+                        visualTransformation = if (showSignedUrl) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            Text(
+                                if (showSignedUrl) stringResource(R.string.hide) else stringResource(R.string.show),
+                                modifier = Modifier
+                                    .clickable { showSignedUrl = !showSignedUrl }
+                                    .padding(8.dp),
+                                color = colors.onSurfaceVariant,
+                            )
+                        },
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(stringResource(R.string.backup_include_database), modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = includeDatabase,
+                            onCheckedChange = {
+                                includeDatabase = it
+                                includeDatabaseDirty = true
+                            },
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(stringResource(R.string.backup_include_import_copies))
+                            if (signedUrlCoversOnlyDatabase && CloudBackupPolicy.isUploadConfigured(signedUrl)) {
+                                Text(
+                                    stringResource(R.string.backup_import_copies_signed_url_hint),
+                                    color = colors.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = includeImports &&
+                                !(signedUrlCoversOnlyDatabase && CloudBackupPolicy.isUploadConfigured(signedUrl)),
+                            enabled = !(signedUrlCoversOnlyDatabase && CloudBackupPolicy.isUploadConfigured(signedUrl)),
+                            onCheckedChange = {
+                                includeImports = it
+                                includeImportsDirty = true
+                            },
+                        )
+                    }
+                    Text(stringResource(R.string.backup_status), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    if (backupRunning) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
+                            Text(stringResource(R.string.backup_running), color = colors.onSurfaceVariant)
+                        }
+                    }
+                    Text(
+                        stringResource(
+                            R.string.backup_last_attempt,
+                            settings.backupLastAttemptEpochSeconds?.let(::formatEpochSeconds) ?: neverLabel,
+                        ),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        stringResource(
+                            R.string.backup_last_success,
+                            settings.backupLastSuccessEpochSeconds?.let(::formatEpochSeconds) ?: neverLabel,
+                        ),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (settings.backupLastMessage.isNotBlank()) {
+                        Text(
+                            settings.backupLastMessage,
+                            color = when (settings.backupLastOk) {
+                                true -> colors.primary
+                                false -> colors.error
+                                null -> colors.onSurfaceVariant
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    } else if (!settings.cloudBackupEnabled) {
+                        Text(
+                            stringResource(R.string.backup_not_configured),
+                            color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Button(onClick = {
                         scope.launch {
                             container.settingsStore.update { stored ->
-                                val url = if (signedUrlDirty) signedUrl else stored.gcsSignedUrl
+                                val nextBucket = if (bucketDirty) bucket else stored.gcsBucket
+                                val nextPrefix = if (prefixDirty) prefix else stored.gcsPrefix
+                                val raw = if (signedUrlDirty) signedUrl.trim() else stored.gcsSignedUrl
+                                val url = normalizeStoredSignedUrl(raw, nextBucket, nextPrefix)
                                 stored.copy(
-                                    cloudBackupEnabled = url.isNotBlank(),
-                                    gcsBucket = if (bucketDirty) bucket else stored.gcsBucket,
-                                    gcsPrefix = if (prefixDirty) prefix else stored.gcsPrefix,
+                                    cloudBackupEnabled = CloudBackupPolicy.isUploadConfigured(url),
+                                    gcsBucket = nextBucket,
+                                    gcsPrefix = nextPrefix,
                                     gcsSignedUrl = url,
+                                    backupIncludeDatabase = if (includeDatabaseDirty) includeDatabase else stored.backupIncludeDatabase,
+                                    backupIncludeImportCopies = if (includeImportsDirty) includeImports else stored.backupIncludeImportCopies,
                                 )
                             }
                             bucketDirty = false
                             prefixDirty = false
                             signedUrlDirty = false
+                            signedUrlPathLocked = false
+                            includeDatabaseDirty = false
+                            includeImportsDirty = false
                         }
                     }) {
                         Text(stringResource(R.string.save_backup_settings))
+                    }
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                if (bucketDirty || prefixDirty || signedUrlDirty || includeDatabaseDirty || includeImportsDirty) {
+                                    container.settingsStore.update { stored ->
+                                        val nextBucket = if (bucketDirty) bucket else stored.gcsBucket
+                                        val nextPrefix = if (prefixDirty) prefix else stored.gcsPrefix
+                                        val raw = if (signedUrlDirty) signedUrl.trim() else stored.gcsSignedUrl
+                                        val url = normalizeStoredSignedUrl(raw, nextBucket, nextPrefix)
+                                        stored.copy(
+                                            cloudBackupEnabled = CloudBackupPolicy.isUploadConfigured(url),
+                                            gcsBucket = nextBucket,
+                                            gcsPrefix = nextPrefix,
+                                            gcsSignedUrl = url,
+                                            backupIncludeDatabase = if (includeDatabaseDirty) includeDatabase else stored.backupIncludeDatabase,
+                                            backupIncludeImportCopies = if (includeImportsDirty) includeImports else stored.backupIncludeImportCopies,
+                                        )
+                                    }
+                                    bucketDirty = false
+                                    prefixDirty = false
+                                    signedUrlDirty = false
+                                    signedUrlPathLocked = false
+                                    includeDatabaseDirty = false
+                                    includeImportsDirty = false
+                                }
+                                container.cloudBackupCoordinator.enqueue(BackupTrigger.Manual)
+                            }
+                        },
+                        enabled = !backupRunning && (
+                            settings.cloudBackupEnabled ||
+                                CloudBackupPolicy.isUploadConfigured(signedUrl)
+                            ),
+                    ) {
+                        Text(stringResource(R.string.backup_now))
                     }
                 }
             }

@@ -54,17 +54,88 @@ class LegacySbfspotImporters(
 
     fun readUri(uri: Uri): Pair<String, ByteArray> {
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: "import.csv"
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("Unable to open $uri")
+        val bytes = context.contentResolver.openInputStream(uri)?.use {
+            RemoteBrowseHelpers.readBytesCapped(it)
+        } ?: error("Unable to open $uri")
         return name to bytes
     }
 
     fun downloadUrl(url: String): Pair<String, ByteArray> =
         url.substringAfterLast('/') to urlClient.download(url)
 
-    fun downloadFtp(host: String, username: String, password: String, path: String): Pair<String, ByteArray> =
-        path.substringAfterLast('/') to ftpClient.download(host, username, password, path)
+    fun downloadFtp(
+        host: String,
+        port: Int = FtpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): Pair<String, ByteArray> =
+        RemoteBrowseHelpers.fileName(path) to ftpClient.download(host, port, username, password, path)
 
-    fun downloadSftp(host: String, username: String, password: String, path: String): Pair<String, ByteArray> =
-        path.substringAfterLast('/') to sftpClient.download(host, username, password, path)
+    fun downloadSftp(
+        host: String,
+        port: Int = SftpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): Pair<String, ByteArray> =
+        RemoteBrowseHelpers.fileName(path) to sftpClient.download(host, port, username, password, path)
+
+    fun listFtp(
+        host: String,
+        port: Int = FtpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> =
+        RemoteBrowseHelpers.prepareBrowseEntries(
+            ftpClient.list(host, port, username, password, path),
+        )
+
+    fun listSftp(
+        host: String,
+        port: Int = SftpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> =
+        RemoteBrowseHelpers.prepareBrowseEntries(
+            sftpClient.list(host, port, username, password, path),
+        )
+
+    fun homeDirectoryFtp(
+        host: String,
+        port: Int = FtpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+    ): String = ftpClient.workingDirectory(host, port, username, password)
+
+    fun homeDirectorySftp(
+        host: String,
+        port: Int = SftpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+    ): String = sftpClient.workingDirectory(host, port, username, password)
+
+    fun listCsvRecursiveFtp(
+        host: String,
+        port: Int = FtpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> =
+        RemoteBrowseHelpers.collectCsvFiles(path) { dir ->
+            listFtp(host, port, username, password, dir)
+        }
+
+    fun listCsvRecursiveSftp(
+        host: String,
+        port: Int = SftpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> =
+        RemoteBrowseHelpers.collectCsvFiles(path) { dir ->
+            listSftp(host, port, username, password, dir)
+        }
 }

@@ -1,0 +1,188 @@
+package com.alorbach.solarmonitor
+
+import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class CloudBackupPolicyTest {
+    @Test
+    fun buildUploadUrl_substitutesBucketPrefixAndFilename() {
+        val url = CloudBackupPolicy.buildUploadUrl(
+            template = "https://storage.example/{bucket}/{prefix}/{filename}?sig=abc",
+            bucket = "my-bucket",
+            prefix = "/solar-monitor/",
+            filename = "solar-monitor.db",
+        )
+        assertEquals(
+            "https://storage.example/my-bucket/solar-monitor/solar-monitor.db?sig=abc",
+            url,
+        )
+    }
+
+    @Test
+    fun buildUploadUrl_keepsDistinctFilenames() {
+        val template = "https://storage.example/{bucket}/{prefix}/{filename}"
+        val db = CloudBackupPolicy.buildUploadUrl(template, "b", "p", "solar-monitor.db")
+        val csv = CloudBackupPolicy.buildUploadUrl(template, "b", "p", "daydata.csv")
+        assertEquals("https://storage.example/b/p/solar-monitor.db", db)
+        assertEquals("https://storage.example/b/p/daydata.csv", csv)
+    }
+
+    @Test
+    fun resolveSkipReason_whenDisabledOrBlankUrl() {
+        assertEquals(
+            "Cloud backup is not configured",
+            CloudBackupPolicy.resolveSkipReason(
+                enabled = false,
+                signedUrlBlank = true,
+                includeDatabase = true,
+                includeImportCopies = true,
+            ),
+        )
+        assertEquals(
+            "Cloud backup is not configured",
+            CloudBackupPolicy.resolveSkipReason(
+                enabled = true,
+                signedUrlBlank = true,
+                includeDatabase = true,
+                includeImportCopies = true,
+            ),
+        )
+    }
+
+    @Test
+    fun resolveSkipReason_whenNoContentSelected() {
+        assertEquals(
+            "No backup content selected",
+            CloudBackupPolicy.resolveSkipReason(
+                enabled = true,
+                signedUrlBlank = false,
+                includeDatabase = false,
+                includeImportCopies = false,
+            ),
+        )
+        assertNull(
+            CloudBackupPolicy.resolveSkipReason(
+                enabled = true,
+                signedUrlBlank = false,
+                includeDatabase = true,
+                includeImportCopies = false,
+            ),
+        )
+    }
+
+    @Test
+    fun shouldThrottleAuto_withinWindow() {
+        val lastSuccess = 1_000_000L
+        assertTrue(
+            CloudBackupPolicy.shouldThrottleAuto(
+                nowEpochSeconds = lastSuccess + CloudBackupPolicy.AUTO_THROTTLE_SECONDS - 1,
+                lastSuccessEpochSeconds = lastSuccess,
+            ),
+        )
+        assertFalse(
+            CloudBackupPolicy.shouldThrottleAuto(
+                nowEpochSeconds = lastSuccess + CloudBackupPolicy.AUTO_THROTTLE_SECONDS,
+                lastSuccessEpochSeconds = lastSuccess,
+            ),
+        )
+        assertFalse(
+            CloudBackupPolicy.shouldThrottleAuto(
+                nowEpochSeconds = lastSuccess + 1,
+                lastSuccessEpochSeconds = null,
+            ),
+        )
+    }
+
+    @Test
+    fun displaySignedUrlTemplate_usesDefaultWhenBlank() {
+        assertEquals(
+            "https://storage.googleapis.com/{bucket}/{prefix}/solar-monitor.db",
+            CloudBackupPolicy.displaySignedUrlTemplate(""),
+        )
+        assertEquals(
+            "https://storage.googleapis.com/my-bucket/solar-monitor/solar-monitor.db",
+            CloudBackupPolicy.displaySignedUrlTemplate("", "my-bucket", "solar-monitor"),
+        )
+        assertEquals(
+            "https://example/signed",
+            CloudBackupPolicy.displaySignedUrlTemplate("https://example/signed"),
+        )
+    }
+
+    @Test
+    fun buildPathTemplate_usesConfiguredValues() {
+        assertEquals(
+            "https://storage.googleapis.com/my-bucket/backups/{filename}",
+            CloudBackupPolicy.buildPathTemplate("my-bucket", "/backups/"),
+        )
+        assertEquals(
+            CloudBackupPolicy.DEFAULT_SIGNED_URL_TEMPLATE,
+            CloudBackupPolicy.buildPathTemplate("", ""),
+        )
+    }
+
+    @Test
+    fun withAutoPath_dropsSignatureQuery() {
+        val updated = CloudBackupPolicy.withAutoPath(
+            existingUrl = "https://storage.googleapis.com/{bucket}/{prefix}/{filename}?X-Goog-Signature=abc",
+            bucket = "prod",
+            prefix = "solar",
+        )
+        assertEquals(
+            "https://storage.googleapis.com/prod/solar/solar-monitor.db",
+            updated,
+        )
+    }
+
+    @Test
+    fun selectableBackupFilenames_limitsSignedPlaceholderToDatabase() {
+        val template =
+            "https://storage.googleapis.com/b/p/{filename}?X-Goog-Signature=abc"
+        assertEquals(
+            listOf("solar-monitor.db"),
+            CloudBackupPolicy.selectableBackupFilenames(
+                template,
+                listOf("solar-monitor.db", "day.csv", "archive.zip"),
+            ),
+        )
+    }
+
+    @Test
+    fun isUploadConfigured_rejectsBlankAndPlaceholderDefault() {
+        assertFalse(CloudBackupPolicy.isUploadConfigured(""))
+        assertFalse(CloudBackupPolicy.isUploadConfigured(CloudBackupPolicy.DEFAULT_SIGNED_URL_TEMPLATE))
+        assertFalse(
+            CloudBackupPolicy.isUploadConfigured(
+                "https://storage.googleapis.com/my-bucket/solar-monitor/{filename}",
+            ),
+        )
+        assertFalse(
+            CloudBackupPolicy.isUploadConfigured(
+                "http://storage.googleapis.com/my-bucket/solar-monitor.db?X-Goog-Signature=abc",
+            ),
+        )
+        assertTrue(
+            CloudBackupPolicy.isUploadConfigured(
+                CloudBackupPolicy.buildDatabaseObjectUrl("my-bucket", "solar-monitor") +
+                    "?X-Goog-Signature=abc",
+            ),
+        )
+    }
+
+    @Test
+    fun isTransientUploadFailure_coversDnsAndConnectOutages() {
+        assertTrue(
+            CloudBackupPolicy.isTransientUploadFailure(
+                "Unable to resolve host storage.googleapis.com: No address associated with hostname",
+            ),
+        )
+        assertTrue(CloudBackupPolicy.isTransientUploadFailure("Failed to connect to storage.googleapis.com"))
+        assertTrue(CloudBackupPolicy.isTransientUploadFailure("Network is unreachable"))
+        assertTrue(CloudBackupPolicy.isTransientUploadFailure("gcs upload failed: 503"))
+        assertFalse(CloudBackupPolicy.isTransientUploadFailure("gcs upload failed: 403"))
+    }
+}

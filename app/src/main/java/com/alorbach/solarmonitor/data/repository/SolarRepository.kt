@@ -445,7 +445,17 @@ class SolarRepository(
             .substringAfterLast('\\')
             .replace("..", "")
             .ifBlank { "import.bin" }
-        val file = targetDir.resolve(safeName)
+        var file = targetDir.resolve(safeName)
+        if (file.exists()) {
+            val dot = safeName.lastIndexOf('.')
+            val base = if (dot > 0) safeName.substring(0, dot) else safeName
+            val ext = if (dot > 0) safeName.substring(dot) else ""
+            var index = 1
+            do {
+                file = targetDir.resolve("$base-$index$ext")
+                index++
+            } while (file.exists())
+        }
         require(file.canonicalPath.startsWith(targetDir.canonicalPath)) {
             "Invalid import path"
         }

@@ -5,14 +5,17 @@ import com.jcraft.jsch.HostKey
 import com.jcraft.jsch.HostKeyRepository
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.JSchException
+import com.jcraft.jsch.SftpATTRS
 import com.jcraft.jsch.SftpException
 import com.jcraft.jsch.UserInfo
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.apache.commons.net.ftp.FTPClient
+import org.apache.commons.net.ftp.FTPFile
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.util.Vector
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -33,25 +36,84 @@ class UrlImportClient(
         val request = Request.Builder().url(url).build()
         okHttpClient.newCall(request).execute().use { response ->
             require(response.isSuccessful) { "URL import failed: ${response.code}" }
-            return response.body?.bytes() ?: error("Empty response body")
+            val body = response.body ?: error("Empty response body")
+            val declared = body.contentLength()
+            if (declared >= 0) {
+                require(declared <= RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES) {
+                    "Import file exceeds ${RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)} MiB limit"
+                }
+            }
+            return body.byteStream().use { RemoteBrowseHelpers.readBytesCapped(it) }
         }
     }
 }
 
 class FtpImportClient {
-    fun download(host: String, username: String, password: String, path: String): ByteArray {
+    fun download(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): ByteArray = withClient(host, port, username, password) { ftp ->
+        val stream = ftp.retrieveFileStream(path) ?: error("FTP retrieve failed for $path")
+        try {
+            RemoteBrowseHelpers.readBytesCapped(stream)
+        } finally {
+            runCatching { stream.close() }
+            check(ftp.completePendingCommand()) { "FTP retrieve failed for $path" }
+        }
+    }
+
+    fun list(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> = withClient(host, port, username, password) { ftp ->
+        val dir = RemoteBrowseHelpers.normalizeDirectory(path)
+        val files: Array<FTPFile> = ftp.listFiles(dir)
+            ?: error("FTP list failed for $dir")
+        files.mapNotNull { file ->
+            val name = file.name ?: return@mapNotNull null
+            if (name == "." || name == "..") return@mapNotNull null
+            RemoteEntry(
+                name = name,
+                path = RemoteBrowseHelpers.joinPath(dir, name),
+                isDirectory = file.isDirectory,
+                size = if (file.isFile) file.size.takeIf { it >= 0 } else null,
+            )
+        }
+    }
+
+    /** Current working directory after login (home for most accounts). */
+    fun workingDirectory(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+    ): String = withClient(host, port, username, password) { ftp ->
+        RemoteBrowseHelpers.normalizeDirectory(ftp.printWorkingDirectory().orEmpty().ifBlank { "/" })
+    }
+
+    private fun <T> withClient(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        block: (FTPClient) -> T,
+    ): T {
         val ftp = FTPClient()
         ftp.connectTimeout = 20_000
         ftp.defaultTimeout = 60_000
         ftp.setDataTimeout(java.time.Duration.ofMillis(60_000))
         try {
-            ftp.connect(host)
+            ftp.connect(host, port)
             check(ftp.login(username, password)) { "FTP login failed" }
             ftp.enterLocalPassiveMode()
             ftp.setFileType(org.apache.commons.net.ftp.FTP.BINARY_FILE_TYPE)
-            val out = ByteArrayOutputStream()
-            check(ftp.retrieveFile(path, out)) { "FTP retrieve failed for $path" }
-            return out.toByteArray()
+            return block(ftp)
         } finally {
             runCatching {
                 if (ftp.isConnected) {
@@ -61,12 +123,72 @@ class FtpImportClient {
             }
         }
     }
+
+    companion object {
+        const val DEFAULT_PORT = 21
+    }
 }
 
 class SftpImportClient(
     private val knownHostsFile: File,
 ) {
-    fun download(host: String, username: String, password: String, path: String): ByteArray {
+    fun download(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): ByteArray = withChannel(host, port, username, password) { channel ->
+        try {
+            channel.get(path).use { input -> RemoteBrowseHelpers.readBytesCapped(input) }
+        } catch (error: SftpException) {
+            throw IOException("SFTP download of $path from $host failed: ${error.message}", error)
+        }
+    }
+
+    fun list(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> = withChannel(host, port, username, password) { channel ->
+        val dir = RemoteBrowseHelpers.normalizeDirectory(path)
+        try {
+            @Suppress("UNCHECKED_CAST")
+            val entries = channel.ls(dir) as Vector<ChannelSftp.LsEntry>
+            entries.mapNotNull { entry ->
+                val name = entry.filename ?: return@mapNotNull null
+                if (name == "." || name == "..") return@mapNotNull null
+                val attrs: SftpATTRS? = entry.attrs
+                RemoteEntry(
+                    name = name,
+                    path = RemoteBrowseHelpers.joinPath(dir, name),
+                    isDirectory = attrs?.isDir == true,
+                    size = attrs?.takeIf { !it.isDir }?.size?.takeIf { it >= 0 },
+                )
+            }
+        } catch (error: SftpException) {
+            throw IOException("SFTP list of $dir on $host failed: ${error.message}", error)
+        }
+    }
+
+    fun workingDirectory(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+    ): String = withChannel(host, port, username, password) { channel ->
+        RemoteBrowseHelpers.normalizeDirectory(channel.pwd().orEmpty().ifBlank { "/" })
+    }
+
+    private fun <T> withChannel(
+        host: String,
+        port: Int,
+        username: String,
+        password: String,
+        block: (ChannelSftp) -> T,
+    ): T {
         knownHostsFile.parentFile?.mkdirs()
         if (!knownHostsFile.exists()) {
             knownHostsFile.createNewFile()
@@ -92,7 +214,7 @@ class SftpImportClient(
             override fun getHostKey(): Array<HostKey>? = knownHosts.hostKey
             override fun getHostKey(host: String?, type: String?): Array<HostKey>? = knownHosts.getHostKey(host, type)
         }
-        val session = jsch.getSession(username, host, 22).apply {
+        val session = jsch.getSession(username, host, port).apply {
             setPassword(password)
             setConfig("StrictHostKeyChecking", "yes")
         }
@@ -107,10 +229,8 @@ class SftpImportClient(
             } catch (error: JSchException) {
                 throw connectionFailure(host, error)
             }
-            return try {
-                channel.get(path).use { input -> input.readBytes() }
-            } catch (error: SftpException) {
-                throw IOException("SFTP download of $path from $host failed: ${error.message}", error)
+            try {
+                return block(channel)
             } finally {
                 channel.disconnect()
             }
@@ -131,6 +251,10 @@ class SftpImportClient(
         } else {
             IOException("SFTP connection to $host failed: ${message.ifBlank { error::class.java.simpleName }}", error)
         }
+    }
+
+    companion object {
+        const val DEFAULT_PORT = 22
     }
 }
 

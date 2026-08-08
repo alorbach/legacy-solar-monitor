@@ -1,5 +1,7 @@
 package com.alorbach.solarmonitor.data.repository
 
+import com.alorbach.solarmonitor.data.cloud.BackupTrigger
+import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
@@ -50,6 +52,7 @@ data class LiveMonitoringState(
 class LiveMonitoringRepository(
     private val repository: SolarRepository,
     private val bluetoothGateway: SmaLegacyBluetoothGateway,
+    private val cloudBackupCoordinator: CloudBackupCoordinator,
 ) {
     private val _state = MutableStateFlow(LiveMonitoringState())
     val state: StateFlow<LiveMonitoringState> = _state.asStateFlow()
@@ -285,6 +288,9 @@ class LiveMonitoringRepository(
             if (aborted) {
                 Result.failure(IllegalStateException(saved.getOrNull() ?: "Archive sync cancelled"))
             } else {
+                if (saved.isSuccess) {
+                    cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                }
                 saved
             }
         }

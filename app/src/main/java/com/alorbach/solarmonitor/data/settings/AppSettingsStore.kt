@@ -22,6 +22,12 @@ data class AppSettings(
     val gcsBucket: String = "",
     val gcsPrefix: String = "solar-monitor",
     val gcsSignedUrl: String = "",
+    val backupIncludeDatabase: Boolean = true,
+    val backupIncludeImportCopies: Boolean = true,
+    val backupLastAttemptEpochSeconds: Long? = null,
+    val backupLastSuccessEpochSeconds: Long? = null,
+    val backupLastMessage: String = "",
+    val backupLastOk: Boolean? = null,
     val statsGranularity: StatsGranularity = StatsGranularity.DAY,
     val statsSelectedDeviceId: Long? = null,
     /** Empty string means follow the system locale. */
@@ -62,6 +68,24 @@ class AppSettingsStore(
                 credentialStore.putNamed(CredentialStore.KEY_GCS_SIGNED_URL, updated.gcsSignedUrl)
             }
             prefs.remove(Keys.legacyGcsSignedUrl)
+            prefs[Keys.backupIncludeDatabase] = updated.backupIncludeDatabase
+            prefs[Keys.backupIncludeImportCopies] = updated.backupIncludeImportCopies
+            if (updated.backupLastAttemptEpochSeconds == null) {
+                prefs.remove(Keys.backupLastAttemptEpochSeconds)
+            } else {
+                prefs[Keys.backupLastAttemptEpochSeconds] = updated.backupLastAttemptEpochSeconds
+            }
+            if (updated.backupLastSuccessEpochSeconds == null) {
+                prefs.remove(Keys.backupLastSuccessEpochSeconds)
+            } else {
+                prefs[Keys.backupLastSuccessEpochSeconds] = updated.backupLastSuccessEpochSeconds
+            }
+            prefs[Keys.backupLastMessage] = updated.backupLastMessage
+            when (updated.backupLastOk) {
+                null -> prefs.remove(Keys.backupLastOk)
+                true -> prefs[Keys.backupLastOk] = true
+                false -> prefs[Keys.backupLastOk] = false
+            }
             prefs[Keys.statsGranularity] = updated.statsGranularity.name
             if (updated.statsSelectedDeviceId == null) {
                 prefs.remove(Keys.statsSelectedDeviceId)
@@ -91,6 +115,12 @@ class AppSettingsStore(
             gcsSignedUrl = credentialStore.getNamed(CredentialStore.KEY_GCS_SIGNED_URL)
                 ?: prefs[Keys.legacyGcsSignedUrl]
                 ?: "",
+            backupIncludeDatabase = prefs[Keys.backupIncludeDatabase] ?: true,
+            backupIncludeImportCopies = prefs[Keys.backupIncludeImportCopies] ?: true,
+            backupLastAttemptEpochSeconds = prefs[Keys.backupLastAttemptEpochSeconds],
+            backupLastSuccessEpochSeconds = prefs[Keys.backupLastSuccessEpochSeconds],
+            backupLastMessage = prefs[Keys.backupLastMessage] ?: "",
+            backupLastOk = prefs[Keys.backupLastOk],
             statsGranularity = prefs[Keys.statsGranularity]
                 ?.let { runCatching { StatsGranularity.valueOf(it) }.getOrNull() }
                 ?: StatsGranularity.DAY,
@@ -104,6 +134,12 @@ class AppSettingsStore(
         val gcsBucket = stringPreferencesKey("gcs_bucket")
         val gcsPrefix = stringPreferencesKey("gcs_prefix")
         val legacyGcsSignedUrl = stringPreferencesKey("gcs_signed_url")
+        val backupIncludeDatabase = booleanPreferencesKey("backup_include_database")
+        val backupIncludeImportCopies = booleanPreferencesKey("backup_include_import_copies")
+        val backupLastAttemptEpochSeconds = longPreferencesKey("backup_last_attempt_epoch_seconds")
+        val backupLastSuccessEpochSeconds = longPreferencesKey("backup_last_success_epoch_seconds")
+        val backupLastMessage = stringPreferencesKey("backup_last_message")
+        val backupLastOk = booleanPreferencesKey("backup_last_ok")
         val statsGranularity = stringPreferencesKey("stats_granularity")
         val statsSelectedDeviceId = longPreferencesKey("stats_selected_device_id")
         val languageTag = stringPreferencesKey("language_tag")
