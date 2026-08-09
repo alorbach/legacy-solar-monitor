@@ -88,6 +88,13 @@ class SolarRepository(
 
     suspend fun deleteDevice(deviceId: Long) = dao.deleteDevice(deviceId)
 
+    /** Wipes all stored history for a device. Sync/import never call this — user must opt in. */
+    suspend fun clearDeviceHistory(deviceId: Long) {
+        hourRecomputeMutex(deviceId).withLock {
+            dao.clearDeviceHistory(deviceId)
+        }
+    }
+
     suspend fun getDevice(deviceId: Long): DeviceProfileEntity? = dao.getDeviceById(deviceId)
 
     suspend fun getDeviceByMac(mac: String): DeviceProfileEntity? = dao.getDeviceByMac(mac)
@@ -103,7 +110,7 @@ class SolarRepository(
     suspend fun getImportSources(deviceId: Long): List<ImportSourceEntity> = dao.getImportSources(deviceId)
 
     suspend fun saveSpotSamples(samples: List<SpotSampleEntity>) {
-        if (samples.isNotEmpty()) dao.insertSpotSamples(samples)
+        if (samples.isNotEmpty()) dao.upsertSpotSamples(samples)
     }
 
     suspend fun saveLiveSample(deviceId: Long, sample: SpotSampleEntity, status: String) {
@@ -133,7 +140,7 @@ class SolarRepository(
         spotSamples: List<SpotSampleEntity> = emptyList(),
         status: String,
     ) {
-        if (spotSamples.isNotEmpty()) dao.insertSpotSamples(spotSamples)
+        if (spotSamples.isNotEmpty()) dao.upsertSpotSamples(spotSamples)
         if (dayItems.isNotEmpty()) dao.upsertDayAggregates(dayItems)
         if (monthItems.isNotEmpty()) dao.upsertMonthAggregates(monthItems)
         if (spotSamples.isNotEmpty()) {
@@ -157,12 +164,24 @@ class SolarRepository(
         dayAggregates: List<DayAggregateEntity>,
         monthAggregates: List<MonthAggregateEntity>,
         events: List<DeviceEventEntity>,
+        recomputeHours: Boolean = true,
     ) {
-        dao.importBundle(spotSamples, dayAggregates, monthAggregates, events)
-        spotSamples.groupBy { it.deviceId }.forEach { (deviceId, samples) ->
+        val deviceId = spotSamples.firstOrNull()?.deviceId
+            ?: dayAggregates.firstOrNull()?.deviceId
+            ?: monthAggregates.firstOrNull()?.deviceId
+            ?: events.firstOrNull()?.deviceId
+        if (deviceId != null) {
+            hourRecomputeMutex(deviceId).withLock {
+                dao.importBundle(spotSamples, dayAggregates, monthAggregates, events)
+            }
+        } else {
+            dao.importBundle(spotSamples, dayAggregates, monthAggregates, events)
+        }
+        if (!recomputeHours) return
+        spotSamples.groupBy { it.deviceId }.forEach { (id, samples) ->
             if (samples.isNotEmpty()) {
                 recomputeHourAggregates(
-                    deviceId = deviceId,
+                    deviceId = id,
                     fromEpochSeconds = samples.minOf { it.timestampEpochSeconds },
                     toEpochSeconds = samples.maxOf { it.timestampEpochSeconds },
                 )
@@ -175,18 +194,37 @@ class SolarRepository(
         fromEpochSeconds: Long,
         toEpochSeconds: Long,
     ) {
+        // Bound heap for multi-year folder imports: recompute one week at a time.
+        val chunkSeconds = 7L * 24L * 3600L
+        var cursor = fromEpochSeconds
+        while (cursor <= toEpochSeconds) {
+            val chunkEnd = minOf(toEpochSeconds, cursor + chunkSeconds - 1)
+            recomputeHourAggregatesWindow(deviceId, cursor, chunkEnd)
+            cursor = chunkEnd + 1
+        }
+    }
+
+    private suspend fun recomputeHourAggregatesWindow(
+        deviceId: Long,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+    ) {
         hourRecomputeMutex(deviceId).withLock {
             val zoneId = deviceZone(deviceId)
             val fromHour = StatisticsAggregator.hourStartEpochSeconds(fromEpochSeconds, zoneId)
             val toHour = StatisticsAggregator.hourStartEpochSeconds(toEpochSeconds, zoneId)
-            // Include one hour of lookback so the first bucket has a baseline total.
-            val lookback = fromHour - 3600
+            // Short live windows keep a 1h baseline; multi-day folder chunks keep a week
+            // so cumulative eTotalWh survives gaps at chunk boundaries.
+            val spanSeconds = (toEpochSeconds - fromEpochSeconds).coerceAtLeast(0L)
+            val lookbackPad = if (spanSeconds <= 6L * 3600L) 3600L else 7L * 24L * 3600L
+            val lookback = fromHour - lookbackPad
             val samples = dao.getSpotSamplesInRange(deviceId, lookback, toHour + 3599)
             val aggregates = StatisticsAggregator.hourAggregatesFromSamples(
                 deviceId = deviceId,
                 samples = samples,
                 zoneId = zoneId,
             ).filter { it.hourEpochSeconds in fromHour..toHour }
+            // Replace the recomputed window so hours without usable eTotalWh do not stay stale.
             dao.deleteHourAggregatesInRange(deviceId, fromHour, toHour)
             if (aggregates.isNotEmpty()) {
                 dao.upsertHourAggregates(aggregates)
@@ -208,9 +246,6 @@ class SolarRepository(
                     zoneId = zoneId,
                 )
                 if (aggregates.isNotEmpty()) {
-                    val from = aggregates.minOf { it.hourEpochSeconds }
-                    val to = aggregates.maxOf { it.hourEpochSeconds }
-                    dao.deleteHourAggregatesInRange(device.id, from, to)
                     dao.upsertHourAggregates(aggregates)
                 }
             }
@@ -229,6 +264,17 @@ class SolarRepository(
             copyPath = copyPath,
         )
     }
+
+    /**
+     * Marks leftover RUNNING jobs failed after process death / abandoned UI imports.
+     * Only jobs created before [processStartedAtEpochSeconds] are touched so a
+     * ScheduledImportWorker started in this process is not raced.
+     */
+    suspend fun failOrphanedImportJobs(processStartedAtEpochSeconds: Long): Int = dao.failRunningImportJobs(
+        completedAt = System.currentTimeMillis() / 1000,
+        message = "Import interrupted (app closed or process stopped)",
+        createdBeforeEpochSeconds = processStartedAtEpochSeconds,
+    )
 
     suspend fun getDeviceDashboard(deviceId: Long): DeviceDashboardSummary? {
         val device = dao.getDeviceById(deviceId) ?: return null

@@ -55,8 +55,8 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM import_sources WHERE deviceId = :deviceId ORDER BY id DESC")
     suspend fun getImportSources(deviceId: Long): List<ImportSourceEntity>
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertSpotSamples(samples: List<SpotSampleEntity>): List<Long>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSpotSamples(samples: List<SpotSampleEntity>): List<Long>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDayAggregates(items: List<DayAggregateEntity>)
@@ -66,6 +66,12 @@ interface SolarMonitorDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertHourAggregates(items: List<HourAggregateEntity>)
+
+    @Query(
+        "DELETE FROM hour_aggregates WHERE deviceId = :deviceId " +
+            "AND hourEpochSeconds BETWEEN :fromHour AND :toHour",
+    )
+    suspend fun deleteHourAggregatesInRange(deviceId: Long, fromHour: Long, toHour: Long)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEvents(items: List<DeviceEventEntity>)
@@ -90,11 +96,29 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM spot_samples WHERE deviceId = :deviceId ORDER BY timestampEpochSeconds")
     suspend fun getAllSpotSamples(deviceId: Long): List<SpotSampleEntity>
 
-    @Query(
-        "DELETE FROM hour_aggregates WHERE deviceId = :deviceId " +
-            "AND hourEpochSeconds BETWEEN :fromHour AND :toHour",
-    )
-    suspend fun deleteHourAggregatesInRange(deviceId: Long, fromHour: Long, toHour: Long)
+    @Query("DELETE FROM spot_samples WHERE deviceId = :deviceId")
+    suspend fun deleteSpotSamplesForDevice(deviceId: Long)
+
+    @Query("DELETE FROM day_aggregates WHERE deviceId = :deviceId")
+    suspend fun deleteDayAggregatesForDevice(deviceId: Long)
+
+    @Query("DELETE FROM month_aggregates WHERE deviceId = :deviceId")
+    suspend fun deleteMonthAggregatesForDevice(deviceId: Long)
+
+    @Query("DELETE FROM hour_aggregates WHERE deviceId = :deviceId")
+    suspend fun deleteHourAggregatesForDevice(deviceId: Long)
+
+    @Query("DELETE FROM device_events WHERE deviceId = :deviceId")
+    suspend fun deleteEventsForDevice(deviceId: Long)
+
+    @Transaction
+    suspend fun clearDeviceHistory(deviceId: Long) {
+        deleteSpotSamplesForDevice(deviceId)
+        deleteDayAggregatesForDevice(deviceId)
+        deleteMonthAggregatesForDevice(deviceId)
+        deleteHourAggregatesForDevice(deviceId)
+        deleteEventsForDevice(deviceId)
+    }
 
     @Query(
         "SELECT * FROM hour_aggregates WHERE deviceId IN (:deviceIds) " +
@@ -133,6 +157,16 @@ interface SolarMonitorDao {
         message: String?,
         copyPath: String?,
     )
+
+    @Query(
+        "UPDATE import_jobs SET status = 'FAILED', completedAtEpochSeconds = :completedAt, " +
+            "message = :message WHERE status = 'RUNNING' AND createdAtEpochSeconds < :createdBeforeEpochSeconds",
+    )
+    suspend fun failRunningImportJobs(
+        completedAt: Long,
+        message: String,
+        createdBeforeEpochSeconds: Long,
+    ): Int
 
     @Query("SELECT * FROM day_aggregates WHERE deviceId = :deviceId AND dateEpochDay BETWEEN :startDay AND :endDay ORDER BY dateEpochDay")
     suspend fun getDayRange(deviceId: Long, startDay: Long, endDay: Long): List<DayAggregateEntity>
@@ -173,7 +207,7 @@ interface SolarMonitorDao {
         monthAggregates: List<MonthAggregateEntity>,
         events: List<DeviceEventEntity>,
     ) {
-        if (spotSamples.isNotEmpty()) insertSpotSamples(spotSamples)
+        if (spotSamples.isNotEmpty()) upsertSpotSamples(spotSamples)
         if (dayAggregates.isNotEmpty()) upsertDayAggregates(dayAggregates)
         if (monthAggregates.isNotEmpty()) upsertMonthAggregates(monthAggregates)
         if (events.isNotEmpty()) upsertEvents(events)

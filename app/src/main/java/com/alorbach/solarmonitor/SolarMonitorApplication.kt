@@ -21,8 +21,12 @@ class SolarMonitorApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        val processStartedAtEpochSeconds = System.currentTimeMillis() / 1000
         container = AppContainer(this)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            // Async so Application.onCreate does not block the main thread on DB I/O.
+            // createdAt <= processStartedAt still catches same-second orphans from the prior process.
+            runCatching { container.repository.failOrphanedImportJobs(processStartedAtEpochSeconds) }
             runCatching { container.settingsStore.migrateLegacySecrets() }
             runCatching { container.repository.backfillHourAggregatesIfNeeded() }
             runCatching {

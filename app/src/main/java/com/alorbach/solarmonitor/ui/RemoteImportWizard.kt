@@ -7,17 +7,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,9 +28,11 @@ import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -45,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -96,6 +103,7 @@ fun RemoteImportWizard(
     val selectedProtocol = RemoteImportProtocol.valueOf(protocol)
 
     var selectedDeviceId by rememberSaveable { mutableStateOf(initialDeviceId) }
+    var clearBeforeImport by rememberSaveable { mutableStateOf(false) }
 
     var host by rememberSaveable { mutableStateOf("") }
     var portText by rememberSaveable {
@@ -114,6 +122,8 @@ fun RemoteImportWizard(
 
     var busy by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var progressCurrent by remember { mutableIntStateOf(0) }
+    var progressTotal by remember { mutableIntStateOf(0) }
 
     // Password is not saveable; after process death fall back to Connection so the user re-enters it.
     LaunchedEffect(Unit) {
@@ -157,7 +167,15 @@ fun RemoteImportWizard(
                     RemoteBrowseHelpers.isImportableFile(RemoteBrowseHelpers.fileName(selection.first))
                 )
         }
-        WizardStep.Confirm -> !busy
+        WizardStep.Confirm -> {
+            if (busy) {
+                false
+            } else if (selectedIsDirectory || RemoteBrowseHelpers.looksLikeDirectory(selectedPath ?: manualPath)) {
+                selectedCsvCount in 1..RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES
+            } else {
+                true
+            }
+        }
     }
 
     suspend fun listDirectory(path: String): Result<List<RemoteEntry>> = withContext(Dispatchers.IO) {
@@ -313,10 +331,16 @@ fun RemoteImportWizard(
                 val selection = resolvedSelection() ?: return
                 val (path, asDirectory) = selection
                 if (asDirectory) {
+                    val normalized = RemoteBrowseHelpers.normalizeDirectory(path)
+                    // Reuse the count from "Select this folder" to avoid a second full remote walk.
+                    if (selectedIsDirectory && selectedPath == normalized && selectedCsvCount > 0) {
+                        manualPath = normalized
+                        step = WizardStep.Confirm.name
+                        return
+                    }
                     scope.launch {
                         busy = true
                         errorMessage = null
-                        val normalized = RemoteBrowseHelpers.normalizeDirectory(path)
                         val result = runCatching { countCsvUnder(normalized) }
                         busy = false
                         result.fold(
@@ -347,9 +371,16 @@ fun RemoteImportWizard(
                 val path = selectedPath ?: manualPath.trim()
                 if (path.isBlank()) return
                 val asDirectory = selectedIsDirectory || RemoteBrowseHelpers.looksLikeDirectory(path)
+                if (asDirectory && selectedCsvCount > RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES) {
+                    errorMessage = "Folder import exceeds ${RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES} CSV files " +
+                        "(found $selectedCsvCount). Choose a smaller subfolder."
+                    return
+                }
                 scope.launch {
                     busy = true
                     errorMessage = null
+                    progressCurrent = 0
+                    progressTotal = 0
                     val request = when (selectedProtocol) {
                         RemoteImportProtocol.FTP -> ImportRequest.FtpRequest(
                             deviceId = deviceId,
@@ -359,6 +390,7 @@ fun RemoteImportWizard(
                             password = password,
                             path = path,
                             directory = asDirectory,
+                            clearBeforeImport = clearBeforeImport,
                             sourceLabel = if (asDirectory) "FTP folder $host:$path" else "FTP $host:$path",
                         )
                         RemoteImportProtocol.SFTP -> ImportRequest.SftpRequest(
@@ -369,11 +401,22 @@ fun RemoteImportWizard(
                             password = password,
                             path = path,
                             directory = asDirectory,
+                            clearBeforeImport = clearBeforeImport,
                             sourceLabel = if (asDirectory) "SFTP folder $host:$path" else "SFTP $host:$path",
                         )
                     }
-                    val result = importManager.run(request)
+                    val result = importManager.run(request) { current, total ->
+                        // Throttle Main updates: avoid one coroutine per file on ~25k imports.
+                        if (current == 1 || current == total || current % 25 == 0) {
+                            scope.launch(Dispatchers.Main.immediate) {
+                                progressCurrent = current
+                                progressTotal = total
+                            }
+                        }
+                    }
                     busy = false
+                    progressCurrent = 0
+                    progressTotal = 0
                     result.fold(
                         onSuccess = {
                             onImportSucceeded()
@@ -386,123 +429,160 @@ fun RemoteImportWizard(
         }
     }
 
+    // Full-screen Dialog so the footer is not clipped by the app NavigationBar /
+    // gesture inset. decorFitsSystemWindows=false + explicit safeDrawing padding.
     Dialog(
         onDismissRequest = { if (!busy) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            dismissOnBackPress = !busy,
+            dismissOnClickOutside = false,
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
     ) {
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .imePadding(),
             color = colors.background,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            stringResource(R.string.remote_import_wizard_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text(
-                            stringResource(R.string.remote_import_step_of, currentStep.ordinal + 1, WizardStep.entries.size),
-                            color = colors.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    IconButton(onClick = { if (!busy) onDismiss() }, enabled = !busy) {
-                        Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cancel))
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                Box(
+            Column(modifier = Modifier.fillMaxSize()) {
+                Column(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp),
                 ) {
-                    when (currentStep) {
-                        WizardStep.Protocol -> ProtocolStep(
-                            selected = selectedProtocol,
-                            onSelect = {
-                                protocol = it.name
-                                portText = defaultPortFor(it).toString()
-                            },
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.remote_import_wizard_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                stringResource(
+                                    R.string.remote_import_step_of,
+                                    currentStep.ordinal + 1,
+                                    WizardStep.entries.size,
+                                ),
+                                color = colors.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        IconButton(onClick = { if (!busy) onDismiss() }, enabled = !busy) {
+                            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.cancel))
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    ) {
+                        when (currentStep) {
+                            WizardStep.Protocol -> ProtocolStep(
+                                selected = selectedProtocol,
+                                onSelect = {
+                                    protocol = it.name
+                                    portText = defaultPortFor(it).toString()
+                                },
+                            )
+                            WizardStep.Device -> DeviceStep(
+                                devices = devices,
+                                selectedDeviceId = selectedDeviceId,
+                                onSelect = { selectedDeviceId = it },
+                            )
+                            WizardStep.Connection -> ConnectionStep(
+                                protocol = selectedProtocol,
+                                host = host,
+                                onHostChange = { host = it },
+                                portText = portText,
+                                onPortChange = { portText = it.filter(Char::isDigit).take(5) },
+                                username = username,
+                                onUsernameChange = { username = it },
+                                password = password,
+                                onPasswordChange = { password = it },
+                                showPassword = showPassword,
+                                onTogglePassword = { showPassword = !showPassword },
+                            )
+                            WizardStep.Browse -> BrowseStep(
+                                currentPath = currentPath,
+                                entries = entries,
+                                selectedPath = selectedPath,
+                                selectedIsDirectory = selectedIsDirectory,
+                                selectedCsvCount = selectedCsvCount,
+                                manualPath = manualPath,
+                                busy = busy,
+                                onManualPathChange = {
+                                    manualPath = it
+                                    selectedPath = null
+                                    selectedIsDirectory = false
+                                    selectedCsvCount = 0
+                                },
+                                onOpenParent = {
+                                    RemoteBrowseHelpers.parentPath(currentPath)?.let(::openDirectory)
+                                },
+                                onOpenDirectory = { openDirectory(it.path) },
+                                onSelectFile = {
+                                    selectedPath = it.path
+                                    selectedIsDirectory = false
+                                    selectedCsvCount = 1
+                                    manualPath = it.path
+                                },
+                                onSelectDirectory = { selectDirectory(it) },
+                            )
+                            WizardStep.Confirm -> ConfirmStep(
+                                protocol = selectedProtocol,
+                                deviceName = devices.firstOrNull { it.id == selectedDeviceId }?.name.orEmpty(),
+                                host = host.trim(),
+                                port = parsedPort(),
+                                username = username.trim(),
+                                path = selectedPath ?: manualPath.trim(),
+                                isDirectory = selectedIsDirectory,
+                                csvCount = selectedCsvCount,
+                                clearBeforeImport = clearBeforeImport,
+                                onClearBeforeImportChange = { clearBeforeImport = it },
+                                enabled = !busy,
+                            )
+                        }
+                    }
+
+                    if (progressTotal > 0) {
+                        Spacer(Modifier.height(10.dp))
+                        val fraction = (progressCurrent.toFloat() / progressTotal.toFloat()).coerceIn(0f, 1f)
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp),
                         )
-                        WizardStep.Device -> DeviceStep(
-                            devices = devices,
-                            selectedDeviceId = selectedDeviceId,
-                            onSelect = { selectedDeviceId = it },
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            stringResource(R.string.remote_import_progress, progressCurrent, progressTotal),
+                            color = colors.primary,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        WizardStep.Connection -> ConnectionStep(
-                            protocol = selectedProtocol,
-                            host = host,
-                            onHostChange = { host = it },
-                            portText = portText,
-                            onPortChange = { portText = it.filter(Char::isDigit).take(5) },
-                            username = username,
-                            onUsernameChange = { username = it },
-                            password = password,
-                            onPasswordChange = { password = it },
-                            showPassword = showPassword,
-                            onTogglePassword = { showPassword = !showPassword },
-                        )
-                        WizardStep.Browse -> BrowseStep(
-                            currentPath = currentPath,
-                            entries = entries,
-                            selectedPath = selectedPath,
-                            selectedIsDirectory = selectedIsDirectory,
-                            selectedCsvCount = selectedCsvCount,
-                            manualPath = manualPath,
-                            busy = busy,
-                            onManualPathChange = {
-                                manualPath = it
-                                selectedPath = null
-                                selectedIsDirectory = false
-                                selectedCsvCount = 0
-                            },
-                            onOpenParent = {
-                                RemoteBrowseHelpers.parentPath(currentPath)?.let(::openDirectory)
-                            },
-                            onOpenDirectory = { openDirectory(it.path) },
-                            onSelectFile = {
-                                selectedPath = it.path
-                                selectedIsDirectory = false
-                                selectedCsvCount = 1
-                                manualPath = it.path
-                            },
-                            onSelectDirectory = { selectDirectory(it) },
-                        )
-                        WizardStep.Confirm -> ConfirmStep(
-                            protocol = selectedProtocol,
-                            deviceName = devices.firstOrNull { it.id == selectedDeviceId }?.name.orEmpty(),
-                            host = host.trim(),
-                            port = parsedPort(),
-                            username = username.trim(),
-                            path = selectedPath ?: manualPath.trim(),
-                            isDirectory = selectedIsDirectory,
-                            csvCount = selectedCsvCount,
-                        )
+                    }
+                    errorMessage?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, color = colors.error, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
 
-                errorMessage?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text(it, color = colors.error, style = MaterialTheme.typography.bodyMedium)
-                }
-
-                Spacer(Modifier.height(12.dp))
-
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 12.dp, bottom = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     OutlinedButton(
@@ -834,6 +914,9 @@ private fun ConfirmStep(
     path: String,
     isDirectory: Boolean,
     csvCount: Int,
+    clearBeforeImport: Boolean,
+    onClearBeforeImportChange: (Boolean) -> Unit,
+    enabled: Boolean,
 ) {
     val colors = MaterialTheme.colorScheme
     Column(
@@ -855,6 +938,16 @@ private fun ConfirmStep(
         )
         if (isDirectory) {
             ConfirmRow(stringResource(R.string.remote_import_csv_count), csvCount.toString())
+            if (csvCount > RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES) {
+                Text(
+                    stringResource(
+                        R.string.remote_import_folder_limit,
+                        RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES,
+                        csvCount,
+                    ),
+                    color = colors.error,
+                )
+            }
         }
         Text(
             stringResource(
@@ -862,6 +955,37 @@ private fun ConfirmStep(
             ),
             color = colors.onSurfaceVariant,
         )
+        Spacer(Modifier.height(4.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .toggleable(
+                    value = clearBeforeImport,
+                    enabled = enabled,
+                    role = Role.Checkbox,
+                    onValueChange = onClearBeforeImportChange,
+                )
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Checkbox(
+                checked = clearBeforeImport,
+                onCheckedChange = null,
+                enabled = enabled,
+            )
+            Column(modifier = Modifier.padding(start = 4.dp, top = 12.dp)) {
+                Text(
+                    stringResource(R.string.remote_import_clear_before),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    stringResource(R.string.remote_import_clear_before_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
@@ -872,3 +996,4 @@ private fun ConfirmRow(label: String, value: String) {
         Text(value, fontWeight = FontWeight.Medium)
     }
 }
+

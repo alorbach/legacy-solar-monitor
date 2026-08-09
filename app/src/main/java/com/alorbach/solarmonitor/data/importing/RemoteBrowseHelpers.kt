@@ -8,10 +8,11 @@ data class RemoteEntry(
 )
 
 object RemoteBrowseHelpers {
-    const val MAX_FOLDER_IMPORT_FILES = 200
+    /** Soft cap for huge SBFspot trees (~years of daily CSVs). */
+    const val MAX_FOLDER_IMPORT_FILES = 25_000
     const val MAX_IMPORT_FILE_BYTES = 50L * 1024L * 1024L
-    /** Soft bound so folder imports cannot stage hundreds of max-sized files at once. */
-    const val MAX_FOLDER_IMPORT_TOTAL_BYTES = 200L * 1024L * 1024L
+    /** Aggregate download cap for one folder import (independent of per-file heap bound). */
+    const val MAX_FOLDER_IMPORT_TOTAL_BYTES = 2L * 1024L * 1024L * 1024L
 
     fun readBytesCapped(
         input: java.io.InputStream,

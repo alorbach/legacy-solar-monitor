@@ -124,8 +124,10 @@ class LegacySbfspotImporters(
         password: String,
         path: String,
     ): List<RemoteEntry> =
-        RemoteBrowseHelpers.collectCsvFiles(path) { dir ->
-            listFtp(host, port, username, password, dir)
+        ftpClient.withSession(host, port, username, password) { session ->
+            RemoteBrowseHelpers.collectCsvFiles(path) { dir ->
+                RemoteBrowseHelpers.prepareBrowseEntries(session.list(dir))
+            }
         }
 
     fun listCsvRecursiveSftp(
@@ -135,7 +137,81 @@ class LegacySbfspotImporters(
         password: String,
         path: String,
     ): List<RemoteEntry> =
-        RemoteBrowseHelpers.collectCsvFiles(path) { dir ->
-            listSftp(host, port, username, password, dir)
+        sftpClient.withSession(host, port, username, password) { session ->
+            RemoteBrowseHelpers.collectCsvFiles(path) { dir ->
+                RemoteBrowseHelpers.prepareBrowseEntries(session.list(dir))
+            }
         }
+
+    fun forEachCsvInFtpFolder(
+        host: String,
+        port: Int = FtpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+        onProgress: ((current: Int, total: Int) -> Unit)? = null,
+        onFile: (name: String, bytes: ByteArray) -> Unit,
+    ): Int = ftpClient.withSession(host, port, username, password) { session ->
+        forEachCsvInFolder(
+            path = path,
+            listDir = { dir -> RemoteBrowseHelpers.prepareBrowseEntries(session.list(dir)) },
+            download = { remotePath -> session.download(remotePath) },
+            keepAlive = { session.noop() },
+            onProgress = onProgress,
+            onFile = onFile,
+        )
+    }
+
+    fun forEachCsvInSftpFolder(
+        host: String,
+        port: Int = SftpImportClient.DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+        onProgress: ((current: Int, total: Int) -> Unit)? = null,
+        onFile: (name: String, bytes: ByteArray) -> Unit,
+    ): Int = sftpClient.withSession(host, port, username, password) { session ->
+        forEachCsvInFolder(
+            path = path,
+            listDir = { dir -> RemoteBrowseHelpers.prepareBrowseEntries(session.list(dir)) },
+            download = { remotePath -> session.download(remotePath) },
+            keepAlive = { session.keepAlive() },
+            onProgress = onProgress,
+            onFile = onFile,
+        )
+    }
+
+    private fun forEachCsvInFolder(
+        path: String,
+        listDir: (String) -> List<RemoteEntry>,
+        download: (String) -> ByteArray,
+        keepAlive: () -> Unit,
+        onProgress: ((current: Int, total: Int) -> Unit)?,
+        onFile: (name: String, bytes: ByteArray) -> Unit,
+    ): Int {
+        val files = RemoteBrowseHelpers.collectCsvFiles(root = path, listDirectory = listDir)
+        require(files.isNotEmpty()) { "No CSV files found under $path" }
+        require(files.size <= RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES) {
+            "Folder import exceeds ${RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES} CSV files " +
+                "(found ${files.size})"
+        }
+        var totalBytes = 0L
+        files.forEachIndexed { index, entry ->
+            val bytes = download(entry.path)
+            require(bytes.size <= RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES) {
+                "Import file ${entry.name} exceeds ${RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)} MiB limit"
+            }
+            totalBytes += bytes.size
+            require(totalBytes <= RemoteBrowseHelpers.MAX_FOLDER_IMPORT_TOTAL_BYTES) {
+                "Folder import exceeds ${RemoteBrowseHelpers.MAX_FOLDER_IMPORT_TOTAL_BYTES / (1024 * 1024)} MiB total"
+            }
+            onFile(entry.name, bytes)
+            // Local parse/persist can idle the socket; ping before the next download.
+            if (index + 1 < files.size) {
+                runCatching { keepAlive() }
+            }
+            onProgress?.invoke(index + 1, files.size)
+        }
+        return files.size
+    }
 }

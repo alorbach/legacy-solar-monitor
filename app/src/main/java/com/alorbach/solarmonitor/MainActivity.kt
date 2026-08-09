@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
@@ -62,6 +64,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -444,6 +447,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     scrollToDeviceId = pendingScrollDeviceId,
                     onRequestScrollToDevice = { pendingScrollDeviceId = it },
                     onScrollHandled = { pendingScrollDeviceId = null },
+                    monitoredDeviceIds = liveState.activeDeviceIds,
                 )
 
                 AppTab.IMPORT -> ImportTab(
@@ -609,6 +613,7 @@ private fun DevicesTab(
     scrollToDeviceId: Long?,
     onRequestScrollToDevice: (Long) -> Unit,
     onScrollHandled: () -> Unit,
+    monitoredDeviceIds: Set<Long> = emptySet(),
 ) {
     val scope = rememberCoroutineScope()
     val colors = MaterialTheme.colorScheme
@@ -720,6 +725,7 @@ private fun DevicesTab(
                 isScanning = isScanning,
                 onRefreshBluetooth = onRefreshBluetooth,
                 onDataChanged = onDataChanged,
+                continuousLiveActive = device.id in monitoredDeviceIds,
             )
         }
     }
@@ -733,6 +739,7 @@ private fun DeviceEditorCard(
     isScanning: Boolean,
     onRefreshBluetooth: () -> Unit,
     onDataChanged: () -> Unit,
+    continuousLiveActive: Boolean = false,
 ) {
     val scope = rememberCoroutineScope()
     var name by rememberSaveable(device.id) { mutableStateOf(device.name) }
@@ -747,11 +754,13 @@ private fun DeviceEditorCard(
     var liveRunning by remember { mutableStateOf(false) }
     var syncRunning by remember { mutableStateOf(false) }
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showClearHistoryConfirm by remember { mutableStateOf(false) }
+    var clearHistoryRunning by remember { mutableStateOf(false) }
     var actionJob by remember { mutableStateOf<Job?>(null) }
     // The MAC field stays editable while an action runs, so Cancel must abort the MAC the action
     // was started with rather than whatever is in the text field now.
     var actionMac by remember { mutableStateOf<String?>(null) }
-    val anyActionRunning = testRunning || liveRunning || syncRunning
+    val anyActionRunning = testRunning || liveRunning || syncRunning || clearHistoryRunning
     val colors = MaterialTheme.colorScheme
     val context = androidx.compose.ui.platform.LocalContext.current
     val operationLabel = when {
@@ -979,7 +988,7 @@ private fun DeviceEditorCard(
                         Text(stringResource(R.string.sync_history))
                     }
                 }
-                if (anyActionRunning) {
+                if (testRunning || liveRunning || syncRunning) {
                     Button(onClick = {
                         actionJob?.cancel()
                         actionJob = null
@@ -992,10 +1001,61 @@ private fun DeviceEditorCard(
                         Text(stringResource(R.string.cancel))
                     }
                 }
+                Button(
+                    enabled = !anyActionRunning && !liveRunning && !continuousLiveActive,
+                    onClick = { showClearHistoryConfirm = true },
+                ) {
+                    Text(stringResource(R.string.clear_history))
+                }
                 Button(enabled = !anyActionRunning, onClick = { scope.launch { container.repository.deleteDevice(device.id) } }) {
                     Text(stringResource(R.string.delete))
                 }
             }
+            if (showClearHistoryConfirm) {
+                AlertDialog(
+                    onDismissRequest = { if (!clearHistoryRunning) showClearHistoryConfirm = false },
+                    title = { Text(stringResource(R.string.clear_history_title)) },
+                    text = { Text(stringResource(R.string.clear_history_body)) },
+                    confirmButton = {
+                        TextButton(
+                            enabled = !clearHistoryRunning,
+                            onClick = {
+                                clearHistoryRunning = true
+                                scope.launch {
+                                    try {
+                                        container.repository.clearDeviceHistory(device.id)
+                                        container.cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                                        testSuccess = true
+                                        testMessage = context.getString(R.string.clear_history_done)
+                                        onDataChanged()
+                                    } catch (error: Throwable) {
+                                        testSuccess = false
+                                        testMessage = error.message ?: context.getString(R.string.clear_history_failed)
+                                    } finally {
+                                        clearHistoryRunning = false
+                                        showClearHistoryConfirm = false
+                                    }
+                                }
+                            },
+                        ) {
+                            Text(stringResource(R.string.clear_history_confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            enabled = !clearHistoryRunning,
+                            onClick = { showClearHistoryConfirm = false },
+                        ) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    },
+                )
+            }
+            Text(
+                stringResource(R.string.sync_merge_hint),
+                color = colors.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
             if (!device.lastDiagnostics.isNullOrBlank()) {
                 Text(
                     text = if (showDiagnostics) "Hide diagnostics" else "Show diagnostics",
@@ -1153,22 +1213,9 @@ private fun ImportTab(
         }
     }
 
-    if (showRemoteWizard) {
-        RemoteImportWizard(
-            devices = devices,
-            importers = container.importers,
-            importManager = container.importManager,
-            initialDeviceId = selectedDeviceId,
-            onDismiss = { showRemoteWizard = false },
-            onImportSucceeded = {
-                onDataChanged()
-                importMessage = remoteImportSucceededMessage
-            },
-        )
-    }
-
+    Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -1274,13 +1321,31 @@ private fun ImportTab(
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surfaceVariant),
                 shape = RoundedCornerShape(24.dp),
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Text(job.sourceLabel, fontWeight = FontWeight.Bold)
                     Text("${job.sourceType} • ${job.status}")
                     job.message?.let { Text(it) }
                     job.preservedCopyPath?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                 }
             }
+        }
+    }
+
+        if (showRemoteWizard) {
+            RemoteImportWizard(
+                devices = devices,
+                importers = container.importers,
+                importManager = container.importManager,
+                initialDeviceId = selectedDeviceId,
+                onDismiss = { showRemoteWizard = false },
+                onImportSucceeded = {
+                    onDataChanged()
+                    importMessage = remoteImportSucceededMessage
+                },
+            )
         }
     }
 }

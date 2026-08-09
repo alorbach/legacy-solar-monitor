@@ -30,6 +30,8 @@ sealed interface ImportRequest {
     val deviceId: Long?
     val sourceLabel: String
     val sourceType: ImportSourceType
+    /** When true, device history is cleared only after usable import data is parsed. */
+    val clearBeforeImport: Boolean get() = false
 
     data class FileRequest(
         override val deviceId: Long?,
@@ -55,6 +57,7 @@ sealed interface ImportRequest {
         val path: String,
         /** When true, [path] is a directory and all CSV files under it are imported. */
         val directory: Boolean = false,
+        override val clearBeforeImport: Boolean = false,
         override val sourceLabel: String,
         override val sourceType: ImportSourceType = ImportSourceType.FTP,
     ) : ImportRequest
@@ -69,6 +72,7 @@ sealed interface ImportRequest {
         val path: String,
         /** When true, [path] is a directory and all CSV files under it are imported. */
         val directory: Boolean = false,
+        override val clearBeforeImport: Boolean = false,
         override val sourceLabel: String,
         override val sourceType: ImportSourceType = ImportSourceType.SFTP,
     ) : ImportRequest
