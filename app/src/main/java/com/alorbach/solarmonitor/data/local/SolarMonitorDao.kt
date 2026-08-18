@@ -183,6 +183,9 @@ interface SolarMonitorDao {
     @Query("DELETE FROM import_jobs")
     suspend fun deleteAllImportJobs()
 
+    @Query("SELECT id FROM import_jobs")
+    suspend fun listImportJobIds(): List<Long>
+
     @Query("SELECT passwordCredentialId FROM import_jobs WHERE passwordCredentialId IS NOT NULL")
     suspend fun listImportPasswordCredentialIds(): List<String>
 

@@ -12,6 +12,8 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.alorbach.solarmonitor.SolarMonitorApplication
 import com.alorbach.solarmonitor.data.importing.ImportRequest
+import com.alorbach.solarmonitor.data.importing.replayConfig
+import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import java.util.concurrent.TimeUnit
 
 class ScheduledImportWorker(
@@ -25,11 +27,15 @@ class ScheduledImportWorker(
         val container = (applicationContext as SolarMonitorApplication).container
 
         val request = when (sourceType) {
-            "URL" -> ImportRequest.UrlRequest(
-                deviceId,
-                inputData.getString(KEY_URL) ?: return Result.failure(),
-                sourceLabel,
-            )
+            "URL" -> {
+                val credentialId = inputData.getString(KEY_PASSWORD_CREDENTIAL_ID)?.takeIf { it.isNotBlank() }
+                val url = if (credentialId != null) {
+                    container.credentialStore.getSecret(credentialId) ?: return Result.failure()
+                } else {
+                    inputData.getString(KEY_URL)?.takeIf { it.isNotBlank() } ?: return Result.failure()
+                }
+                ImportRequest.UrlRequest(deviceId, url, sourceLabel)
+            }
             "FTP" -> ImportRequest.FtpRequest(
                 deviceId = deviceId,
                 host = inputData.getString(KEY_HOST) ?: return Result.failure(),
@@ -37,6 +43,7 @@ class ScheduledImportWorker(
                 passwordCredentialId = inputData.getString(KEY_PASSWORD_CREDENTIAL_ID)
                     ?: return Result.failure(),
                 path = inputData.getString(KEY_PATH) ?: return Result.failure(),
+                directory = inputData.getBoolean(KEY_DIRECTORY, false),
                 sourceLabel = sourceLabel,
             )
             "SFTP" -> ImportRequest.SftpRequest(
@@ -46,6 +53,7 @@ class ScheduledImportWorker(
                 passwordCredentialId = inputData.getString(KEY_PASSWORD_CREDENTIAL_ID)
                     ?: return Result.failure(),
                 path = inputData.getString(KEY_PATH) ?: return Result.failure(),
+                directory = inputData.getBoolean(KEY_DIRECTORY, false),
                 sourceLabel = sourceLabel,
             )
             else -> return Result.failure()
@@ -80,8 +88,79 @@ class ScheduledImportWorker(
         const val KEY_USERNAME = "username"
         const val KEY_PASSWORD_CREDENTIAL_ID = "password_credential_id"
         const val KEY_PATH = "path"
+        const val KEY_DIRECTORY = "directory"
 
         fun credentialTag(credentialId: String): String = "import_cred_$credentialId"
+
+        fun uniqueName(jobId: Long): String = "scheduled_import_$jobId"
+
+        fun cancel(context: Context, jobId: Long) {
+            WorkManager.getInstance(context).cancelUniqueWork(uniqueName(jobId))
+        }
+
+        fun cancelAll(context: Context, jobIds: Collection<Long>) {
+            val workManager = WorkManager.getInstance(context)
+            jobIds.forEach { workManager.cancelUniqueWork(uniqueName(it)) }
+            workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
+        }
+
+        fun enqueueJob(
+            context: Context,
+            job: ImportJobEntity,
+            intervalHours: Long,
+        ): Boolean {
+            val config = job.replayConfig() ?: return false
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            val data = when (config.kind) {
+                "URL" -> {
+                    val credentialId = job.passwordCredentialId?.takeIf { it.isNotBlank() }
+                    val url = config.url?.takeIf { it.isNotBlank() }
+                    if (credentialId == null && url == null) return false
+                    workDataOf(
+                        KEY_SOURCE_TYPE to "URL",
+                        KEY_SOURCE_LABEL to config.sourceLabel,
+                        KEY_DEVICE_ID to config.deviceId,
+                        KEY_URL to (url ?: ""),
+                        KEY_PASSWORD_CREDENTIAL_ID to (credentialId ?: ""),
+                    )
+                }
+                "FTP", "SFTP" -> {
+                    val passwordCredentialId = job.passwordCredentialId ?: return false
+                    val host = config.host ?: return false
+                    val path = config.path ?: return false
+                    workDataOf(
+                        KEY_SOURCE_TYPE to config.kind,
+                        KEY_SOURCE_LABEL to config.sourceLabel,
+                        KEY_DEVICE_ID to config.deviceId,
+                        KEY_HOST to host,
+                        KEY_USERNAME to (config.username ?: ""),
+                        KEY_PASSWORD_CREDENTIAL_ID to passwordCredentialId,
+                        KEY_PATH to path,
+                        KEY_DIRECTORY to config.directory,
+                    )
+                }
+                else -> return false
+            }
+            val request = PeriodicWorkRequestBuilder<ScheduledImportWorker>(
+                intervalHours.coerceIn(1L, 168L),
+                TimeUnit.HOURS,
+            )
+                .setConstraints(constraints)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
+                .setInputData(data)
+                .apply {
+                    job.passwordCredentialId?.let { addTag(credentialTag(it)) }
+                }
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                uniqueName(job.id),
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request,
+            )
+            return true
+        }
 
         fun enqueueUrlImport(
             context: Context,

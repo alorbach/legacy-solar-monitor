@@ -298,6 +298,7 @@ class SmaLegacyBluetoothGatewayImpl(
         }
     }
 
+    @SuppressLint("MissingPermission")
     private suspend fun <T> withSession(
         device: DeviceProfileEntity?,
         block: suspend (SmaBluetoothSession, String, SessionTrace) -> T,
@@ -314,20 +315,23 @@ class SmaLegacyBluetoothGatewayImpl(
         }
 
         deviceMutex.withLock {
+            @SuppressLint("MissingPermission")
             val btDevice = requireNotNull(adapter?.getRemoteDevice(device.btMac)) {
                 "Bluetooth adapter unavailable"
             }
-            if (btDevice.bondState == BluetoothDevice.BOND_NONE) {
+            @SuppressLint("MissingPermission")
+            val bondState = btDevice.bondState
+            if (bondState == BluetoothDevice.BOND_NONE) {
                 traceBondHint(device.btMac)
             }
             adapter?.takeIf { it.isDiscovering }?.cancelDiscovery()
             val trace = SessionTrace(device.btMac)
             trace.record(
-                "session:start compatibility=${device.legacyCompatibilityMode} preferred=${device.lastSuccessfulSocketStrategy ?: "none"} bond=${btDevice.bondState}",
+                "session:start compatibility=${device.legacyCompatibilityMode} preferred=${device.lastSuccessfulSocketStrategy ?: "none"} bond=$bondState",
             )
             val strategies = rfcommStrategies(
                 preferredStrategy = device.lastSuccessfulSocketStrategy,
-                bonded = btDevice.bondState == BluetoothDevice.BOND_BONDED,
+                bonded = bondState == BluetoothDevice.BOND_BONDED,
             )
             var lastError: Throwable? = null
             for (strategy in strategies) {

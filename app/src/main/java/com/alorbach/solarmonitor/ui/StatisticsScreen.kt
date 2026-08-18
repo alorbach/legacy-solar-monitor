@@ -1,7 +1,6 @@
 package com.alorbach.solarmonitor.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,10 +16,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -134,6 +134,15 @@ fun StatisticsScreen(
     val peakPower = points.mapNotNull { it.peakPowerW }.maxOrNull()
     val totalEarnings = points.sumOf { it.earnings }
 
+    val today = remember(zoneId) { LocalDate.now(zoneId) }
+    val canGoPrevious = granularity != StatsGranularity.YEAR
+    val canGoNext = when (granularity) {
+        StatsGranularity.HOUR -> anchorDate.isBefore(today)
+        StatsGranularity.DAY -> YearMonth.from(anchorDate).isBefore(YearMonth.from(today))
+        StatsGranularity.MONTH -> anchorDate.year < today.year
+        StatsGranularity.YEAR -> false
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -200,7 +209,7 @@ fun StatisticsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Button(
+                        IconButton(
                             onClick = {
                                 anchorDate = when (granularity) {
                                     StatsGranularity.HOUR -> anchorDate.minusDays(1)
@@ -209,12 +218,12 @@ fun StatisticsScreen(
                                     StatsGranularity.YEAR -> anchorDate
                                 }
                             },
-                            enabled = granularity != StatsGranularity.YEAR,
+                            enabled = canGoPrevious,
                         ) {
                             Icon(Icons.Rounded.ChevronLeft, contentDescription = stringResource(R.string.stats_previous))
                         }
                         Text(periodLabel, fontWeight = FontWeight.SemiBold)
-                        Button(
+                        IconButton(
                             onClick = {
                                 anchorDate = when (granularity) {
                                     StatsGranularity.HOUR -> anchorDate.plusDays(1)
@@ -223,7 +232,7 @@ fun StatisticsScreen(
                                     StatsGranularity.YEAR -> anchorDate
                                 }
                             },
-                            enabled = granularity != StatsGranularity.YEAR,
+                            enabled = canGoNext,
                         ) {
                             Icon(Icons.Rounded.ChevronRight, contentDescription = stringResource(R.string.stats_next))
                         }
@@ -293,15 +302,10 @@ fun StatisticsScreen(
 
 @Composable
 private fun SelectChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Text(
-        text = label,
-        modifier = Modifier
-            .background(if (selected) colors.primary else colors.surfaceVariant, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        color = if (selected) colors.onPrimary else colors.onSurface,
-        fontWeight = FontWeight.Medium,
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
     )
 }
 

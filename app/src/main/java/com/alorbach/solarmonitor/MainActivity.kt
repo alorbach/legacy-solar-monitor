@@ -28,6 +28,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -37,27 +39,29 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.Power
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material.icons.rounded.BarChart
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +90,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -97,6 +102,7 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.alorbach.solarmonitor.BuildConfig
 import com.alorbach.solarmonitor.data.AppContainer
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
@@ -115,9 +121,12 @@ import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.service.LiveMonitorService
+import com.alorbach.solarmonitor.ui.DeviceEventsSection
 import com.alorbach.solarmonitor.ui.ProductionChart
 import com.alorbach.solarmonitor.ui.RemoteImportWizard
 import com.alorbach.solarmonitor.ui.StatisticsScreen
+import com.alorbach.solarmonitor.ui.TariffSection
+import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -132,24 +141,40 @@ private val SolarLightColors = lightColorScheme(
     primary = Color(0xFF17212B),
     onPrimary = Color(0xFFFFD86B),
     secondary = Color(0xFFF4B400),
+    tertiary = Color(0xFF246B3D),
+    onTertiary = Color(0xFFF4F0E8),
+    tertiaryContainer = Color(0xFFD6EBD9),
+    onTertiaryContainer = Color(0xFF0F3A1C),
     background = Color(0xFFF4F0E8),
     surface = Color(0xFFF8F5EE),
     surfaceVariant = Color(0xFFE4DED5),
     onBackground = Color(0xFF17212B),
     onSurface = Color(0xFF17212B),
     onSurfaceVariant = Color(0xFF5C636B),
+    error = Color(0xFF8E2A2A),
+    onError = Color(0xFFFFF8F6),
+    errorContainer = Color(0xFFF5D6D6),
+    onErrorContainer = Color(0xFF5C1414),
 )
 
 private val SolarDarkColors = darkColorScheme(
     primary = Color(0xFFFFD86B),
     onPrimary = Color(0xFF17212B),
     secondary = Color(0xFFF4B400),
+    tertiary = Color(0xFF7BC794),
+    onTertiary = Color(0xFF0F3A1C),
+    tertiaryContainer = Color(0xFF1E4A2C),
+    onTertiaryContainer = Color(0xFFD6EBD9),
     background = Color(0xFF121820),
     surface = Color(0xFF1B2430),
     surfaceVariant = Color(0xFF2A3442),
     onBackground = Color(0xFFF4F0E8),
     onSurface = Color(0xFFF4F0E8),
     onSurfaceVariant = Color(0xFFB8BFC7),
+    error = Color(0xFFE08A8A),
+    onError = Color(0xFF3A1010),
+    errorContainer = Color(0xFF5C1414),
+    onErrorContainer = Color(0xFFF5D6D6),
 )
 
 class MainActivity : ComponentActivity() {
@@ -251,9 +276,19 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
     val isScanning by container.bluetoothGateway.isDiscovering.collectAsStateWithLifecycle()
     val settings by container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     var localDataEpoch by remember { mutableStateOf(0L) }
-    val portfolioRefreshKey = remember(devices, importJobs, localDataEpoch) {
+    val importJobsFingerprint = remember(importJobs) {
+        importJobs.joinToString(";") { job ->
+            "${job.id}:${job.status}:${job.completedAtEpochSeconds ?: job.createdAtEpochSeconds}"
+        }
+    }
+    val dataRevision = remember(localDataEpoch, importJobsFingerprint) {
+        localDataEpoch + importJobsFingerprint.hashCode().toLong()
+    }
+    val portfolioRefreshKey = remember(devices, importJobsFingerprint, localDataEpoch) {
         buildString {
             append(localDataEpoch)
+            append('|')
+            append(importJobsFingerprint)
             append('|')
             devices.forEach {
                 append(it.id).append(':')
@@ -261,14 +296,10 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     .append(it.lastArchiveSyncAtEpochSeconds ?: 0).append(':')
                     .append(it.lastConnectionStatus.orEmpty()).append('|')
             }
-            importJobs.firstOrNull()?.let {
-                append(it.id).append(':').append(it.status).append(':')
-                    .append(it.completedAtEpochSeconds ?: it.createdAtEpochSeconds)
-            }
         }
     }
     val portfolio by produceState(
-        initialValue = PortfolioSummary(0, 0, 0, 0, 0, 0.0, null),
+        initialValue = PortfolioSummary(0, null, 0, 0, 0, 0.0, null),
         key1 = portfolioRefreshKey,
     ) {
         value = container.repository.getPortfolioSummary()
@@ -317,20 +348,24 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             message,
-                            color = Color(0xFF8E2A2A),
+                            color = colors.onErrorContainer,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.clickable {
-                                val intent = when (bannerAction) {
-                                    BannerAction.LOCATION_SETTINGS ->
-                                        Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(colors.errorContainer, RoundedCornerShape(12.dp))
+                                .clickable {
+                                    val intent = when (bannerAction) {
+                                        BannerAction.LOCATION_SETTINGS ->
+                                            Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
 
-                                    BannerAction.APP_SETTINGS ->
-                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                            data = Uri.fromParts("package", activity.packageName, null)
-                                        }
+                                        BannerAction.APP_SETTINGS ->
+                                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                data = Uri.fromParts("package", activity.packageName, null)
+                                            }
+                                    }
+                                    activity.startActivity(intent)
                                 }
-                                activity.startActivity(intent)
-                            },
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     }
                 }
@@ -381,25 +416,27 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                     container = container,
                                     seed = seed,
                                     existingCount = devices.size,
+                                    context = activity,
                                 )
                                 localDataEpoch += 1
                             }
                         },
                     ) {
-                        Icon(Icons.Rounded.Power, contentDescription = stringResource(R.string.add_device))
+                        Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.add_device))
                     }
                 }
             },
         ) { padding ->
+            val tabModifier = Modifier.padding(padding).imePadding()
             when (currentTab) {
                 AppTab.DASHBOARD -> DashboardTab(
-                    modifier = Modifier.padding(padding),
+                    modifier = tabModifier,
                     portfolio = portfolio,
                     devices = devices,
                     container = container,
                     liveMessage = liveState.message,
                     liveActive = liveState.active,
-                    dataEpoch = localDataEpoch,
+                    dataEpoch = dataRevision,
                     onStartLive = { deviceIds ->
                         ContextCompat.startForegroundService(
                             activity,
@@ -412,15 +449,15 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                 )
 
                 AppTab.STATISTICS -> StatisticsScreen(
-                    modifier = Modifier.padding(padding),
+                    modifier = tabModifier,
                     devices = devices,
                     container = container,
                     settings = settings,
-                    dataEpoch = localDataEpoch,
+                    dataEpoch = dataRevision,
                 )
 
                 AppTab.DEVICES -> DevicesTab(
-                    modifier = Modifier.padding(padding),
+                    modifier = tabModifier,
                     devices = devices,
                     container = container,
                     bluetoothDevices = bluetoothDevices,
@@ -458,10 +495,30 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     onRequestScrollToDevice = { pendingScrollDeviceId = it },
                     onScrollHandled = { pendingScrollDeviceId = null },
                     monitoredDeviceIds = liveState.activeDeviceIds,
+                    dataEpoch = dataRevision,
+                    onDeleteDevice = { deviceId ->
+                        scope.launch {
+                            container.liveMonitoringRepository.stopDevice(deviceId)
+                            val persisted = LiveMonitorService.persistedDeviceIds(activity)
+                            if (deviceId in persisted) {
+                                val remaining = persisted.filter { it != deviceId }.toLongArray()
+                                LiveMonitorService.persistDeviceIds(activity, remaining)
+                                if (remaining.isEmpty()) {
+                                    activity.startService(LiveMonitorService.stopIntent(activity))
+                                } else {
+                                    ContextCompat.startForegroundService(
+                                        activity,
+                                        LiveMonitorService.startIntent(activity, remaining),
+                                    )
+                                }
+                            }
+                            container.repository.deleteDevice(deviceId)
+                        }
+                    },
                 )
 
                 AppTab.IMPORT -> ImportTab(
-                    modifier = Modifier.padding(padding),
+                    modifier = tabModifier,
                     devices = devices,
                     importJobs = importJobs,
                     container = container,
@@ -469,7 +526,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                 )
 
                 AppTab.SETTINGS -> SettingsTab(
-                    modifier = Modifier.padding(padding),
+                    modifier = tabModifier,
                     container = container,
                     settings = settings,
                 )
@@ -498,10 +555,17 @@ private fun DashboardTab(
         }
     }
     var chartData by remember { mutableStateOf<List<DailyPoint>>(emptyList()) }
-    LaunchedEffect(selectedDeviceId, dataEpoch) {
+    val selectedDevice = devices.firstOrNull { it.id == selectedDeviceId }
+    LaunchedEffect(
+        selectedDeviceId,
+        dataEpoch,
+        selectedDevice?.lastLiveReadAtEpochSeconds,
+        selectedDevice?.lastArchiveSyncAtEpochSeconds,
+    ) {
         chartData = selectedDeviceId?.let { container.repository.getDailyChart(it) } ?: emptyList()
     }
     val colors = MaterialTheme.colorScheme
+    val scope = rememberCoroutineScope()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -539,7 +603,7 @@ private fun DashboardTab(
                         ),
                         color = colors.onSurfaceVariant,
                     )
-                    StatusBadge(liveMessage)
+                    StatusBadge(liveMessage, active = liveActive)
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -548,7 +612,7 @@ private fun DashboardTab(
                             enabled = selectedDeviceId != null && !liveActive,
                             onClick = { selectedDeviceId?.let { onStartLive(listOf(it)) } },
                         ) {
-                            Text(stringResource(R.string.start_live_monitor))
+                            Text(stringResource(R.string.start_live_selected))
                         }
                         Button(
                             enabled = devices.isNotEmpty() && !liveActive,
@@ -582,13 +646,50 @@ private fun DashboardTab(
                         .padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(stringResource(R.string.production_chart), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        selectedDevice?.let { stringResource(R.string.production_chart_for, it.name) }
+                            ?: stringResource(R.string.production_chart),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
                     Text(
                         stringResource(R.string.production_chart_subtitle),
                         color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     ProductionChart(chartData)
+                    if (selectedDeviceId != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val id = selectedDeviceId ?: return@OutlinedButton
+                                    scope.launch {
+                                        val summary = container.repository.getDeviceDashboard(id) ?: return@launch
+                                        runCatching {
+                                            container.reportExporter.share(
+                                                container.reportExporter.exportCsv(summary),
+                                                "text/csv",
+                                            )
+                                        }
+                                    }
+                                },
+                            ) { Text(stringResource(R.string.export_csv)) }
+                            OutlinedButton(
+                                onClick = {
+                                    val id = selectedDeviceId ?: return@OutlinedButton
+                                    scope.launch {
+                                        val summary = container.repository.getDeviceDashboard(id) ?: return@launch
+                                        runCatching {
+                                            container.reportExporter.share(
+                                                container.reportExporter.exportPdf(summary),
+                                                "application/pdf",
+                                            )
+                                        }
+                                    }
+                                },
+                            ) { Text(stringResource(R.string.export_pdf)) }
+                        }
+                    }
                 }
             }
         }
@@ -653,10 +754,14 @@ private fun DevicesTab(
     onRequestScrollToDevice: (Long) -> Unit,
     onScrollHandled: () -> Unit,
     monitoredDeviceIds: Set<Long> = emptySet(),
+    dataEpoch: Long,
+    onDeleteDevice: (Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
     val listState = rememberLazyListState()
+    var expandedDeviceId by rememberSaveable { mutableStateOf<Long?>(null) }
     val rankedDevices = remember(bluetoothDevices) {
         bluetoothDevices.sortedWith(bluetoothDiscoveryUiComparator)
     }
@@ -664,6 +769,7 @@ private fun DevicesTab(
     // The device list arrives from the database flow, so scroll once the new row exists.
     LaunchedEffect(scrollToDeviceId, devices) {
         val target = scrollToDeviceId ?: return@LaunchedEffect
+        expandedDeviceId = target
         val position = devices.indexOfFirst { it.id == target }
         if (position >= 0) {
             listState.animateScrollToItem(position + DEVICE_LIST_HEADER_ITEMS)
@@ -686,11 +792,11 @@ private fun DevicesTab(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Rounded.Bluetooth, contentDescription = stringResource(R.string.scan_bluetooth), tint = colors.onBackground)
                         Spacer(Modifier.width(10.dp))
-                        Text("Bluetooth discovery", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.bluetooth_discovery), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
-                    Text("Scan nearby devices, then tap a result to create a device profile with that name and MAC.")
+                    Text(stringResource(R.string.bluetooth_discovery_body))
                     if (!bluetoothEnabled) {
-                        Text(stringResource(R.string.bluetooth_disabled), color = Color(0xFF8E2A2A))
+                        Text(stringResource(R.string.bluetooth_disabled), color = colors.error)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(onClick = onRefreshBluetooth, enabled = bluetoothEnabled) {
@@ -703,7 +809,7 @@ private fun DevicesTab(
                         }
                     }
                     val nearbyCount = rankedDevices.count { !it.bonded }
-                    Text("Nearby (unpaired): $nearbyCount · Paired: ${rankedDevices.size - nearbyCount}")
+                    Text(stringResource(R.string.bluetooth_nearby_paired, nearbyCount, rankedDevices.size - nearbyCount))
                     Text(
                         stringResource(R.string.bluetooth_scan_hint),
                         color = colors.onSurfaceVariant,
@@ -712,13 +818,20 @@ private fun DevicesTab(
                     if (rankedDevices.isEmpty()) {
                         Text(
                             if (isScanning) {
-                                "Scanning the environment for Bluetooth devices..."
+                                stringResource(R.string.bluetooth_scanning_env)
                             } else {
                                 stringResource(R.string.bluetooth_no_results)
                             },
                             color = colors.onSurfaceVariant,
                         )
                     } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                         rankedDevices.forEach { candidate ->
                             val existingId = devices.firstOrNull {
                                 it.btMac.equals(candidate.address, ignoreCase = true)
@@ -736,6 +849,7 @@ private fun DevicesTab(
                                                 container = container,
                                                 seed = candidate,
                                                 existingCount = devices.size,
+                                                context = context,
                                             )
                                             onRequestScrollToDevice(id)
                                             onDataChanged()
@@ -744,6 +858,7 @@ private fun DevicesTab(
                                 },
                             )
                         }
+                        }
                     }
                 }
             }
@@ -751,7 +866,7 @@ private fun DevicesTab(
         if (devices.isEmpty()) {
             item {
                 Text(
-                    "No devices yet. Tap a scan result above or use the + button to add one.",
+                    stringResource(R.string.no_devices_add_hint),
                     color = colors.onSurfaceVariant,
                 )
             }
@@ -760,11 +875,14 @@ private fun DevicesTab(
             DeviceEditorCard(
                 device = device,
                 container = container,
-                bluetoothDevices = rankedDevices,
-                isScanning = isScanning,
-                onRefreshBluetooth = onRefreshBluetooth,
+                expanded = expandedDeviceId == device.id,
+                onToggleExpanded = {
+                    expandedDeviceId = if (expandedDeviceId == device.id) null else device.id
+                },
                 onDataChanged = onDataChanged,
                 continuousLiveActive = device.id in monitoredDeviceIds,
+                dataEpoch = dataEpoch,
+                onDeleteDevice = onDeleteDevice,
             )
         }
     }
@@ -774,18 +892,18 @@ private fun DevicesTab(
 private fun DeviceEditorCard(
     device: DeviceProfileEntity,
     container: AppContainer,
-    bluetoothDevices: List<BluetoothDeviceDescriptor>,
-    isScanning: Boolean,
-    onRefreshBluetooth: () -> Unit,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onDataChanged: () -> Unit,
     continuousLiveActive: Boolean = false,
+    dataEpoch: Long,
+    onDeleteDevice: (Long) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     var name by rememberSaveable(device.id) { mutableStateOf(device.name) }
     var mac by rememberSaveable(device.id) { mutableStateOf(device.btMac ?: "") }
     var owner by rememberSaveable(device.id) { mutableStateOf(device.ownerName ?: "") }
-    var smaPin by remember(device.id) { mutableStateOf(device.passwordRef ?: "0000") }
-    var search by rememberSaveable(device.id) { mutableStateOf("") }
+    var smaPin by remember(device.id) { mutableStateOf(container.repository.displayPin(device)) }
     var showPin by rememberSaveable(device.id) { mutableStateOf(false) }
     var testMessage by remember { mutableStateOf<String?>(null) }
     var testSuccess by remember { mutableStateOf(false) }
@@ -794,14 +912,18 @@ private fun DeviceEditorCard(
     var syncRunning by remember { mutableStateOf(false) }
     var showDiagnostics by remember { mutableStateOf(false) }
     var showClearHistoryConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     var clearHistoryRunning by remember { mutableStateOf(false) }
     var actionJob by remember { mutableStateOf<Job?>(null) }
-    // The MAC field stays editable while an action runs, so Cancel must abort the MAC the action
-    // was started with rather than whatever is in the text field now.
     var actionMac by remember { mutableStateOf<String?>(null) }
     val anyActionRunning = testRunning || liveRunning || syncRunning || clearHistoryRunning
     val colors = MaterialTheme.colorScheme
     val context = androidx.compose.ui.platform.LocalContext.current
+    val cancelledLabel = stringResource(R.string.live_cancelled)
+    val connectionFailedLabel = stringResource(R.string.connection_test_failed)
+    val liveOkLabel = stringResource(R.string.live_read_ok)
+    val liveFailedLabel = stringResource(R.string.live_read_failed)
+    val archiveFailedLabel = stringResource(R.string.archive_sync_failed)
     val operationLabel = when {
         testRunning -> stringResource(R.string.testing_connection)
         liveRunning -> stringResource(R.string.reading_live_data)
@@ -809,29 +931,20 @@ private fun DeviceEditorCard(
         else -> null
     }
 
-    val filteredDevices = remember(bluetoothDevices, search) {
-        bluetoothDevices.filter {
-            search.isBlank() ||
-                (it.name ?: "").contains(search, ignoreCase = true) ||
-                it.address.contains(search, ignoreCase = true)
-        }
-    }
-
-    /** Returns null when the edited MAC belongs to another profile, so nothing was saved. */
     suspend fun persistEdits(): DeviceProfileEntity? {
         val updated = device.copy(
             name = name,
             btMac = mac,
             ownerName = owner,
-            passwordRef = smaPin,
         )
-        if (!container.repository.saveEditedDevice(updated)) {
+        if (!container.repository.saveEditedDevice(updated, smaPin)) {
             testSuccess = false
             testMessage = context.getString(R.string.duplicate_mac, mac)
             return null
         }
-        actionMac = updated.btMac
-        return updated
+        val saved = container.repository.getDevice(device.id) ?: updated
+        actionMac = saved.btMac
+        return saved
     }
 
     ElevatedCard(
@@ -839,29 +952,44 @@ private fun DeviceEditorCard(
         shape = RoundedCornerShape(28.dp),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable(onClick = onToggleExpanded),
+            ) {
                 Column(Modifier.weight(1f)) {
-                    Text(name.ifBlank { device.model ?: "Legacy SMA" }, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-                    Text(device.model ?: "Legacy SMA Bluetooth profile", color = colors.onSurfaceVariant)
+                    Text(
+                        name.ifBlank { device.model ?: stringResource(R.string.legacy_sma) },
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(device.model ?: stringResource(R.string.legacy_sma_profile), color = colors.onSurfaceVariant)
                 }
                 AssistChip(
-                    onClick = { },
-                    enabled = false,
-                    label = { Text(if (mac.isBlank()) "Unassigned" else mac) },
+                    onClick = onToggleExpanded,
+                    enabled = true,
+                    label = { Text(if (mac.isBlank()) stringResource(R.string.unassigned) else mac) },
                 )
             }
-            OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Device name") }, singleLine = true)
-            OutlinedTextField(value = owner, onValueChange = { owner = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Owner") }, singleLine = true)
+            if (!expanded) {
+                Text(
+                    stringResource(R.string.status_label, device.lastConnectionStatus ?: stringResource(R.string.idle)),
+                    color = colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (expanded) {
+            OutlinedTextField(value = name, onValueChange = { name = it }, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.device_name)) }, singleLine = true)
+            OutlinedTextField(value = owner, onValueChange = { owner = it }, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.owner)) }, singleLine = true)
             OutlinedTextField(
                 value = smaPin,
                 onValueChange = { smaPin = it.filter(Char::isDigit).take(12) },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("SMA Bluetooth PIN / password") },
+                label = { Text(stringResource(R.string.sma_pin)) },
                 singleLine = true,
                 visualTransformation = if (showPin) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     Text(
-                        if (showPin) "Hide" else "Show",
+                        if (showPin) stringResource(R.string.hide) else stringResource(R.string.show),
                         modifier = Modifier
                             .clickable { showPin = !showPin }
                             .padding(8.dp),
@@ -869,44 +997,11 @@ private fun DeviceEditorCard(
                     )
                 },
             )
-            OutlinedTextField(value = mac, onValueChange = { mac = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Bluetooth MAC") }, singleLine = true)
-            OutlinedTextField(
-                value = search,
-                onValueChange = { search = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search nearby Bluetooth devices") },
-                singleLine = true,
-                trailingIcon = {
-                    Icon(
-                        imageVector = if (isScanning) Icons.Rounded.Refresh else Icons.Rounded.Search,
-                        contentDescription = stringResource(R.string.scan_bluetooth),
-                        modifier = Modifier.clickable(onClick = onRefreshBluetooth),
-                    )
-                },
-            )
-            if (filteredDevices.isEmpty()) {
-                Text(
-                    if (isScanning) "Scanning the environment for Bluetooth devices..." else "No nearby results yet. Start a scan.",
-                    color = colors.onSurfaceVariant,
-                )
-            } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(filteredDevices, key = { it.address }) { candidate ->
-                        BluetoothCandidateChip(
-                            candidate = candidate,
-                            selected = mac.equals(candidate.address, ignoreCase = true),
-                            onClick = {
-                                mac = candidate.address
-                                name = candidate.name?.takeIf { it.isNotBlank() } ?: name
-                            },
-                        )
-                    }
-                }
-            }
-            Text("Last live read: ${device.lastLiveReadAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"}", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Last history sync: ${device.lastArchiveSyncAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"}", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Socket strategy: ${device.lastSuccessfulSocketStrategy ?: "--"}", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Status: ${device.lastConnectionStatus ?: "--"}", color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            OutlinedTextField(value = mac, onValueChange = { mac = it }, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.bluetooth_mac)) }, singleLine = true)
+            Text(stringResource(R.string.last_live_read, device.lastLiveReadAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.last_history_sync, device.lastArchiveSyncAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.socket_strategy, device.lastSuccessfulSocketStrategy ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.status_label, device.lastConnectionStatus ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             operationLabel?.let {
                 Text(text = it, color = colors.onBackground, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
@@ -930,17 +1025,17 @@ private fun DeviceEditorCard(
                                         testMessage = it
                                     }.onFailure {
                                         testSuccess = false
-                                        testMessage = it.message ?: "Connection test failed"
+                                        testMessage = it.message ?: connectionFailedLabel
                                     }
                                 }
                             } catch (error: Throwable) {
                                 if (error is CancellationException) {
                                     testSuccess = false
-                                    testMessage = "Cancelled"
+                                    testMessage = cancelledLabel
                                     throw error
                                 }
                                 testSuccess = false
-                                testMessage = error.message ?: "Connection test failed"
+                                testMessage = error.message ?: connectionFailedLabel
                             } finally {
                                 testRunning = false
                             }
@@ -948,7 +1043,7 @@ private fun DeviceEditorCard(
                     },
                 ) {
                     if (testRunning) {
-                        CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = Color.White)
+                        CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = colors.onPrimary)
                     } else {
                         Text(stringResource(R.string.test_connection))
                     }
@@ -963,21 +1058,21 @@ private fun DeviceEditorCard(
                                 container.liveMonitoringRepository.start(saved.id).also { result ->
                                     result.onSuccess {
                                         testSuccess = true
-                                        testMessage = it.status ?: "Live read OK"
+                                        testMessage = it.status ?: liveOkLabel
                                         onDataChanged()
                                     }.onFailure {
                                         testSuccess = false
-                                        testMessage = it.message ?: "Live read failed"
+                                        testMessage = it.message ?: liveFailedLabel
                                     }
                                 }
                             } catch (error: Throwable) {
                                 if (error is CancellationException) {
                                     testSuccess = false
-                                    testMessage = "Cancelled"
+                                    testMessage = cancelledLabel
                                     throw error
                                 }
                                 testSuccess = false
-                                testMessage = error.message ?: "Live read failed"
+                                testMessage = error.message ?: liveFailedLabel
                             } finally {
                                 liveRunning = false
                             }
@@ -985,7 +1080,7 @@ private fun DeviceEditorCard(
                     },
                 ) {
                     if (liveRunning) {
-                        CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = Color.White)
+                        CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = colors.onPrimary)
                     } else {
                         Text(stringResource(R.string.live_read))
                     }
@@ -1004,17 +1099,17 @@ private fun DeviceEditorCard(
                                         onDataChanged()
                                     }.onFailure {
                                         testSuccess = false
-                                        testMessage = it.message ?: "Archive sync failed"
+                                        testMessage = it.message ?: archiveFailedLabel
                                     }
                                 }
                             } catch (error: Throwable) {
                                 if (error is CancellationException) {
                                     testSuccess = false
-                                    testMessage = "Cancelled"
+                                    testMessage = cancelledLabel
                                     throw error
                                 }
                                 testSuccess = false
-                                testMessage = error.message ?: "Archive sync failed"
+                                testMessage = error.message ?: archiveFailedLabel
                             } finally {
                                 syncRunning = false
                             }
@@ -1022,7 +1117,7 @@ private fun DeviceEditorCard(
                     },
                 ) {
                     if (syncRunning) {
-                        CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = Color.White)
+                        CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = colors.onPrimary)
                     } else {
                         Text(stringResource(R.string.sync_history))
                     }
@@ -1035,7 +1130,7 @@ private fun DeviceEditorCard(
                         // Keep *Running flags set until the coroutine finally-block clears them
                         // so overlapping Test/Live/Sync cannot start while RFCOMM is still winding down.
                         testSuccess = false
-                        testMessage = "Cancelled"
+                        testMessage = cancelledLabel
                     }) {
                         Text(stringResource(R.string.cancel))
                     }
@@ -1046,7 +1141,7 @@ private fun DeviceEditorCard(
                 ) {
                     Text(stringResource(R.string.clear_history))
                 }
-                Button(enabled = !anyActionRunning, onClick = { scope.launch { container.repository.deleteDevice(device.id) } }) {
+                Button(enabled = !anyActionRunning, onClick = { showDeleteConfirm = true }) {
                     Text(stringResource(R.string.delete))
                 }
             }
@@ -1090,15 +1185,44 @@ private fun DeviceEditorCard(
                     },
                 )
             }
+            if (showDeleteConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirm = false },
+                    title = { Text(stringResource(R.string.delete_device_title)) },
+                    text = { Text(stringResource(R.string.delete_device_body)) },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteConfirm = false
+                                onDeleteDevice(device.id)
+                            },
+                        ) {
+                            Text(stringResource(R.string.delete_device_confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteConfirm = false }) {
+                            Text(stringResource(R.string.cancel))
+                        }
+                    },
+                )
+            }
             Text(
                 stringResource(R.string.sync_merge_hint),
                 color = colors.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
+            TariffSection(deviceId = device.id, container = container, onSaved = onDataChanged)
+            DeviceEventsSection(
+                deviceId = device.id,
+                container = container,
+                dataEpoch = dataEpoch + (device.lastLiveReadAtEpochSeconds ?: 0) +
+                    (device.lastArchiveSyncAtEpochSeconds ?: 0),
+            )
             if (!device.lastDiagnostics.isNullOrBlank()) {
                 Text(
-                    text = if (showDiagnostics) "Hide diagnostics" else "Show diagnostics",
-                    color = Color(0xFF5B4BA7),
+                    text = if (showDiagnostics) stringResource(R.string.hide_diagnostics) else stringResource(R.string.show_diagnostics),
+                    color = colors.primary,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable { showDiagnostics = !showDiagnostics },
                 )
@@ -1109,10 +1233,11 @@ private fun DeviceEditorCard(
             testMessage?.let { message ->
                 Text(
                     text = message,
-                    color = if (testSuccess) Color(0xFF246B3D) else Color(0xFF8E2A2A),
+                    color = if (testSuccess) colors.primary else colors.error,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
+            }
             }
         }
     }
@@ -1126,6 +1251,7 @@ private fun BluetoothDiscoveryRow(
 ) {
     val colors = MaterialTheme.colorScheme
     val isSma = candidate.name?.contains("SMA", ignoreCase = true) == true
+    val proximity = if (candidate.bonded) stringResource(R.string.bonded) else stringResource(R.string.nearby)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1139,7 +1265,7 @@ private fun BluetoothDiscoveryRow(
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                candidate.name ?: "Unnamed Bluetooth device",
+                candidate.name ?: stringResource(R.string.unnamed_bluetooth),
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1148,7 +1274,7 @@ private fun BluetoothDiscoveryRow(
                 buildString {
                     append(candidate.address)
                     append(" • ")
-                    append(if (candidate.bonded) "Bonded" else "Nearby")
+                    append(proximity)
                     candidate.rssi?.let { append(" • RSSI $it") }
                 },
                 color = colors.onSurfaceVariant,
@@ -1162,47 +1288,6 @@ private fun BluetoothDiscoveryRow(
             color = if (alreadyAdded) colors.onSurfaceVariant else colors.onBackground,
             fontWeight = FontWeight.Medium,
             style = MaterialTheme.typography.labelLarge,
-        )
-    }
-}
-
-@Composable
-private fun BluetoothCandidateChip(
-    candidate: BluetoothDeviceDescriptor,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val colors = MaterialTheme.colorScheme
-    Column(
-        modifier = Modifier
-            .width(190.dp)
-            .background(
-                if (selected) colors.primary else colors.surface,
-                RoundedCornerShape(20.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Text(
-            candidate.name ?: "Unnamed Bluetooth device",
-            color = if (selected) colors.onPrimary else colors.onBackground,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            candidate.address,
-            color = if (selected) colors.onPrimary.copy(alpha = 0.85f) else colors.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
-        Text(
-            buildString {
-                append(if (candidate.bonded) "Bonded" else "Nearby")
-                candidate.rssi?.let { append(" • RSSI $it") }
-            },
-            color = if (selected) colors.onPrimary.copy(alpha = 0.85f) else colors.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
         )
     }
 }
@@ -1225,6 +1310,7 @@ private fun ImportTab(
     var importUrl by rememberSaveable { mutableStateOf("") }
     var importRunning by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
+    var importSuccess by remember { mutableStateOf(false) }
     var showRemoteWizard by rememberSaveable { mutableStateOf(false) }
     var showClearImportJobsConfirm by remember { mutableStateOf(false) }
     var rerunJob by remember { mutableStateOf<ImportJobEntity?>(null) }
@@ -1233,8 +1319,14 @@ private fun ImportTab(
     var rerunPort by remember { mutableStateOf("") }
     var rerunUrl by remember { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
+    val importFailedMessage = stringResource(R.string.import_failed)
+    val importSucceededMessage = stringResource(R.string.import_succeeded)
+    val urlImportSucceededMessage = stringResource(R.string.url_import_succeeded)
+    val urlImportFailedMessage = stringResource(R.string.url_import_failed)
     val remoteImportSucceededMessage = stringResource(R.string.remote_import_succeeded)
     val rerunSucceededMessage = stringResource(R.string.rerun_import_succeeded)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var scheduleHours by rememberSaveable { mutableStateOf("6") }
 
     fun startRerun(
         job: ImportJobEntity,
@@ -1265,8 +1357,14 @@ private fun ImportTab(
             // Re-runs may persist partial data before failing; always refresh views.
             onDataChanged()
             importMessage = result.fold(
-                onSuccess = { rerunSucceededMessage },
-                onFailure = { it.message ?: "Import failed" },
+                onSuccess = {
+                    importSuccess = true
+                    rerunSucceededMessage
+                },
+                onFailure = {
+                    importSuccess = false
+                    it.message ?: importFailedMessage
+                },
             )
         }
     }
@@ -1288,9 +1386,13 @@ private fun ImportTab(
             importMessage = result.fold(
                 onSuccess = {
                     onDataChanged()
-                    "Import succeeded"
+                    importSuccess = true
+                    importSucceededMessage
                 },
-                onFailure = { it.message ?: "Import failed" },
+                onFailure = {
+                    importSuccess = false
+                    it.message ?: importFailedMessage
+                },
             )
         }
     }
@@ -1307,10 +1409,10 @@ private fun ImportTab(
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Import sources", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text("Import SBFspot CSV, ZIP, or SQLite files from local storage or a URL.")
+                    Text(stringResource(R.string.import_sources), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.import_sources_body))
                     if (devices.isEmpty()) {
-                        Text("Add a device first, then import data for it.", color = colors.onSurfaceVariant)
+                        Text(stringResource(R.string.import_add_device_first), color = colors.onSurfaceVariant)
                     } else {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             items(devices, key = { it.id }) { device ->
@@ -1350,7 +1452,7 @@ private fun ImportTab(
                             value = importUrl,
                             onValueChange = { importUrl = it },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Import URL") },
+                            label = { Text(stringResource(R.string.import_url)) },
                             singleLine = true,
                         )
                         Button(
@@ -1371,15 +1473,20 @@ private fun ImportTab(
                                     importMessage = result.fold(
                                         onSuccess = {
                                             onDataChanged()
-                                            "URL import succeeded"
+                                            onDataChanged()
+                                            importSuccess = true
+                                            urlImportSucceededMessage
                                         },
-                                        onFailure = { it.message ?: "URL import failed" },
+                                        onFailure = {
+                                            importSuccess = false
+                                            it.message ?: urlImportFailedMessage
+                                        },
                                     )
                                 }
                             },
                         ) {
                             if (importRunning) {
-                                CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = Color.White)
+                                CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp, color = colors.onPrimary)
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(R.string.import_running))
                             } else {
@@ -1388,7 +1495,18 @@ private fun ImportTab(
                                 Text(stringResource(R.string.import_from_url))
                             }
                         }
-                        importMessage?.let { Text(it, color = colors.onSurfaceVariant) }
+                        importMessage?.let {
+                            Text(it, color = if (importSuccess) colors.primary else colors.error)
+                        }
+                        if (importRunning) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
+                                Text(stringResource(R.string.import_in_progress), color = colors.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
@@ -1465,6 +1583,38 @@ private fun ImportTab(
                     Text("${job.sourceType} • ${job.status}")
                     job.message?.let { Text(it) }
                     job.preservedCopyPath?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    if (job.canReplay()) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = scheduleHours,
+                                onValueChange = { scheduleHours = it.filter(Char::isDigit).take(3) },
+                                modifier = Modifier.width(120.dp),
+                                label = { Text(stringResource(R.string.schedule_import_hours)) },
+                                singleLine = true,
+                            )
+                            OutlinedButton(
+                                enabled = !importRunning,
+                                onClick = {
+                                    val hours = scheduleHours.toLongOrNull()?.coerceIn(1L, 168L) ?: 6L
+                                    if (ScheduledImportWorker.enqueueJob(context, job, hours)) {
+                                        importSuccess = true
+                                        importMessage = context.getString(
+                                            R.string.schedule_import_saved,
+                                            hours.toInt(),
+                                        )
+                                    } else {
+                                        importSuccess = false
+                                        importMessage = context.getString(R.string.schedule_import_failed)
+                                    }
+                                },
+                            ) {
+                                Text(stringResource(R.string.schedule_import))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1640,6 +1790,7 @@ private fun ImportTab(
                 onDismiss = { showRemoteWizard = false },
                 onImportSucceeded = {
                     onDataChanged()
+                    importSuccess = true
                     importMessage = remoteImportSucceededMessage
                 },
             )
@@ -1678,6 +1829,7 @@ private fun SettingsTab(
     var includeDatabaseDirty by rememberSaveable { mutableStateOf(false) }
     var includeImportsDirty by rememberSaveable { mutableStateOf(false) }
     var showSignedUrl by rememberSaveable { mutableStateOf(false) }
+    var pollSeconds by rememberSaveable { mutableStateOf(settings.livePollIntervalSeconds.toString()) }
     val colors = MaterialTheme.colorScheme
     val neverLabel = stringResource(R.string.backup_never)
     val backupRunning by produceState(initialValue = false, context) {
@@ -1736,6 +1888,44 @@ private fun SettingsTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.about), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.app_version, BuildConfig.VERSION_NAME), color = colors.onSurfaceVariant)
+                }
+            }
+        }
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.live_poll_interval), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.live_poll_interval_hint), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = pollSeconds,
+                        onValueChange = { pollSeconds = it.filter(Char::isDigit).take(4) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.live_poll_interval)) },
+                        singleLine = true,
+                    )
+                    Button(onClick = {
+                        val seconds = pollSeconds.toLongOrNull()?.coerceIn(15L, 3600L) ?: 60L
+                        pollSeconds = seconds.toString()
+                        scope.launch {
+                            container.settingsStore.update { it.copy(livePollIntervalSeconds = seconds) }
+                        }
+                    }) {
+                        Text(stringResource(R.string.save))
+                    }
+                }
+            }
+        }
         item {
             ElevatedCard(
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
@@ -1987,29 +2177,27 @@ private fun MetricTile(modifier: Modifier = Modifier, label: String, value: Stri
 }
 
 @Composable
-private fun StatusBadge(message: String) {
+private fun StatusBadge(message: String, active: Boolean = false) {
     val colors = MaterialTheme.colorScheme
     Text(
         text = message,
         modifier = Modifier
-            .background(colors.surfaceVariant, RoundedCornerShape(14.dp))
+            .background(
+                if (active) colors.tertiaryContainer else colors.surfaceVariant,
+                RoundedCornerShape(14.dp),
+            )
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        color = colors.onSurfaceVariant,
+        color = if (active) colors.onTertiaryContainer else colors.onSurfaceVariant,
         style = MaterialTheme.typography.bodySmall,
     )
 }
 
 @Composable
 private fun DeviceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Text(
-        text = label,
-        modifier = Modifier
-            .background(if (selected) colors.primary else colors.surfaceVariant, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        color = if (selected) colors.onPrimary else colors.onSurface,
-        fontWeight = FontWeight.Medium,
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
     )
 }
 
@@ -2062,17 +2250,19 @@ private suspend fun createDeviceFromBluetooth(
     container: AppContainer,
     seed: BluetoothDeviceDescriptor?,
     existingCount: Int,
+    context: Context,
 ): Long {
     // A MAC may only be profiled once, even when taps race ahead of the device list flow.
     val upsert = container.repository.saveDeviceForMac(
         DeviceProfileEntity(
-            name = seed?.name?.takeIf { it.isNotBlank() } ?: "SMA Device ${existingCount + 1}",
+            name = seed?.name?.takeIf { it.isNotBlank() }
+                ?: context.getString(R.string.default_device_name, existingCount + 1),
             serial = null,
-            model = "Legacy SMA",
+            model = context.getString(R.string.legacy_sma),
             transport = DeviceTransport.BLUETOOTH_LEGACY,
             btMac = seed?.address,
             passwordRef = "0000",
-            plantName = "MeinePVAnlage",
+            plantName = context.getString(R.string.default_plant_name),
             ownerName = "",
             address = "",
             latitude = null,

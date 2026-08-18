@@ -292,7 +292,7 @@ data class DeviceDashboardSummary(
 
 data class PortfolioSummary(
     val deviceCount: Int,
-    val currentPowerW: Int,
+    val currentPowerW: Int?,
     val todayYieldWh: Long,
     val monthYieldWh: Long,
     val yearYieldWh: Long,

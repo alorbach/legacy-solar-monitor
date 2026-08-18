@@ -145,8 +145,11 @@ class ImportManager(
                     copyPath = outcome.copyPath,
                 )
                 cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
+                Unit
             } catch (t: Throwable) {
                 repository.completeImportJob(jobId, false, t.message, null)
+                runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
                 throw t
             }
         }

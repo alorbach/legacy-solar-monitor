@@ -57,6 +57,19 @@ class CredentialStore(context: Context) {
         prefs.edit().remove(namedKey(key)).apply()
     }
 
+    fun isCredentialId(id: String?): Boolean = !id.isNullOrBlank() && id.startsWith("cred_")
+
+    /** Plain PIN, or the secret stored under a credential id. Legacy Room values were plaintext. */
+    fun resolveSmaPin(passwordRef: String?): String? {
+        if (passwordRef.isNullOrBlank()) return null
+        return if (isCredentialId(passwordRef)) getSecret(passwordRef) else passwordRef
+    }
+
+    fun persistSmaPin(plainPin: String, existingRef: String?): String {
+        val existingId = existingRef.takeIf { isCredentialId(it) }
+        return putSecret(plainPin.trim(), existingId)
+    }
+
     private fun newId(): String = "cred_${UUID.randomUUID()}"
 
     private fun namedKey(key: String): String = "named_$key"

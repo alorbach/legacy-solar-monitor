@@ -4,7 +4,7 @@
     android:initialLayout="@android:layout/simple_list_item_1"
     android:minWidth="110dp"
     android:minHeight="72dp"
-    android:previewImage="@android:drawable/ic_menu_info_details"
+    android:previewImage="@mipmap/ic_launcher"
     android:resizeMode="horizontal|vertical"
     android:updatePeriodMillis="1800000"
     android:widgetCategory="home_screen" />

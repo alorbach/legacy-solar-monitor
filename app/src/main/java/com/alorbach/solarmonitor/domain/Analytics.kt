@@ -51,6 +51,25 @@ object EarningsCalculator {
     }
 }
 
+object DashboardMetrics {
+    const val STALE_POWER_SECONDS = 15 * 60L
+
+    fun currentPowerW(
+        latestPac: Int?,
+        sampleEpochSeconds: Long?,
+        nowEpochSeconds: Long,
+        staleAfterSeconds: Long = STALE_POWER_SECONDS,
+    ): Int? {
+        val power = latestPac ?: return null
+        val sampledAt = sampleEpochSeconds ?: return null
+        if (nowEpochSeconds - sampledAt > staleAfterSeconds) return null
+        return power
+    }
+
+    fun monthYieldWh(currentMonthKey: String, months: List<MonthAggregateEntity>): Long? =
+        months.firstOrNull { it.monthKey == currentMonthKey }?.dayYieldWh
+}
+
 object YieldFormatting {
     fun whToKwhLabel(wh: Long?, locale: Locale = Locale.getDefault()): String =
         if (wh == null) "--"

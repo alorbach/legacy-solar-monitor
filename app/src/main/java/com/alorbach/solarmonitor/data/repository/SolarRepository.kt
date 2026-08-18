@@ -20,6 +20,7 @@ import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.data.security.CredentialStore
+import com.alorbach.solarmonitor.domain.DashboardMetrics
 import com.alorbach.solarmonitor.domain.EarningsCalculator
 import com.alorbach.solarmonitor.domain.StatisticsAggregator
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
@@ -69,8 +70,50 @@ class SolarRepository(
                 return SaveDeviceResult.DuplicateMac(existing.id, normalizedMac)
             }
         }
-        val id = dao.upsertDevice(device.copy(btMac = normalizedMac))
+        val id = dao.upsertDevice(encryptPinIfPlain(device.copy(btMac = normalizedMac)))
         return SaveDeviceResult.Success(if (device.id == 0L) id else device.id)
+    }
+
+    /** In-memory copy with the plaintext SMA PIN for Bluetooth sessions. */
+    fun withResolvedPin(device: DeviceProfileEntity): DeviceProfileEntity {
+        val pin = credentialStore?.resolveSmaPin(device.passwordRef) ?: device.passwordRef
+        return device.copy(passwordRef = pin)
+    }
+
+    fun displayPin(device: DeviceProfileEntity): String =
+        credentialStore?.resolveSmaPin(device.passwordRef) ?: device.passwordRef ?: "0000"
+
+    suspend fun saveEditedDevice(device: DeviceProfileEntity, plainPin: String): Boolean {
+        val normalizedMac = device.btMac?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()
+        if (normalizedMac != null) {
+            val existing = dao.getDeviceByMac(normalizedMac)
+            if (existing != null && existing.id != device.id) {
+                return false
+            }
+        }
+        val store = credentialStore
+        val withPin = if (store == null) {
+            device.copy(passwordRef = plainPin)
+        } else {
+            device.copy(passwordRef = store.persistSmaPin(plainPin, device.passwordRef))
+        }
+        return saveDevice(withPin) is SaveDeviceResult.Success
+    }
+
+    suspend fun migrateLegacyDevicePins() {
+        val store = credentialStore ?: return
+        dao.getAllDevices().forEach { device ->
+            val ref = device.passwordRef ?: return@forEach
+            if (store.isCredentialId(ref)) return@forEach
+            dao.updateDevice(device.copy(passwordRef = store.persistSmaPin(ref, existingRef = null)))
+        }
+    }
+
+    private fun encryptPinIfPlain(device: DeviceProfileEntity): DeviceProfileEntity {
+        val store = credentialStore ?: return device
+        val ref = device.passwordRef?.trim().orEmpty()
+        if (ref.isEmpty() || store.isCredentialId(ref)) return device
+        return device.copy(passwordRef = store.persistSmaPin(ref, existingRef = null))
     }
 
     /**
@@ -88,11 +131,14 @@ class SolarRepository(
         }
     }
 
-    /** Update an existing profile. Returns false when the MAC belongs to another profile. */
-    suspend fun saveEditedDevice(device: DeviceProfileEntity): Boolean =
-        saveDevice(device) is SaveDeviceResult.Success
-
-    suspend fun deleteDevice(deviceId: Long) = dao.deleteDevice(deviceId)
+    suspend fun deleteDevice(deviceId: Long) {
+        val device = dao.getDeviceById(deviceId)
+        dao.deleteDevice(deviceId)
+        val ref = device?.passwordRef
+        if (credentialStore?.isCredentialId(ref) == true) {
+            credentialStore.deleteSecret(ref)
+        }
+    }
 
     /** Wipes all stored history for a device. Sync/import never call this — user must opt in. */
     suspend fun clearDeviceHistory(deviceId: Long) {
@@ -287,6 +333,7 @@ class SolarRepository(
     )
 
     suspend fun deleteImportJob(jobId: Long) {
+        ScheduledImportWorker.cancel(appContext, jobId)
         val credentialId = dao.getImportJob(jobId)?.passwordCredentialId
         dao.deleteImportJob(jobId)
         if (!credentialId.isNullOrBlank()) {
@@ -295,6 +342,7 @@ class SolarRepository(
     }
 
     suspend fun deleteAllImportJobs() {
+        ScheduledImportWorker.cancelAll(appContext, dao.listImportJobIds())
         val credentialIds = dao.listImportPasswordCredentialIds()
             .filter { it.isNotBlank() }
             .toSet()
@@ -339,8 +387,7 @@ class SolarRepository(
         val tariffs = dao.getTariffs(deviceId)
 
         val currentMonthKey = YearMonth.now(zoneId).toString()
-        val monthYield = months.firstOrNull { it.monthKey == currentMonthKey }?.dayYieldWh
-            ?: months.firstOrNull()?.dayYieldWh
+        val monthYield = DashboardMetrics.monthYieldWh(currentMonthKey, months)
         val yearPrefix = YearMonth.now(zoneId).year.toString()
         val year = YearMonth.now(zoneId).year
         val yearStart = LocalDate.of(year, 1, 1).toEpochDay()
@@ -360,7 +407,12 @@ class SolarRepository(
             deviceId = device.id,
             deviceName = device.name,
             model = device.model,
-            currentPowerW = latest?.totalPac,
+            currentPowerW = DashboardMetrics.currentPowerW(
+                latestPac = latest?.totalPac,
+                sampleEpochSeconds = latest?.timestampEpochSeconds
+                    ?: device.lastLiveReadAtEpochSeconds,
+                nowEpochSeconds = System.currentTimeMillis() / 1000,
+            ),
             todayYieldWh = latest?.eTodayWh ?: todayAggregate?.totalYieldWh,
             monthYieldWh = monthYield,
             yearlyYieldWh = yearYield,
@@ -376,7 +428,7 @@ class SolarRepository(
         val summaries = devices.mapNotNull { getDeviceDashboard(it.id) }
         return PortfolioSummary(
             deviceCount = summaries.size,
-            currentPowerW = summaries.sumOf { it.currentPowerW ?: 0 },
+            currentPowerW = summaries.mapNotNull { it.currentPowerW }.takeIf { it.isNotEmpty() }?.sum(),
             todayYieldWh = summaries.sumOf { it.todayYieldWh ?: 0 },
             monthYieldWh = summaries.sumOf { it.monthYieldWh ?: 0 },
             yearYieldWh = summaries.sumOf { it.yearlyYieldWh ?: 0 },

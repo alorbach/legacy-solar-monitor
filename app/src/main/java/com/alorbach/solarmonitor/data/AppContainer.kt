@@ -43,6 +43,7 @@ class AppContainer(context: Context) {
         cloudBackupCoordinator = cloudBackupCoordinator,
     )
     val liveMonitoringRepository = LiveMonitoringRepository(
+        appContext = appContext,
         repository = repository,
         bluetoothGateway = bluetoothGateway,
         cloudBackupCoordinator = cloudBackupCoordinator,

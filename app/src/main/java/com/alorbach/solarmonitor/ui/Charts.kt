@@ -37,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.StatsPoint
@@ -83,6 +84,8 @@ fun ProductionChart(points: List<DailyPoint>) {
                 val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
                 val chartWidth = (chartRight - chartLeft).coerceAtLeast(1f)
                 val step = chartWidth / (points.size - 1).coerceAtLeast(1)
+                val axisTextPx = 12.sp.toPx()
+                val peakTextPx = 11.sp.toPx()
 
                 drawLine(
                     color = axisLineColor,
@@ -93,12 +96,12 @@ fun ProductionChart(points: List<DailyPoint>) {
 
                 val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisLabelColor
-                    textSize = 28f
+                    textSize = axisTextPx
                     textAlign = Paint.Align.CENTER
                 }
                 val yPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisLabelColor
-                    textSize = 26f
+                    textSize = peakTextPx
                     textAlign = Paint.Align.LEFT
                 }
                 // Peak label (kWh) at top-left.
@@ -162,12 +165,25 @@ fun StatsBarChart(points: List<StatsPoint>) {
     // >10 bars: scroll sideways so year/day/hour labels stay readable.
     val enableScroll = points.size > 10
     val minSlotWidth = 52.dp
+    val emptyHint = stringResource(R.string.chart_empty_hint)
+    val chartDescription = stringResource(
+        R.string.chart_description,
+        points.size,
+        YieldFormatting.whToKwhLabel(points.maxOfOrNull { it.yieldWh }),
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(280.dp)
             .background(colors.surface, RoundedCornerShape(22.dp))
-            .padding(16.dp),
+            .padding(16.dp)
+            .semantics {
+                contentDescription = if (points.isEmpty()) {
+                    emptyHint
+                } else {
+                    chartDescription
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (points.isEmpty()) {
@@ -218,8 +234,9 @@ fun StatsBarChart(points: List<StatsPoint>) {
                     // Hours ("14:00") and years ("2025"): upright vertical is clearer than diagonal.
                     val verticalAxisLabels = longestAxisLabel >= 4 || points.size >= 12
                     val chartTop = if (manyBars) 8.dp.toPx() else 28.dp.toPx()
+                    val minSp = 10.sp.toPx()
                     val axisPaintProbe = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        textSize = if (isScrolling || enableScroll) 15f else 13f
+                        textSize = if (isScrolling || enableScroll) 11.sp.toPx() else 10.sp.toPx()
                     }
                     val longestAxisWidth = points.maxOf { axisPaintProbe.measureText(it.label) }
                     val chartBottom = if (verticalAxisLabels) {
@@ -234,9 +251,9 @@ fun StatsBarChart(points: List<StatsPoint>) {
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         textSize = when {
-                            isScrolling || enableScroll -> min(barWidth * 0.55f, 26f).coerceAtLeast(14f)
-                            manyBars -> min(barWidth * 0.85f, 22f).coerceAtLeast(12f)
-                            else -> min(barWidth * 0.42f, 28f).coerceAtLeast(18f)
+                            isScrolling || enableScroll -> min(barWidth * 0.55f, 13.sp.toPx()).coerceAtLeast(minSp)
+                            manyBars -> min(barWidth * 0.85f, 12.sp.toPx()).coerceAtLeast(minSp)
+                            else -> min(barWidth * 0.42f, 14.sp.toPx()).coerceAtLeast(11.sp.toPx())
                         }
                     }
                     val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -244,9 +261,9 @@ fun StatsBarChart(points: List<StatsPoint>) {
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
                         textSize = when {
-                            isScrolling || enableScroll -> min(barWidth * 0.7f, 28f).coerceIn(13f, 18f)
-                            verticalAxisLabels -> min(barWidth * 0.95f, 26f).coerceIn(11f, 16f)
-                            else -> min(barWidth * 0.55f, 28f).coerceIn(12f, 20f)
+                            isScrolling || enableScroll -> min(barWidth * 0.7f, 12.sp.toPx()).coerceIn(minSp, 13.sp.toPx())
+                            verticalAxisLabels -> min(barWidth * 0.95f, 12.sp.toPx()).coerceIn(minSp, 12.sp.toPx())
+                            else -> min(barWidth * 0.55f, 13.sp.toPx()).coerceIn(minSp, 14.sp.toPx())
                         }
                     }
                     val axisStep = when {

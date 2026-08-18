@@ -33,6 +33,8 @@ data class AppSettings(
     /** Empty string means follow the system locale. */
     val languageTag: String = "",
     val hourAggregatesBackfilled: Boolean = false,
+    /** Seconds between live Bluetooth polls while the foreground service runs. */
+    val livePollIntervalSeconds: Long = 60,
 )
 
 class AppSettingsStore(
@@ -94,6 +96,7 @@ class AppSettingsStore(
             }
             prefs[Keys.languageTag] = updated.languageTag
             prefs[Keys.hourAggregatesBackfilled] = updated.hourAggregatesBackfilled
+            prefs[Keys.livePollIntervalSeconds] = updated.livePollIntervalSeconds.coerceIn(15L, 3600L)
         }
     }
 
@@ -127,6 +130,7 @@ class AppSettingsStore(
             statsSelectedDeviceId = prefs[Keys.statsSelectedDeviceId],
             languageTag = prefs[Keys.languageTag] ?: "",
             hourAggregatesBackfilled = prefs[Keys.hourAggregatesBackfilled] ?: false,
+            livePollIntervalSeconds = prefs[Keys.livePollIntervalSeconds] ?: 60L,
         )
 
     private object Keys {
@@ -144,5 +148,6 @@ class AppSettingsStore(
         val statsSelectedDeviceId = longPreferencesKey("stats_selected_device_id")
         val languageTag = stringPreferencesKey("language_tag")
         val hourAggregatesBackfilled = booleanPreferencesKey("hour_aggregates_backfilled")
+        val livePollIntervalSeconds = longPreferencesKey("live_poll_interval_seconds")
     }
 }

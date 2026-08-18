@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -46,12 +47,15 @@ class LiveMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            clearPersistedDeviceIds()
             stopMonitoring()
             return START_NOT_STICKY
         }
 
-        val deviceIds = resolveDeviceIds(intent)
+        val fromIntent = resolveDeviceIds(intent)
+        val deviceIds = if (fromIntent.isNotEmpty()) fromIntent else loadPersistedDeviceIds()
         if (deviceIds.isEmpty()) return START_NOT_STICKY
+        persistDeviceIds(deviceIds)
 
         ServiceCompat.startForeground(
             this,
@@ -86,15 +90,17 @@ class LiveMonitorService : Service() {
                             val aggregate = container.liveMonitoringRepository.state.value.message
                             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                             manager.notify(NOTIFICATION_ID, buildNotification(aggregate))
-                            // Keep per-device failure detail in status; notification shows aggregate.
                             result.exceptionOrNull()
-                            delay(POLL_INTERVAL_MS)
+                            val intervalSeconds = runCatching {
+                                container.settingsStore.settings.first().livePollIntervalSeconds
+                            }.getOrDefault(POLL_INTERVAL_MS / 1000).coerceIn(15L, 3600L)
+                            delay(intervalSeconds * 1000)
                         }
                     }
                 }
             }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onDestroy() {
@@ -173,6 +179,16 @@ class LiveMonitorService : Service() {
         )
     }
 
+    private fun persistDeviceIds(ids: LongArray) {
+        persistDeviceIds(this, ids)
+    }
+
+    private fun loadPersistedDeviceIds(): LongArray = persistedDeviceIds(this)
+
+    private fun clearPersistedDeviceIds() {
+        persistDeviceIds(this, longArrayOf())
+    }
+
     companion object {
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_DEVICE_IDS = "device_ids"
@@ -180,6 +196,26 @@ class LiveMonitorService : Service() {
         private const val CHANNEL_ID = "live_monitor"
         private const val NOTIFICATION_ID = 4001
         private const val POLL_INTERVAL_MS = 60_000L
+        private const val PREFS = "live_monitor"
+        private const val KEY_DEVICE_IDS = "device_ids"
+
+        fun persistedDeviceIds(context: Context): LongArray =
+            context.applicationContext.getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getString(KEY_DEVICE_IDS, "")
+                .orEmpty()
+                .split(',')
+                .mapNotNull { it.toLongOrNull()?.takeIf { id -> id > 0 } }
+                .toLongArray()
+
+        fun persistDeviceIds(context: Context, ids: LongArray) {
+            val prefs = context.applicationContext.getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            if (ids.isEmpty()) {
+                prefs.remove(KEY_DEVICE_IDS)
+            } else {
+                prefs.putString(KEY_DEVICE_IDS, ids.joinToString(","))
+            }
+            check(prefs.commit())
+        }
 
         fun stopIntent(context: Context): Intent =
             Intent(context, LiveMonitorService::class.java).setAction(ACTION_STOP)

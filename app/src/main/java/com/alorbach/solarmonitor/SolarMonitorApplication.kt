@@ -28,6 +28,7 @@ class SolarMonitorApplication : Application(), Configuration.Provider {
             // createdAt <= processStartedAt still catches same-second orphans from the prior process.
             runCatching { container.repository.failOrphanedImportJobs(processStartedAtEpochSeconds) }
             runCatching { container.settingsStore.migrateLegacySecrets() }
+            runCatching { container.repository.migrateLegacyDevicePins() }
             runCatching { container.repository.backfillHourAggregatesIfNeeded() }
             runCatching {
                 val tag = container.settingsStore.settings.first().languageTag

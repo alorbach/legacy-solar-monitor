@@ -1,5 +1,7 @@
 package com.alorbach.solarmonitor.data.repository
 
+import android.content.Context
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
@@ -19,20 +21,21 @@ import kotlinx.coroutines.flow.update
 data class DeviceLiveState(
     val deviceId: Long,
     val active: Boolean = false,
-    val message: String = "Idle",
+    val message: String = "",
     val latest: SpotSampleEntity? = null,
 )
 
 data class LiveMonitoringState(
     val devices: Map<Long, DeviceLiveState> = emptyMap(),
     val activeDeviceIds: Set<Long> = emptySet(),
+    val idleLabel: String = "",
 ) {
     val active: Boolean get() = activeDeviceIds.isNotEmpty()
     val deviceId: Long? get() = activeDeviceIds.firstOrNull() ?: devices.keys.firstOrNull()
     val message: String
         get() {
             if (activeDeviceIds.isEmpty()) {
-                return devices.values.lastOrNull()?.message ?: "Idle"
+                return devices.values.lastOrNull()?.message?.takeIf { it.isNotBlank() } ?: idleLabel
             }
             val activeStates = activeDeviceIds.mapNotNull { devices[it] }
             val connected = activeStates.count {
@@ -41,20 +44,21 @@ data class LiveMonitoringState(
                     it.latest != null
             }
             return if (activeDeviceIds.size == 1) {
-                activeStates.firstOrNull()?.message ?: "Idle"
+                activeStates.firstOrNull()?.message ?: idleLabel
             } else {
-                "${activeDeviceIds.size} inverters, $connected connected"
+                "${activeDeviceIds.size} / $connected"
             }
         }
     val latest: SpotSampleEntity? get() = devices[deviceId]?.latest
 }
 
 class LiveMonitoringRepository(
+    private val appContext: Context,
     private val repository: SolarRepository,
     private val bluetoothGateway: SmaLegacyBluetoothGateway,
     private val cloudBackupCoordinator: CloudBackupCoordinator,
 ) {
-    private val _state = MutableStateFlow(LiveMonitoringState())
+    private val _state = MutableStateFlow(LiveMonitoringState(idleLabel = appContext.getString(R.string.idle)))
     val state: StateFlow<LiveMonitoringState> = _state.asStateFlow()
 
     /**
@@ -148,20 +152,21 @@ class LiveMonitoringRepository(
             publishDevice(
                 deviceId = deviceId,
                 active = continuousActive || continuous,
-                message = "Opening socket",
+                message = appContext.getString(R.string.live_opening_socket),
                 keepLatest = true,
             )
         }
         var aborted = false
+        val sessionDevice = device?.let(repository::withResolvedPin)
         val result = withOperation(device?.btMac, continuous) { op ->
-            bluetoothGateway.connectAndReadLive(device).also { aborted = op.aborted }
+            bluetoothGateway.connectAndReadLive(sessionDevice).also { aborted = op.aborted }
         }
         result.onSuccess { gatewayResult ->
             val snapshot = gatewayResult.value
-            repository.saveLiveSample(deviceId, snapshot, snapshot.status ?: "Live read OK")
+            repository.saveLiveSample(deviceId, snapshot, snapshot.status ?: appContext.getString(R.string.live_read_ok))
             repository.updateDeviceStatus(
                 deviceId = deviceId,
-                status = snapshot.status ?: "Live read OK",
+                status = snapshot.status ?: appContext.getString(R.string.live_read_ok),
                 liveAtEpochSeconds = snapshot.timestampEpochSeconds,
                 socketStrategy = gatewayResult.socketStrategy,
                 diagnostics = gatewayResult.diagnostics,
@@ -170,14 +175,19 @@ class LiveMonitoringRepository(
                 publishDevice(
                     deviceId = deviceId,
                     active = continuousDeviceIds.contains(deviceId),
-                    message = snapshot.status ?: "Connected",
+                    message = snapshot.status ?: appContext.getString(R.string.live_connected),
                     latest = snapshot,
                 )
             }
+            runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
         }.onFailure {
             // Aborting closes the socket, so the read fails with a socket error that would
             // otherwise be shown instead of the cancellation the user asked for.
-            val message = if (aborted) "Cancelled" else it.message ?: "Connection failed"
+            val message = if (aborted) {
+                appContext.getString(R.string.live_cancelled)
+            } else {
+                it.message ?: appContext.getString(R.string.live_connection_failed)
+            }
             repository.updateDeviceStatus(deviceId, message)
             if (publishState) {
                 publishDevice(
@@ -195,13 +205,14 @@ class LiveMonitoringRepository(
      * Closing the socket surfaces as a socket read error; callers show that message, so replace it
      * with the cancellation the user actually asked for.
      */
-    private fun <T> Result<T>.cancelledIfAborted(aborted: Boolean, message: String = "Cancelled"): Result<T> =
+    private fun <T> Result<T>.cancelledIfAborted(aborted: Boolean, message: String = appContext.getString(R.string.live_cancelled)): Result<T> =
         if (aborted && isFailure) Result.failure(IllegalStateException(message, exceptionOrNull())) else this
 
     suspend fun testConnection(device: DeviceProfileEntity): Result<String> {
         var aborted = false
+        val sessionDevice = repository.withResolvedPin(device)
         val result = withOperation(device.btMac) { op ->
-            bluetoothGateway.testConnection(device).also { aborted = op.aborted }
+            bluetoothGateway.testConnection(sessionDevice).also { aborted = op.aborted }
         }.map { gatewayResult ->
             repository.updateDeviceStatus(
                 deviceId = device.id,
@@ -212,7 +223,11 @@ class LiveMonitoringRepository(
             gatewayResult.value.message
         }
         result.onFailure {
-            val message = if (aborted) "Cancelled" else it.message ?: "Connection failed"
+            val message = if (aborted) {
+                appContext.getString(R.string.live_cancelled)
+            } else {
+                it.message ?: appContext.getString(R.string.live_connection_failed)
+            }
             repository.updateDeviceStatus(device.id, message)
         }
         return result.cancelledIfAborted(aborted)
@@ -224,18 +239,19 @@ class LiveMonitoringRepository(
         fromMonth: YearMonth = YearMonth.now().minusMonths(12),
     ): Result<String> {
         var aborted = false
+        val sessionDevice = repository.withResolvedPin(device)
         val dayResult = withOperation(device.btMac) { op ->
-            bluetoothGateway.syncDayArchive(device, fromDate).also { aborted = op.aborted }
+            bluetoothGateway.syncDayArchive(sessionDevice, fromDate).also { aborted = op.aborted }
         }
         // The gateway reports an aborted session as a failed Result rather than a cancellation, so
         // the second Bluetooth session would otherwise still be opened after Cancel.
         coroutineContext.ensureActive()
         if (aborted) {
-            repository.updateDeviceStatus(device.id, "Archive sync cancelled")
-            return Result.failure(IllegalStateException("Archive sync cancelled"))
+            repository.updateDeviceStatus(device.id, appContext.getString(R.string.archive_sync_cancelled))
+            return Result.failure(IllegalStateException(appContext.getString(R.string.archive_sync_cancelled)))
         }
         val monthResult = withOperation(device.btMac) { op ->
-            bluetoothGateway.syncMonthArchive(device, fromMonth).also { aborted = op.aborted }
+            bluetoothGateway.syncMonthArchive(sessionDevice, fromMonth).also { aborted = op.aborted }
         }
         val dayGatewayResult = dayResult.getOrNull()
         val monthGatewayResult = monthResult.getOrNull()
@@ -244,8 +260,12 @@ class LiveMonitoringRepository(
         if (dayGatewayResult == null && monthGatewayResult == null) {
             val error = dayResult.exceptionOrNull()
                 ?: monthResult.exceptionOrNull()
-                ?: IllegalStateException("Archive sync failed")
-            val message = if (aborted) "Archive sync cancelled" else error.message ?: "Archive sync failed"
+                ?: IllegalStateException(appContext.getString(R.string.archive_sync_failed))
+            val message = if (aborted) {
+                appContext.getString(R.string.archive_sync_cancelled)
+            } else {
+                error.message ?: appContext.getString(R.string.archive_sync_failed)
+            }
             repository.updateDeviceStatus(device.id, message)
             return Result.failure(if (aborted) IllegalStateException(message, error) else error)
         }
@@ -255,9 +275,13 @@ class LiveMonitoringRepository(
         // Records already fetched are still saved when the user cancels, but the sync is reported as
         // cancelled rather than as a successful partial run.
         val status = when {
-            aborted -> "Archive sync cancelled"
-            failure == null -> "Archive sync OK"
-            else -> "Archive sync partial ($failedPart archive: ${failure.message ?: "failed"})"
+            aborted -> appContext.getString(R.string.archive_sync_cancelled)
+            failure == null -> appContext.getString(R.string.archive_sync_ok)
+            else -> appContext.getString(
+                R.string.archive_sync_partial,
+                failedPart,
+                failure.message ?: appContext.getString(R.string.archive_sync_failed),
+            )
         }
         return runCatching {
             val dayArchive = dayGatewayResult?.value
@@ -283,13 +307,14 @@ class LiveMonitoringRepository(
             )
             "$status: ${dayItems.size} day records, ${monthItems.size} month records, ${spotSamples.size} samples"
         }.onFailure {
-            repository.updateDeviceStatus(device.id, it.message ?: "Archive sync failed")
+            repository.updateDeviceStatus(device.id, it.message ?: appContext.getString(R.string.archive_sync_failed))
         }.let { saved ->
             if (aborted) {
-                Result.failure(IllegalStateException(saved.getOrNull() ?: "Archive sync cancelled"))
+                Result.failure(IllegalStateException(saved.getOrNull() ?: appContext.getString(R.string.archive_sync_cancelled)))
             } else {
                 if (saved.isSuccess) {
                     cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                    runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
                 }
                 saved
             }
@@ -318,7 +343,7 @@ class LiveMonitoringRepository(
                 continuousOps[key]?.aborted = true
                 bluetoothGateway.abortSession(key)
             }
-            publishDevice(deviceId, active = false, message = "Stopped", keepLatest = true)
+            publishDevice(deviceId, active = false, message = appContext.getString(R.string.live_stopped), keepLatest = true)
             return
         }
         stopAll()
@@ -337,7 +362,7 @@ class LiveMonitoringRepository(
             current.copy(
                 activeDeviceIds = emptySet(),
                 devices = current.devices.mapValues { (_, state) ->
-                    state.copy(active = false, message = "Stopped")
+                    state.copy(active = false, message = appContext.getString(R.string.live_stopped))
                 },
             )
         }
@@ -353,6 +378,6 @@ class LiveMonitoringRepository(
                 bluetoothGateway.abortSession(key)
             }
         }
-        publishDevice(deviceId, active = false, message = "Stopped", keepLatest = true)
+        publishDevice(deviceId, active = false, message = appContext.getString(R.string.live_stopped), keepLatest = true)
     }
 }
