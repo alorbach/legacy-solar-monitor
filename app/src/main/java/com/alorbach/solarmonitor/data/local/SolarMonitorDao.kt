@@ -29,11 +29,23 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM device_profiles WHERE btMac = :mac COLLATE NOCASE LIMIT 1")
     suspend fun getDeviceByMac(mac: String): DeviceProfileEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsertDevice(device: DeviceProfileEntity): Long
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDevice(device: DeviceProfileEntity): Long
 
     @Update
     suspend fun updateDevice(device: DeviceProfileEntity)
+
+    @Transaction
+    suspend fun upsertDevice(device: DeviceProfileEntity): Long {
+        if (device.id != 0L) {
+            updateDevice(device)
+            return device.id
+        }
+        val inserted = insertDevice(device)
+        if (inserted != -1L) return inserted
+        val mac = device.btMac?.trim().orEmpty()
+        return getDeviceByMac(mac)?.id ?: inserted
+    }
 
     @Query("DELETE FROM device_profiles WHERE id = :id")
     suspend fun deleteDevice(id: Long)
@@ -61,6 +73,22 @@ interface SolarMonitorDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDayAggregates(items: List<DayAggregateEntity>)
+
+    @Transaction
+    suspend fun mergeDayAggregates(items: List<DayAggregateEntity>) {
+        val coalesced = DayAggregateMerger.coalesce(items)
+        if (coalesced.isEmpty()) return
+        val deviceIds = coalesced.map { it.deviceId }.distinct()
+        val days = coalesced.map { it.dateEpochDay }.distinct()
+        val existing = days.chunked(400).flatMap { chunk ->
+            getDaysForDevicesOnDays(deviceIds, chunk)
+        }.associateBy { it.deviceId to it.dateEpochDay }
+        val merged = coalesced.map { incoming ->
+            val prior = existing[incoming.deviceId to incoming.dateEpochDay] ?: return@map incoming
+            DayAggregateMerger.merge(prior, incoming)
+        }
+        upsertDayAggregates(merged)
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertMonthAggregates(items: List<MonthAggregateEntity>)
@@ -227,6 +255,15 @@ interface SolarMonitorDao {
 
     @Query(
         "SELECT * FROM day_aggregates WHERE deviceId IN (:deviceIds) " +
+            "AND dateEpochDay IN (:epochDays)",
+    )
+    suspend fun getDaysForDevicesOnDays(
+        deviceIds: List<Long>,
+        epochDays: List<Long>,
+    ): List<DayAggregateEntity>
+
+    @Query(
+        "SELECT * FROM day_aggregates WHERE deviceId IN (:deviceIds) " +
             "AND dateEpochDay BETWEEN :startDay AND :endDay ORDER BY dateEpochDay",
     )
     suspend fun getDayRangeForDevices(
@@ -284,7 +321,7 @@ interface SolarMonitorDao {
         events: List<DeviceEventEntity>,
     ) {
         if (spotSamples.isNotEmpty()) upsertSpotSamples(spotSamples)
-        if (dayAggregates.isNotEmpty()) upsertDayAggregates(dayAggregates)
+        if (dayAggregates.isNotEmpty()) mergeDayAggregates(dayAggregates)
         if (monthAggregates.isNotEmpty()) upsertMonthAggregates(monthAggregates)
         if (events.isNotEmpty()) upsertEvents(events)
     }

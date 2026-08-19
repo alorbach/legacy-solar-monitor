@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
+import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.DeviceTransport
 import com.alorbach.solarmonitor.data.model.SaveDeviceResult
@@ -110,6 +111,36 @@ class SaveDeviceDuplicateMacTest {
             device("Inverter 1 renamed", "11:22:33:44:55:66").copy(id = firstId),
         )
         assertTrue(sameProfile is SaveDeviceResult.Success)
+    }
+
+    @Test
+    fun updatingExistingDeviceKeepsChildHistory() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        db = Room.inMemoryDatabaseBuilder(context, SolarMonitorDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        val settings = AppSettingsStore(context, CredentialStore(context))
+        repository = SolarRepository(context, db, settings)
+
+        val created = repository.saveDevice(device("Inverter 1", "11:22:33:44:55:66"))
+        val deviceId = (created as SaveDeviceResult.Success).deviceId
+        db.dao().upsertDayAggregates(
+            listOf(
+                DayAggregateEntity(
+                    deviceId = deviceId,
+                    dateEpochDay = 20_000L,
+                    totalYieldWh = 12_500L,
+                ),
+            ),
+        )
+
+        val renamed = repository.saveDevice(
+            device("Inverter 1 renamed", "11:22:33:44:55:66").copy(id = deviceId),
+        )
+        assertTrue(renamed is SaveDeviceResult.Success)
+        val days = db.dao().getDayRange(deviceId, 20_000L, 20_000L)
+        assertEquals(1, days.size)
+        assertEquals(12_500L, days.first().totalYieldWh)
     }
 
     private fun device(name: String, mac: String) = DeviceProfileEntity(

@@ -1,6 +1,10 @@
 package com.alorbach.solarmonitor.ui
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -79,6 +84,7 @@ fun StatisticsScreen(
     var selectedBucketEvents by remember { mutableStateOf<List<DeviceEventEntity>?>(null) }
     var eventFilter by remember { mutableStateOf(EventFilter.ALL) }
     var currency by remember { mutableStateOf("EUR") }
+    var seriesLoading by remember { mutableStateOf(false) }
 
     LaunchedEffect(devices) {
         if (selectedDeviceId != null && devices.none { it.id == selectedDeviceId }) {
@@ -97,6 +103,29 @@ fun StatisticsScreen(
         }
     }
 
+    fun drillInto(key: String) {
+        when (granularity) {
+            StatsGranularity.YEAR -> {
+                val year = key.toIntOrNull() ?: return
+                granularity = StatsGranularity.MONTH
+                anchorDate = LocalDate.of(year, 1, 1)
+            }
+            StatsGranularity.MONTH -> {
+                val month = runCatching { YearMonth.parse(key) }.getOrNull() ?: return
+                granularity = StatsGranularity.DAY
+                anchorDate = month.atDay(1)
+            }
+            StatsGranularity.DAY -> {
+                val epochDay = key.toLongOrNull() ?: return
+                granularity = StatsGranularity.HOUR
+                anchorDate = LocalDate.ofEpochDay(epochDay)
+            }
+            StatsGranularity.HOUR -> return
+        }
+        selectedBucketKey = null
+        persistView()
+    }
+
     val deviceIdsKey = devices.map { it.id }.joinToString(separator = ",")
     // Hour/day charts refresh when live/archive samples land; year/month stay keyed by
     // ids + dataEpoch to avoid reloading full-history yearly series on every live tick.
@@ -112,6 +141,7 @@ fun StatisticsScreen(
         ""
     }
     LaunchedEffect(granularity, selectedDeviceId, anchorDate, dataEpoch, deviceIdsKey, liveRevision, zoneId) {
+        seriesLoading = true
         val ids = if (selectedDeviceId == null) {
             devices.map { it.id }
         } else {
@@ -129,6 +159,7 @@ fun StatisticsScreen(
         }
         selectedBucketKey = null
         selectedBucketEvents = null
+        seriesLoading = false
     }
 
     LaunchedEffect(selectedBucketKey, granularity, selectedDeviceId, anchorDate, deviceIdsKey) {
@@ -176,6 +207,15 @@ fun StatisticsScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        if (devices.isEmpty()) {
+            item {
+                EmptyStateCard(
+                    title = stringResource(R.string.tab_statistics),
+                    body = stringResource(R.string.stats_no_devices),
+                )
+            }
+            return@LazyColumn
+        }
         item {
             ElevatedCard(
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
@@ -235,7 +275,6 @@ fun StatisticsScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         IconButton(
                             onClick = {
@@ -250,7 +289,20 @@ fun StatisticsScreen(
                         ) {
                             Icon(Icons.Rounded.ChevronLeft, contentDescription = stringResource(R.string.stats_previous))
                         }
-                        Text(periodLabel, fontWeight = FontWeight.SemiBold)
+                        TextButton(
+                            onClick = {
+                                anchorDate = today
+                                selectedBucketKey = null
+                            },
+                            enabled = canGoNext,
+                        ) {
+                            Text(stringResource(R.string.stats_now))
+                        }
+                        Text(
+                            periodLabel,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f),
+                        )
                         IconButton(
                             onClick = {
                                 anchorDate = when (granularity) {
@@ -269,18 +321,18 @@ fun StatisticsScreen(
                         MetricTile(
                             modifier = Modifier.weight(1f),
                             label = stringResource(R.string.stats_total_yield),
-                            value = YieldFormatting.whToKwhLabel(totalYield),
+                            value = if (seriesLoading) "—" else YieldFormatting.whToKwhLabel(totalYield),
                         )
                         MetricTile(
                             modifier = Modifier.weight(1f),
                             label = stringResource(R.string.stats_peak_power),
-                            value = YieldFormatting.wattsLabel(peakPower),
+                            value = if (seriesLoading) "—" else YieldFormatting.wattsLabel(peakPower),
                         )
                     }
                     Text(
                         stringResource(
                             R.string.stats_earnings,
-                            YieldFormatting.earningsLabel(totalEarnings, currency),
+                            if (seriesLoading) "—" else YieldFormatting.earningsLabel(totalEarnings, currency),
                         ),
                         color = colors.onSurfaceVariant,
                     )
@@ -289,17 +341,30 @@ fun StatisticsScreen(
                         color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall,
                     )
-                    StatsBarChart(
-                        points = points,
-                        selectedBucketKey = selectedBucketKey,
-                        onBarClick = { key ->
-                            selectedBucketKey = if (selectedBucketKey == key) null else key
-                        },
+                    Text(
+                        stringResource(R.string.stats_chart_drill),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
                     )
+                    if (seriesLoading) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator()
+                            Text(stringResource(R.string.stats_loading), color = colors.onSurfaceVariant)
+                        }
+                    } else {
+                        StatsBarChart(
+                            points = points,
+                            selectedBucketKey = selectedBucketKey,
+                            onBarClick = { key ->
+                                selectedBucketKey = if (selectedBucketKey == key) null else key
+                            },
+                            onBarDoubleClick = { key -> drillInto(key) },
+                        )
+                    }
                 }
             }
         }
-        if (points.isEmpty()) {
+        if (!seriesLoading && points.isEmpty()) {
             item {
                 Text(
                     stringResource(
@@ -309,6 +374,7 @@ fun StatisticsScreen(
                 )
             }
         }
+        if (!seriesLoading) {
         items(points, key = { it.bucketKey }) { point ->
             ElevatedCard(
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surfaceVariant),
@@ -317,6 +383,14 @@ fun StatisticsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .pointerInput(point.bucketKey, granularity) {
+                            detectTapGestures(
+                                onTap = {
+                                    selectedBucketKey = if (selectedBucketKey == point.bucketKey) null else point.bucketKey
+                                },
+                                onDoubleTap = { drillInto(point.bucketKey) },
+                            )
+                        }
                         .padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -341,9 +415,10 @@ fun StatisticsScreen(
                 }
             }
         }
+        }
         item {
             EventListBlock(
-                events = selectedBucketEvents ?: periodEvents,
+                events = if (seriesLoading) emptyList() else (selectedBucketEvents ?: periodEvents),
                 zoneId = zoneId,
                 filter = eventFilter,
                 onFilter = { eventFilter = it },
@@ -422,4 +497,17 @@ private fun SelectChip(label: String, selected: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         label = { Text(label) },
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun SelectChipPreview() {
+    MaterialTheme {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SelectChip(label = "Hour", selected = false, onClick = {})
+            SelectChip(label = "Day", selected = true, onClick = {})
+            SelectChip(label = "Month", selected = false, onClick = {})
+            SelectChip(label = "Year", selected = false, onClick = {})
+        }
+    }
 }

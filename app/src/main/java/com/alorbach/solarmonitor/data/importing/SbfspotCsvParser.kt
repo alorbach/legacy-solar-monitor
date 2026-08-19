@@ -23,6 +23,14 @@ data class CsvParseOptions(
     val dateFormat: String? = null,
 )
 
+object CsvFormat {
+    fun normalizeDecimalPoint(value: String): String =
+        if (value.trim().equals("comma", ignoreCase = true)) "comma" else "point"
+
+    fun normalizeDelimiter(value: String): String =
+        if (value.trim().equals("comma", ignoreCase = true)) "comma" else "semicolon"
+}
+
 class SbfspotCsvParser(
     private val options: CsvParseOptions = CsvParseOptions(),
 ) {
@@ -97,12 +105,12 @@ class SbfspotCsvParser(
         val decimalFromHeader = when {
             header.contains("Decimalpoint comma", ignoreCase = true) -> "comma"
             header.contains("Decimalpoint point", ignoreCase = true) -> "point"
-            else -> options.decimalPoint
+            else -> CsvFormat.normalizeDecimalPoint(options.decimalPoint)
         }
         val delimiterFromHeader = when {
             header.contains("Delimiter semicolon", ignoreCase = true) -> ';'
             header.contains("Delimiter comma", ignoreCase = true) -> ','
-            options.delimiter.equals("comma", ignoreCase = true) -> ','
+            CsvFormat.normalizeDelimiter(options.delimiter) == "comma" -> ','
             else -> ';'
         }
         return CsvMetadata(
@@ -128,10 +136,11 @@ class SbfspotCsvParser(
             if (parts.size < 3) return@mapNotNull null
             val date = runCatching { LocalDate.parse(parts[0], dateFormatter) }.getOrNull()
                 ?: return@mapNotNull null
+            val parsedDayYield = parseDecimal(parts[2], metadata.decimalPoint)
             MonthRow(
                 date = date,
                 totalYieldWh = parseDecimalKwh(parts[1], metadata.decimalPoint),
-                dayYieldWh = parseDecimalKwh(parts[2], metadata.decimalPoint),
+                dayYieldWh = parsedDayYield?.let { (it * 1000.0).toLong() },
             )
         }
         // Keep the latest day row per month (cumulative total + sum of day yields)
@@ -143,10 +152,21 @@ class SbfspotCsvParser(
                     deviceId = deviceId,
                     monthKey = month.toString(),
                     totalYieldWh = ordered.last().totalYieldWh,
-                    dayYieldWh = ordered.sumOf { it.dayYieldWh },
+                    dayYieldWh = ordered.sumOf { it.dayYieldWh ?: 0L },
                 )
             }
+        // Month CSVs are one row per calendar day with an explicit DayYield column.
+        val dayAggregates = entries.mapNotNull { row ->
+            val dayYieldWh = row.dayYieldWh ?: return@mapNotNull null
+            DayAggregateEntity(
+                deviceId = deviceId,
+                dateEpochDay = row.date.toEpochDay(),
+                totalYieldWh = dayYieldWh,
+                sourceType = "month_csv",
+            )
+        }
         return ParsedImportBundle(
+            dayAggregates = dayAggregates,
             monthAggregates = monthAggregates,
             preservedName = name,
             sourceType = ImportSourceType.FILE,
@@ -183,16 +203,20 @@ class SbfspotCsvParser(
         val grouped = spotSamples.groupBy {
             Instant.ofEpochSecond(it.timestampEpochSeconds).atZone(metadata.zoneId).toLocalDate()
         }
-        val days = grouped.map { (date, items) ->
+        val days = grouped.mapNotNull { (date, items) ->
             val ordered = items.sortedBy { it.timestampEpochSeconds }
             val first = ordered.firstOrNull()?.eTotalWh
             val last = ordered.lastOrNull()?.eTotalWh
-            val dayYield = if (first != null && last != null && last >= first) last - first else 0L
+            val dayYield = if (first != null && last != null && last > first) last - first else 0L
+            val peak = items.mapNotNull { it.totalPac }.maxOrNull()
+            // Constant energy (typical EToday / stalled ETotal) would store 0 and REPLACE a
+            // real DayYield imported from the month CSV. Keep peak-only rows out as well.
+            if (dayYield <= 0L) return@mapNotNull null
             DayAggregateEntity(
                 deviceId = deviceId,
                 dateEpochDay = date.toEpochDay(),
                 totalYieldWh = dayYield,
-                powerW = items.maxOfOrNull { it.totalPac ?: 0 },
+                powerW = peak,
             )
         }
         return ParsedImportBundle(
@@ -256,7 +280,7 @@ class SbfspotCsvParser(
         val trimmed = value.trim()
         if (trimmed.isEmpty()) return null
         val normalized = when {
-            decimalPoint.equals("comma", ignoreCase = true) ->
+            CsvFormat.normalizeDecimalPoint(decimalPoint) == "comma" ->
                 trimmed.replace(".", "").replace(',', '.')
             else ->
                 trimmed.replace(",", "")
@@ -273,7 +297,7 @@ class SbfspotCsvParser(
     private data class MonthRow(
         val date: LocalDate,
         val totalYieldWh: Long,
-        val dayYieldWh: Long,
+        val dayYieldWh: Long?,
     )
 
     private companion object {

@@ -78,6 +78,74 @@ class StatisticsAggregatorTest {
         assertTrue(StatisticsAggregator.hourAggregatesFromSamples(1L, emptyList(), zone).isEmpty())
     }
 
+    @Test
+    fun constantEnergyIntegratesGapAcrossHourBoundary() {
+        val samples = listOf(
+            sample(epoch("2024-01-01T10:55:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-01T11:00:00Z"), 1000, power = 3600),
+        )
+        val hours = StatisticsAggregator.hourAggregatesFromSamples(1L, samples, zone)
+        assertEquals(2, hours.size)
+        assertEquals(300L, hours[0].yieldWh)
+    }
+
+    @Test
+    fun constantEnergyFallsBackToPowerIntegral() {
+        val samples = listOf(
+            sample(epoch("2024-01-01T10:00:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-01T10:30:00Z"), 1000, power = 3600),
+        )
+        val hours = StatisticsAggregator.hourAggregatesFromSamples(1L, samples, zone)
+        assertEquals(1, hours.size)
+        assertEquals(1800L, hours[0].yieldWh)
+    }
+
+    @Test
+    fun powerEstimateIsNotAddedAgainWhenCounterResumes() {
+        val samples = listOf(
+            sample(epoch("2024-01-01T10:00:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-01T10:30:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-01T11:00:00Z"), 4000, power = 3600),
+        )
+        val hours = StatisticsAggregator.hourAggregatesFromSamples(1L, samples, zone)
+        assertEquals(2, hours.size)
+        assertEquals(3000L, hours[0].yieldWh)
+        assertEquals(0L, hours[1].yieldWh)
+    }
+
+    @Test
+    fun distantNextSampleDoesNotFillRestOfHour() {
+        val samples = listOf(
+            sample(epoch("2024-01-01T10:00:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-02T10:00:00Z"), 1000, power = 3600),
+        )
+        val hours = StatisticsAggregator.hourAggregatesFromSamples(1L, samples, zone)
+        assertEquals(0L, hours[0].yieldWh)
+    }
+
+    @Test
+    fun intraHourTelemetryOutageIsNotFilledByPower() {
+        val samples = listOf(
+            sample(epoch("2024-01-01T10:00:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-01T10:55:00Z"), 1000, power = 3600),
+        )
+        val hours = StatisticsAggregator.hourAggregatesFromSamples(1L, samples, zone)
+        assertEquals(1, hours.size)
+        assertEquals(0L, hours[0].yieldWh)
+    }
+
+    @Test
+    fun crossHourAdjacentSamplesSplitAtBoundary() {
+        val samples = listOf(
+            sample(epoch("2024-01-01T10:50:00Z"), 1000, power = 3600),
+            sample(epoch("2024-01-01T11:10:00Z"), 1000, power = 3600),
+        )
+        val hours = StatisticsAggregator.hourAggregatesFromSamples(1L, samples, zone)
+        assertEquals(2, hours.size)
+        assertEquals(600L, hours[0].yieldWh)
+        assertEquals(600L, hours[1].yieldWh)
+    }
+
     private fun sample(epochSeconds: Long, eTotalWh: Long, power: Int? = null) =
         SpotSampleEntity(
             deviceId = 1L,

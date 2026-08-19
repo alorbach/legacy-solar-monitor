@@ -127,14 +127,18 @@ fun DashboardTab(
             selectedDeviceId = devices.firstOrNull()?.id
         }
     }
-    var chartData by remember { mutableStateOf<List<DailyPoint>>(emptyList()) }
+    var chartData by remember { mutableStateOf<List<DailyPoint>?>(null) }
     val selectedDevice = devices.firstOrNull { it.id == selectedDeviceId }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var exportSuccess by remember { mutableStateOf(false) }
+    val exportFailedLabel = stringResource(R.string.export_failed)
     LaunchedEffect(
         selectedDeviceId,
         dataEpoch,
         selectedDevice?.lastLiveReadAtEpochSeconds,
         selectedDevice?.lastArchiveSyncAtEpochSeconds,
     ) {
+        chartData = null
         chartData = selectedDeviceId?.let { container.repository.getDailyChart(it) } ?: emptyList()
     }
     val colors = MaterialTheme.colorScheme
@@ -230,7 +234,21 @@ fun DashboardTab(
                         color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    ProductionChart(chartData)
+                    if (chartData == null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator()
+                            Text(stringResource(R.string.dashboard_loading), color = colors.onSurfaceVariant)
+                        }
+                    } else {
+                        ProductionChart(chartData.orEmpty())
+                    }
+                    exportMessage?.let { message ->
+                        Text(
+                            message,
+                            color = if (exportSuccess) colors.onSurfaceVariant else colors.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     if (selectedDeviceId != null) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(
@@ -243,6 +261,12 @@ fun DashboardTab(
                                                 container.reportExporter.exportCsv(summary),
                                                 "text/csv",
                                             )
+                                        }.onFailure {
+                                            exportSuccess = false
+                                            exportMessage = exportFailedLabel
+                                        }.onSuccess {
+                                            exportSuccess = true
+                                            exportMessage = null
                                         }
                                     }
                                 },
@@ -257,6 +281,12 @@ fun DashboardTab(
                                                 container.reportExporter.exportPdf(summary),
                                                 "application/pdf",
                                             )
+                                        }.onFailure {
+                                            exportSuccess = false
+                                            exportMessage = exportFailedLabel
+                                        }.onSuccess {
+                                            exportSuccess = true
+                                            exportMessage = null
                                         }
                                     }
                                 },
@@ -294,7 +324,12 @@ fun DashboardTab(
                         .clickable { selectedDeviceId = device.id },
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(device.name, fontWeight = FontWeight.Bold)
+                        Text(
+                            device.name,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                         Text(summary?.status ?: device.lastConnectionStatus ?: stringResource(R.string.idle), color = colors.onSurfaceVariant)
                         Text(
                             stringResource(

@@ -92,6 +92,7 @@ import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.DeviceTransport
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportJobStatus
+import com.alorbach.solarmonitor.data.model.ImportSourceType
 import com.alorbach.solarmonitor.data.model.PortfolioSummary
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
@@ -327,12 +328,21 @@ fun ImportTab(
             }
         } else {
             item {
-                OutlinedButton(
-                    onClick = { showClearImportJobsConfirm = true },
-                    enabled = !importRunning,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.clear_import_jobs))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = scheduleHours,
+                        onValueChange = { scheduleHours = it.filter(Char::isDigit).take(3) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.schedule_import_for_jobs)) },
+                        singleLine = true,
+                    )
+                    OutlinedButton(
+                        onClick = { showClearImportJobsConfirm = true },
+                        enabled = !importRunning,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.clear_import_jobs))
+                    }
                 }
             }
         }
@@ -385,7 +395,7 @@ fun ImportTab(
                     Text(
                         stringResource(
                             R.string.import_job_status,
-                            job.sourceType.name,
+                            importSourceTypeLabel(job.sourceType),
                             stringResource(
                                 when (job.status) {
                                     ImportJobStatus.PENDING, ImportJobStatus.RUNNING -> R.string.import_status_running
@@ -396,37 +406,35 @@ fun ImportTab(
                         ),
                     )
                     job.message?.let { Text(it) }
-                    job.preservedCopyPath?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                    job.preservedCopyPath?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     if (job.canReplay()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = scheduleHours,
-                                onValueChange = { scheduleHours = it.filter(Char::isDigit).take(3) },
-                                modifier = Modifier.fillMaxWidth(),
-                                label = { Text(stringResource(R.string.schedule_import_hours)) },
-                                singleLine = true,
-                            )
-                            OutlinedButton(
-                                enabled = !importRunning,
-                                onClick = {
-                                    val hours = scheduleHours.toLongOrNull()?.coerceIn(1L, 168L) ?: 6L
-                                    if (ScheduledImportWorker.enqueueJob(context, job, hours)) {
-                                        importSuccess = true
-                                        importMessage = context.getString(
-                                            R.string.schedule_import_saved,
-                                            hours.toInt(),
-                                        )
-                                        if (!context.isBatteryUnrestricted()) {
-                                            showBatteryPrompt = true
-                                        }
-                                    } else {
-                                        importSuccess = false
-                                        importMessage = context.getString(R.string.schedule_import_failed)
+                        OutlinedButton(
+                            enabled = !importRunning,
+                            onClick = {
+                                val hours = scheduleHours.toLongOrNull()?.coerceIn(1L, 168L) ?: 6L
+                                if (ScheduledImportWorker.enqueueJob(context, job, hours)) {
+                                    importSuccess = true
+                                    importMessage = context.getString(
+                                        R.string.schedule_import_saved,
+                                        hours.toInt(),
+                                    )
+                                    if (!context.isBatteryUnrestricted()) {
+                                        showBatteryPrompt = true
                                     }
-                                },
-                            ) {
-                                Text(stringResource(R.string.schedule_import))
-                            }
+                                } else {
+                                    importSuccess = false
+                                    importMessage = context.getString(R.string.schedule_import_failed)
+                                }
+                            },
+                        ) {
+                            Text(stringResource(R.string.schedule_import))
                         }
                     }
                 }
@@ -637,3 +645,15 @@ fun ImportTab(
         }
     }
 }
+
+@Composable
+private fun importSourceTypeLabel(type: ImportSourceType): String = stringResource(
+    when (type) {
+        ImportSourceType.FILE -> R.string.import_type_file
+        ImportSourceType.ZIP -> R.string.import_type_zip
+        ImportSourceType.FTP -> R.string.import_type_ftp
+        ImportSourceType.SFTP -> R.string.import_type_sftp
+        ImportSourceType.URL -> R.string.import_type_url
+        ImportSourceType.SQLITE_DB -> R.string.import_type_sqlite
+    },
+)

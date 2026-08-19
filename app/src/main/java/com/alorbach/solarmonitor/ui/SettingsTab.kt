@@ -40,6 +40,8 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -205,7 +207,10 @@ fun SettingsTab(
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.about), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(stringResource(R.string.app_version, BuildConfig.VERSION_NAME), color = colors.onSurfaceVariant)
+                    Text(
+                        stringResource(R.string.app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
+                        color = colors.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -320,13 +325,18 @@ fun SettingsTab(
                             PasswordVisualTransformation()
                         },
                         trailingIcon = {
-                            Text(
-                                if (showSignedUrl) stringResource(R.string.hide) else stringResource(R.string.show),
-                                modifier = Modifier
-                                    .clickable { showSignedUrl = !showSignedUrl }
-                                    .padding(8.dp),
-                                color = colors.onSurfaceVariant,
-                            )
+                            IconButton(onClick = { showSignedUrl = !showSignedUrl }) {
+                                Icon(
+                                    imageVector = if (showSignedUrl) {
+                                        Icons.Rounded.VisibilityOff
+                                    } else {
+                                        Icons.Rounded.Visibility
+                                    },
+                                    contentDescription = stringResource(
+                                        if (showSignedUrl) R.string.hide else R.string.show,
+                                    ),
+                                )
+                            }
                         },
                     )
                     Row(
@@ -375,6 +385,11 @@ fun SettingsTab(
                             Text(stringResource(R.string.backup_running), color = colors.onSurfaceVariant)
                         }
                     }
+                    Text(
+                        stringResource(R.string.backup_restore_not_supported),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     Text(
                         stringResource(
                             R.string.backup_last_attempt,

@@ -29,8 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -59,7 +57,13 @@ fun ProductionChart(points: List<DailyPoint>) {
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
     val locale = Locale.getDefault()
-    val dateFmt = remember(locale) { DateTimeFormatter.ofPattern("dd.MM", locale) }
+    val dateFmt = remember(locale) {
+        if (locale.language == "de") {
+            DateTimeFormatter.ofPattern("dd.MM", locale)
+        } else {
+            DateTimeFormatter.ofPattern("MMM d", locale)
+        }
+    }
     val description = if (points.isEmpty()) {
         stringResource(R.string.chart_no_data)
     } else {
@@ -141,7 +145,7 @@ fun ProductionChart(points: List<DailyPoint>) {
                 }
                 offsets.zipWithNext().forEach { (start, end) ->
                     drawLine(
-                        brush = Brush.linearGradient(listOf(Color(0xFFF4B400), Color(0xFF17212B))),
+                        color = colors.secondary,
                         start = start,
                         end = end,
                         strokeWidth = 10f,
@@ -149,7 +153,7 @@ fun ProductionChart(points: List<DailyPoint>) {
                     )
                 }
                 offsets.forEach { offset ->
-                    drawCircle(Color(0xFFF4B400), radius = 7f, center = offset)
+                    drawCircle(colors.secondary, radius = 7f, center = offset)
                 }
             }
         }
@@ -161,17 +165,18 @@ fun StatsBarChart(
     points: List<StatsPoint>,
     selectedBucketKey: String? = null,
     onBarClick: ((String) -> Unit)? = null,
+    onBarDoubleClick: ((String) -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
     val midYield = (maxYield / 2f).toLong()
     val outsideLabelColor = colors.onBackground.toArgb()
-    val insideLabelColor = Color(0xFF17212B).toArgb()
+    val insideLabelColor = colors.onBackground.toArgb()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
     val eventMarkerColor = colors.error
-    val selectedBarColor = Color(0xFFE09B00)
-    val defaultBarColor = Color(0xFFF4B400)
+    val selectedBarColor = colors.tertiary
+    val defaultBarColor = colors.secondary
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val emptyHint = stringResource(R.string.chart_empty_hint)
@@ -208,7 +213,7 @@ fun StatsBarChart(
                 val manyBars = points.size >= StatsSeriesFill.VISIBLE_BARS && !isScrolling
                 val hasEventMarkers = points.any { it.eventCount > 0 }
                 val longestAxisLabel = points.maxOf { it.label.length }
-                val verticalAxisLabels = longestAxisLabel >= 5
+                val verticalAxisLabels = longestAxisLabel >= 4 && (isScrolling || points.size >= 10)
                 val chartTopPx = with(density) {
                     val base = if (manyBars) 8.dp else 28.dp
                     (if (hasEventMarkers) base + 10.dp else base).toPx()
@@ -291,19 +296,25 @@ fun StatsBarChart(
                             .width(contentWidth)
                             .fillMaxHeight()
                             .then(
-                                if (onBarClick == null) {
+                                if (onBarClick == null && onBarDoubleClick == null) {
                                     Modifier
                                 } else {
                                     Modifier.pointerInput(points, contentWidth) {
-                                        detectTapGestures { offset ->
-                                            val inset = with(density) { 12.dp.toPx() }
-                                            val usableWidth = (size.width - inset * 2f).coerceAtLeast(1f)
-                                            val slot = usableWidth / points.size.coerceAtLeast(1)
-                                            val index = ((offset.x - inset) / slot).toInt()
-                                            if (index in points.indices) {
-                                                onBarClick(points[index].bucketKey)
-                                            }
-                                        }
+                                        val inset = with(density) { 12.dp.toPx() }
+                                        detectTapGestures(
+                                            onTap = { offset ->
+                                                val index = barIndexAt(offset.x, size.width.toFloat(), points.size, inset)
+                                                if (index in points.indices) {
+                                                    onBarClick?.invoke(points[index].bucketKey)
+                                                }
+                                            },
+                                            onDoubleTap = { offset ->
+                                                val index = barIndexAt(offset.x, size.width.toFloat(), points.size, inset)
+                                                if (index in points.indices) {
+                                                    onBarDoubleClick?.invoke(points[index].bucketKey)
+                                                }
+                                            },
+                                        )
                                     }
                                 },
                             ),
@@ -455,5 +466,11 @@ fun StatsBarChart(
             }
         }
     }
+}
+
+private fun barIndexAt(x: Float, widthPx: Float, count: Int, insetPx: Float): Int {
+    val usableWidth = (widthPx - insetPx * 2f).coerceAtLeast(1f)
+    val slot = usableWidth / count.coerceAtLeast(1)
+    return ((x - insetPx) / slot).toInt()
 }
 

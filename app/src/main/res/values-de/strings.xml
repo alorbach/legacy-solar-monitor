@@ -71,8 +71,6 @@
     <string name="remote_import_folder">Ordner</string>
     <string name="remote_import_csv_count">CSV-Dateien</string>
     <string name="remote_import_folder_limit">Zu viele Dateien: max. %1$d CSVs pro Ordner-Import (gefunden: %2$d). Bitte einen kleineren Unterordner wählen.</string>
-    <string name="remote_import_succeeded">FTP/SFTP-Import erfolgreich</string>
-    <string name="remote_import_failed">FTP/SFTP-Import fehlgeschlagen</string>
     <string name="cancel">Abbrechen</string>
     <string name="save">Speichern</string>
     <string name="test_connection">Test</string>
@@ -86,7 +84,6 @@
     <string name="clear_history_done">Gespeicherte Historie gelöscht</string>
     <string name="clear_history_failed">Historie konnte nicht gelöscht werden</string>
     <string name="delete">Löschen</string>
-    <string name="start_live_monitor">Live-Monitor starten</string>
     <string name="start_all_live_monitors">Alle starten</string>
     <string name="stop_live_monitor">Live-Monitor stoppen</string>
     <string name="portfolio">Portfolio</string>
@@ -94,7 +91,7 @@
     <string name="metric_today">Heute</string>
     <string name="metric_month">Monat</string>
     <string name="metric_year">Jahr</string>
-    <string name="earnings_approx">Erlös (~): %1$s</string>
+    <string name="earnings_approx">Erlös letzte ~32 Tage: %1$s</string>
     <string name="no_devices_yet">Noch keine Geräte</string>
     <string name="no_devices_body">Fügen Sie auf dem Geräte-Tab einen Bluetooth-SMA-Wechselrichter hinzu, um die Überwachung zu starten.</string>
     <string name="production_chart">Erzeugungsdiagramm</string>
@@ -108,7 +105,6 @@
     <string name="owner">Besitzer</string>
     <string name="sma_pin">SMA-Bluetooth-PIN / Passwort</string>
     <string name="bluetooth_mac">Bluetooth-MAC</string>
-    <string name="search_bluetooth">Bluetooth-Geräte in der Nähe suchen</string>
     <string name="show">Anzeigen</string>
     <string name="hide">Ausblenden</string>
     <string name="unassigned">Nicht zugewiesen</string>
@@ -129,10 +125,7 @@
     <string name="import_sources_body">SBFspot-CSV-, ZIP- oder SQLite-Dateien aus lokalem Speicher, per URL oder per FTP/SFTP importieren.</string>
     <string name="import_add_device_first">Zuerst ein Gerät hinzufügen, dann Daten dafür importieren.</string>
     <string name="import_url">Import-URL</string>
-    <string name="import_succeeded">Import erfolgreich</string>
     <string name="import_failed">Import fehlgeschlagen</string>
-    <string name="url_import_succeeded">URL-Import erfolgreich</string>
-    <string name="url_import_failed">URL-Import fehlgeschlagen</string>
     <string name="no_imports_yet">Noch keine Importe</string>
     <string name="no_imports_body">Importierte Aufträge erscheinen hier mit Status und gespeicherten Dateipfaden.</string>
     <string name="delete_import_job">Importversuch entfernen</string>
@@ -148,8 +141,6 @@
     <string name="rerun_import_url">Import-URL</string>
     <string name="rerun_import_url_optional">Import-URL (leer = gespeicherte verwenden)</string>
     <string name="rerun_import_url_body">Import-URL erneut eingeben. Passende Zeilen werden überschrieben; die Historie wird nicht vorher gelöscht.</string>
-    <string name="rerun_import_running">Erneuter Import läuft…</string>
-    <string name="rerun_import_succeeded">Erneuter Import erfolgreich</string>
     <string name="clear_import_jobs">Importverlauf leeren</string>
     <string name="clear_import_jobs_title">Importverlauf leeren?</string>
     <string name="clear_import_jobs_body">Entfernt alle gelisteten Importversuche von diesem Bildschirm. Bereits importierte Solardaten bleiben in der Datenbank.</string>
@@ -201,7 +192,6 @@
     <string name="idle">Bereit</string>
     <string name="legacy_sma">Legacy SMA</string>
     <string name="legacy_sma_profile">Legacy-SMA-Bluetooth-Profil</string>
-    <string name="no_nearby_start_scan">Noch keine Ergebnisse in der Nähe. Suche starten.</string>
     <string name="live_opening_socket">Öffne Socket</string>
     <string name="live_read_ok">Live-Abruf OK</string>
     <string name="live_connected">Verbunden</string>
@@ -238,14 +228,12 @@
     <string name="schedule_import_hours">Wiederholen alle Stunden</string>
     <string name="schedule_import_saved">Geplanter Import alle %1$d Stunden</string>
     <string name="schedule_import_failed">Import konnte nicht geplant werden. Bitte einmal erneut ausführen, damit Zugangsdaten gespeichert sind.</string>
-    <string name="schedule_import_disabled">Geplanter Import aus</string>
     <string name="about">Info</string>
-    <string name="app_version">Version %1$s</string>
+    <string name="app_version">Version %1$s Build %2$d</string>
     <string name="live_poll_interval">Live-Abfrageintervall (Sekunden)</string>
     <string name="live_poll_interval_hint">Wie oft der Live-Monitor den Wechselrichter während des Betriebs abfragt.</string>
     <string name="expand_device">Gerätedetails anzeigen</string>
     <string name="collapse_device">Gerätedetails ausblenden</string>
-    <string name="import_message_ok">Import erfolgreich</string>
     <string name="import_in_progress">Import läuft…</string>
     <string name="default_device_name">SMA-Gerät %1$d</string>
     <string name="default_plant_name">Meine PV-Anlage</string>
@@ -257,7 +245,7 @@
     <string name="report_year">Jahr: %1$s</string>
     <string name="report_earnings">Erlös: %1$s</string>
     <string name="report_status">Status: %1$s</string>
-    <string name="stats_chart_unit">Balken in kWh. Es werden bis zu 12 Tage/Stunden direkt angezeigt; danach seitlich scrollen.</string>
+    <string name="stats_chart_unit">Balken in kWh. Bis zu 12 Balken direkt; danach seitlich scrollen.</string>
     <string name="stats_events">Ereignisse in diesem Zeitraum</string>
     <string name="stats_events_empty">Keine Wechselrichter-Ereignisse in diesem Zeitraum. Den Events-Ordner von SBFspot importieren, damit die Liste gefüllt wird.</string>
     <string name="import_channel">Datenimport</string>
@@ -299,7 +287,6 @@
     <string name="import_source_sftp_file">SFTP %1$s:%2$s</string>
     <string name="remote_import_connection_failed">Verbindung fehlgeschlagen</string>
     <string name="remote_import_list_failed">Listing fehlgeschlagen</string>
-    <string name="live_status_multi">%1$d / %2$d</string>
     <string name="chart_empty_with_events">Kein Ertrag in diesem Zeitraum. Ereignisse stehen darunter.</string>
     <string name="delete_import_job_title">Diesen Importversuch entfernen?</string>
     <string name="delete_import_job_body">Entfernt diesen Eintrag aus dem Verlauf. Bereits importierte Solardaten bleiben in der Datenbank.</string>
@@ -322,4 +309,23 @@
     <string name="event_bar_filter_clear">Alle Ereignisse zeigen</string>
     <string name="event_type_incoming">Eingehend</string>
     <string name="event_type_outgoing">Ausgehend</string>
+    <string name="stats_now">Jetzt</string>
+    <string name="stats_no_devices">Gerät hinzufügen, um Statistiken zu sehen.</string>
+    <string name="stats_loading">Statistik wird geladen…</string>
+    <string name="stats_chart_drill">Doppeltippen auf Jahr, Monat oder Tag öffnet die nächste Ebene.</string>
+    <string name="device_advanced">Erweitert</string>
+    <string name="device_timezone">Zeitzone</string>
+    <string name="device_timezone_invalid">Ungültige Zeitzone. Beispiel: Europe/Berlin.</string>
+    <string name="csv_decimal_point">CSV-Dezimalzeichen (comma/point)</string>
+    <string name="csv_delimiter">CSV-Trennzeichen (semicolon/comma)</string>
+    <string name="csv_date_format">CSV-Datumsformat</string>
+    <string name="backup_restore_not_supported">Wiederherstellen aus der Cloud ist noch nicht möglich. Backups sind nur Upload.</string>
+    <string name="import_type_file">Datei</string>
+    <string name="import_type_zip">ZIP</string>
+    <string name="import_type_ftp">FTP</string>
+    <string name="import_type_sftp">SFTP</string>
+    <string name="import_type_url">URL</string>
+    <string name="import_type_sqlite">SQLite</string>
+    <string name="schedule_import_for_jobs">Intervall (Stunden) für die Planen-Schaltfläche je Auftrag</string>
+    <string name="dashboard_loading">Diagramm wird geladen…</string>
 </resources>

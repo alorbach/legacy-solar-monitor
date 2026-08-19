@@ -86,6 +86,7 @@ class SolarRepository(
         credentialStore?.resolveSmaPin(device.passwordRef) ?: device.passwordRef ?: "0000"
 
     suspend fun saveEditedDevice(device: DeviceProfileEntity, plainPin: String): Boolean {
+        val previousTimezone = dao.getDeviceById(device.id)?.timezone
         val normalizedMac = device.btMac?.trim()?.takeIf { it.isNotEmpty() }?.uppercase()
         if (normalizedMac != null) {
             val existing = dao.getDeviceByMac(normalizedMac)
@@ -99,7 +100,22 @@ class SolarRepository(
         } else {
             device.copy(passwordRef = store.persistSmaPin(plainPin, device.passwordRef))
         }
-        return saveDevice(withPin) is SaveDeviceResult.Success
+        if (saveDevice(withPin) !is SaveDeviceResult.Success) return false
+        if (previousTimezone != null && previousTimezone != device.timezone) {
+            recomputeHourAggregatesForDevice(device.id)
+        }
+        return true
+    }
+
+    private suspend fun recomputeHourAggregatesForDevice(deviceId: Long) {
+        dao.deleteHourAggregatesForDevice(deviceId)
+        val samples = dao.getAllSpotSamples(deviceId)
+        if (samples.isEmpty()) return
+        recomputeHourAggregates(
+            deviceId,
+            samples.minOf { it.timestampEpochSeconds },
+            samples.maxOf { it.timestampEpochSeconds },
+        )
     }
 
     suspend fun migrateLegacyDevicePins() {
@@ -180,7 +196,7 @@ class SolarRepository(
     }
 
     suspend fun saveDayAggregates(items: List<DayAggregateEntity>) {
-        if (items.isNotEmpty()) dao.upsertDayAggregates(items)
+        if (items.isNotEmpty()) dao.mergeDayAggregates(items)
     }
 
     suspend fun saveMonthAggregates(items: List<MonthAggregateEntity>) {
@@ -195,7 +211,7 @@ class SolarRepository(
         status: String,
     ) {
         if (spotSamples.isNotEmpty()) dao.upsertSpotSamples(spotSamples)
-        if (dayItems.isNotEmpty()) dao.upsertDayAggregates(dayItems)
+        if (dayItems.isNotEmpty()) dao.mergeDayAggregates(dayItems)
         if (monthItems.isNotEmpty()) dao.upsertMonthAggregates(monthItems)
         if (spotSamples.isNotEmpty()) {
             val from = spotSamples.minOf { it.timestampEpochSeconds }
@@ -277,9 +293,9 @@ class SolarRepository(
                 deviceId = deviceId,
                 samples = samples,
                 zoneId = zoneId,
-            ).filter { it.hourEpochSeconds in fromHour..toHour }
-            // Replace the recomputed window so hours without usable eTotalWh do not stay stale.
-            dao.deleteHourAggregatesInRange(deviceId, fromHour, toHour)
+            ).filter { it.hourEpochSeconds in lookback..toHour }
+            // Replace lookback+window so power-estimate reconciliation is persisted.
+            dao.deleteHourAggregatesInRange(deviceId, lookback, toHour)
             if (aggregates.isNotEmpty()) {
                 dao.upsertHourAggregates(aggregates)
             }

@@ -39,6 +39,8 @@ import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
@@ -69,10 +71,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Observer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,6 +88,7 @@ import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.AppContainer
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
+import com.alorbach.solarmonitor.data.importing.CsvFormat
 import com.alorbach.solarmonitor.data.importing.ImportRequest
 import com.alorbach.solarmonitor.data.importing.canReplay
 import com.alorbach.solarmonitor.data.importing.replayConfig
@@ -143,7 +149,8 @@ fun DevicesTab(
         expandedDeviceId = target
         val position = devices.indexOfFirst { it.id == target }
         if (position >= 0) {
-            listState.animateScrollToItem(position + DEVICE_LIST_HEADER_ITEMS)
+            val headerCount = 1 + rankedDevices.size
+            listState.animateScrollToItem(headerCount + position)
             onScrollHandled()
         }
     }
@@ -151,7 +158,7 @@ fun DevicesTab(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -195,43 +202,36 @@ fun DevicesTab(
                             },
                             color = colors.onSurfaceVariant,
                         )
-                    } else {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 220.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                        rankedDevices.forEach { candidate ->
-                            val existingId = devices.firstOrNull {
-                                it.btMac.equals(candidate.address, ignoreCase = true)
-                            }?.id
-                            BluetoothDiscoveryRow(
-                                candidate = candidate,
-                                alreadyAdded = existingId != null ||
-                                    candidate.address.uppercase() in assignedMacs,
-                                onClick = {
-                                    if (existingId != null) {
-                                        onRequestScrollToDevice(existingId)
-                                    } else {
-                                        scope.launch {
-                                            val id = createDeviceFromBluetooth(
-                                                container = container,
-                                                seed = candidate,
-                                                existingCount = devices.size,
-                                                context = context,
-                                            )
-                                            onRequestScrollToDevice(id)
-                                            onDataChanged()
-                                        }
-                                    }
-                                },
-                            )
-                        }
-                        }
                     }
                 }
+            }
+        }
+        if (rankedDevices.isNotEmpty()) {
+            items(rankedDevices, key = { "bt-${it.address}" }) { candidate ->
+                val existingId = devices.firstOrNull {
+                    it.btMac.equals(candidate.address, ignoreCase = true)
+                }?.id
+                BluetoothDiscoveryRow(
+                    candidate = candidate,
+                    alreadyAdded = existingId != null ||
+                        candidate.address.uppercase() in assignedMacs,
+                    onClick = {
+                        if (existingId != null) {
+                            onRequestScrollToDevice(existingId)
+                        } else {
+                            scope.launch {
+                                val id = createDeviceFromBluetooth(
+                                    container = container,
+                                    seed = candidate,
+                                    existingCount = devices.size,
+                                    context = context,
+                                )
+                                onRequestScrollToDevice(id)
+                                onDataChanged()
+                            }
+                        }
+                    },
+                )
             }
         }
         if (devices.isEmpty()) {
@@ -259,6 +259,7 @@ fun DevicesTab(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DeviceEditorCard(
     device: DeviceProfileEntity,
@@ -275,6 +276,15 @@ internal fun DeviceEditorCard(
     var mac by rememberSaveable(device.id) { mutableStateOf(device.btMac ?: "") }
     var owner by rememberSaveable(device.id) { mutableStateOf(device.ownerName ?: "") }
     var smaPin by remember(device.id) { mutableStateOf(container.repository.displayPin(device)) }
+    var timezone by rememberSaveable(device.id) { mutableStateOf(device.timezone) }
+    var decimalPoint by rememberSaveable(device.id) {
+        mutableStateOf(CsvFormat.normalizeDecimalPoint(device.decimalPoint))
+    }
+    var delimiter by rememberSaveable(device.id) {
+        mutableStateOf(CsvFormat.normalizeDelimiter(device.delimiter))
+    }
+    var dateFormat by rememberSaveable(device.id) { mutableStateOf(device.dateFormat) }
+    var showAdvanced by rememberSaveable(device.id) { mutableStateOf(false) }
     var showPin by rememberSaveable(device.id) { mutableStateOf(false) }
     var testMessage by remember { mutableStateOf<String?>(null) }
     var testSuccess by remember { mutableStateOf(false) }
@@ -295,6 +305,8 @@ internal fun DeviceEditorCard(
     val liveOkLabel = stringResource(R.string.live_read_ok)
     val liveFailedLabel = stringResource(R.string.live_read_failed)
     val archiveFailedLabel = stringResource(R.string.archive_sync_failed)
+    val expandDeviceLabel = stringResource(R.string.expand_device)
+    val collapseDeviceLabel = stringResource(R.string.collapse_device)
     val operationLabel = when {
         testRunning -> stringResource(R.string.testing_connection)
         liveRunning -> stringResource(R.string.reading_live_data)
@@ -307,6 +319,16 @@ internal fun DeviceEditorCard(
             name = name,
             btMac = mac,
             ownerName = owner,
+            timezone = runCatching { ZoneId.of(timezone.ifBlank { device.timezone }) }
+                .getOrElse {
+                    testSuccess = false
+                    testMessage = context.getString(R.string.device_timezone_invalid)
+                    return null
+                }
+                .id,
+            decimalPoint = CsvFormat.normalizeDecimalPoint(decimalPoint.ifBlank { device.decimalPoint }),
+            delimiter = CsvFormat.normalizeDelimiter(delimiter.ifBlank { device.delimiter }),
+            dateFormat = dateFormat.trim().ifBlank { device.dateFormat },
         )
         if (!container.repository.saveEditedDevice(updated, smaPin)) {
             testSuccess = false
@@ -325,7 +347,15 @@ internal fun DeviceEditorCard(
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable(onClick = onToggleExpanded),
+                modifier = Modifier
+                    .clickable(onClick = onToggleExpanded)
+                    .semantics {
+                        contentDescription = if (expanded) {
+                            collapseDeviceLabel
+                        } else {
+                            expandDeviceLabel
+                        }
+                    },
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -359,16 +389,60 @@ internal fun DeviceEditorCard(
                 singleLine = true,
                 visualTransformation = if (showPin) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
-                    Text(
-                        if (showPin) stringResource(R.string.hide) else stringResource(R.string.show),
-                        modifier = Modifier
-                            .clickable { showPin = !showPin }
-                            .padding(8.dp),
-                        color = colors.onSurfaceVariant,
-                    )
+                    IconButton(onClick = { showPin = !showPin }) {
+                        Icon(
+                            imageVector = if (showPin) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            contentDescription = stringResource(if (showPin) R.string.hide else R.string.show),
+                        )
+                    }
                 },
             )
             OutlinedTextField(value = mac, onValueChange = { mac = it }, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.bluetooth_mac)) }, singleLine = true)
+            TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                Text(stringResource(R.string.device_advanced))
+            }
+            if (showAdvanced) {
+                OutlinedTextField(
+                    value = timezone,
+                    onValueChange = { timezone = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.device_timezone)) },
+                    singleLine = true,
+                )
+                Text(stringResource(R.string.csv_decimal_point), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DeviceChip(
+                        label = "comma",
+                        selected = decimalPoint == "comma",
+                        onClick = { decimalPoint = "comma" },
+                    )
+                    DeviceChip(
+                        label = "point",
+                        selected = decimalPoint == "point",
+                        onClick = { decimalPoint = "point" },
+                    )
+                }
+                Text(stringResource(R.string.csv_delimiter), style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DeviceChip(
+                        label = "semicolon",
+                        selected = delimiter == "semicolon",
+                        onClick = { delimiter = "semicolon" },
+                    )
+                    DeviceChip(
+                        label = "comma",
+                        selected = delimiter == "comma",
+                        onClick = { delimiter = "comma" },
+                    )
+                }
+                OutlinedTextField(
+                    value = dateFormat,
+                    onValueChange = { dateFormat = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text(stringResource(R.string.csv_date_format)) },
+                    singleLine = true,
+                )
+            }
             Text(stringResource(R.string.last_live_read, device.lastLiveReadAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.last_history_sync, device.lastArchiveSyncAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.socket_strategy, device.lastSuccessfulSocketStrategy ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -376,9 +450,9 @@ internal fun DeviceEditorCard(
             operationLabel?.let {
                 Text(text = it, color = colors.onBackground, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Button(enabled = !anyActionRunning, onClick = { scope.launch { persistEdits() } }) {
                     Text(stringResource(R.string.save))
@@ -683,9 +757,6 @@ internal fun preferredBluetoothSeed(
         .minWithOrNull(bluetoothDiscoveryUiComparator)
 }
 
-/** Items rendered above the device rows in [DevicesTab] (the Bluetooth discovery card). */
-internal const val DEVICE_LIST_HEADER_ITEMS = 1
-
 internal suspend fun createDeviceFromBluetooth(
     container: AppContainer,
     seed: BluetoothDeviceDescriptor?,
@@ -727,4 +798,21 @@ internal suspend fun createDeviceFromBluetooth(
         )
     }
     return upsert.id
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun BluetoothDiscoveryRowPreview() {
+    MaterialTheme {
+        BluetoothDiscoveryRow(
+            candidate = BluetoothDeviceDescriptor(
+                name = "SMA Sunny Boy",
+                address = "AA:BB:CC:DD:EE:FF",
+                bonded = false,
+                rssi = -55,
+            ),
+            alreadyAdded = false,
+            onClick = {},
+        )
+    }
 }

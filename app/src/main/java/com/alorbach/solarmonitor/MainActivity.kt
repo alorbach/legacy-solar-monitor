@@ -331,7 +331,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                 listOf(colors.secondary, colors.secondary.copy(alpha = 0.55f), colors.background)
                             )
                         )
-                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Text(
                         stringResource(R.string.app_name),
@@ -344,32 +344,32 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                         stringResource(R.string.app_subtitle),
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.onSurfaceVariant,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     permissionMessage?.let { message ->
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            message,
-                            color = colors.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(colors.errorContainer, RoundedCornerShape(12.dp))
-                                .clickable {
-                                    val intent = when (bannerAction) {
-                                        BannerAction.LOCATION_SETTINGS ->
-                                            Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                        Button(
+                            onClick = {
+                                val intent = when (bannerAction) {
+                                    BannerAction.LOCATION_SETTINGS ->
+                                        Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
 
-                                        BannerAction.APP_SETTINGS ->
-                                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                data = Uri.fromParts("package", activity.packageName, null)
-                                            }
-                                    }
-                                    activity.startActivity(intent)
+                                    BannerAction.APP_SETTINGS ->
+                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = Uri.fromParts("package", activity.packageName, null)
+                                        }
                                 }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
+                                activity.startActivity(intent)
+                            },
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = colors.errorContainer,
+                                contentColor = colors.onErrorContainer,
+                            ),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(message, style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
             },
@@ -381,11 +381,11 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                             onClick = { currentTab = tab },
                             icon = {
                                 when (tab) {
-                                    AppTab.DASHBOARD -> Icon(Icons.Rounded.Dashboard, contentDescription = stringResource(R.string.tab_dashboard))
-                                    AppTab.STATISTICS -> Icon(Icons.Rounded.BarChart, contentDescription = stringResource(R.string.tab_statistics))
-                                    AppTab.DEVICES -> Icon(Icons.Rounded.Devices, contentDescription = stringResource(R.string.tab_devices))
-                                    AppTab.IMPORT -> Icon(Icons.Rounded.FileDownload, contentDescription = stringResource(R.string.tab_import))
-                                    AppTab.SETTINGS -> Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.tab_settings))
+                                    AppTab.DASHBOARD -> Icon(Icons.Rounded.Dashboard, contentDescription = null)
+                                    AppTab.STATISTICS -> Icon(Icons.Rounded.BarChart, contentDescription = null)
+                                    AppTab.DEVICES -> Icon(Icons.Rounded.Devices, contentDescription = null)
+                                    AppTab.IMPORT -> Icon(Icons.Rounded.FileDownload, contentDescription = null)
+                                    AppTab.SETTINGS -> Icon(Icons.Rounded.Settings, contentDescription = null)
                                 }
                             },
                             label = {
