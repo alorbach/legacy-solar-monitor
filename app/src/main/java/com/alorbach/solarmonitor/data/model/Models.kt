@@ -289,6 +289,16 @@ data class DeviceDashboardSummary(
     val currency: String?,
     val status: String?,
     val lastUpdateEpochSeconds: Long?,
+    val temperatureC: Double? = null,
+    val frequencyHz: Double? = null,
+    val pdc1: Int? = null,
+    val pdc2: Int? = null,
+    val pac1: Int? = null,
+    val pac2: Int? = null,
+    val pac3: Int? = null,
+    val gridRelay: String? = null,
+    val btSignalPercent: Double? = null,
+    val serial: Long? = null,
 )
 
 data class PortfolioSummary(

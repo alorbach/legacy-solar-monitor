@@ -102,6 +102,8 @@ import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -117,6 +119,7 @@ fun DashboardTab(
     container: AppContainer,
     liveMessage: String,
     liveActive: Boolean,
+    liveActiveDeviceIds: Set<Long>,
     dataEpoch: Long,
     onStartLive: (List<Long>) -> Unit,
     onStopLive: () -> Unit,
@@ -127,6 +130,7 @@ fun DashboardTab(
             selectedDeviceId = devices.firstOrNull()?.id
         }
     }
+    var selectedChartDay by remember { mutableStateOf<DailyPoint?>(null) }
     var chartData by remember { mutableStateOf<List<DailyPoint>?>(null) }
     val selectedDevice = devices.firstOrNull { it.id == selectedDeviceId }
     var exportMessage by remember { mutableStateOf<String?>(null) }
@@ -139,6 +143,7 @@ fun DashboardTab(
         selectedDevice?.lastArchiveSyncAtEpochSeconds,
     ) {
         chartData = null
+        selectedChartDay = null
         chartData = selectedDeviceId?.let { container.repository.getDailyChart(it) } ?: emptyList()
     }
     val colors = MaterialTheme.colorScheme
@@ -186,13 +191,23 @@ fun DashboardTab(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Button(
-                            enabled = selectedDeviceId != null && !liveActive,
-                            onClick = { selectedDeviceId?.let { onStartLive(listOf(it)) } },
+                            enabled = selectedDeviceId != null &&
+                                selectedDeviceId !in liveActiveDeviceIds,
+                            onClick = {
+                                selectedDeviceId?.let { id ->
+                                    onStartLive(listOf(id))
+                                }
+                            },
                         ) {
-                            Text(stringResource(R.string.start_live_selected))
+                            Text(
+                                stringResource(
+                                    if (liveActive) R.string.start_live_add_selected else R.string.start_live_selected,
+                                ),
+                            )
                         }
                         Button(
-                            enabled = devices.isNotEmpty() && !liveActive,
+                            enabled = devices.isNotEmpty() &&
+                                devices.any { it.id !in liveActiveDeviceIds },
                             onClick = { onStartLive(devices.map { it.id }) },
                         ) {
                             Text(stringResource(R.string.start_all_live_monitors))
@@ -224,7 +239,7 @@ fun DashboardTab(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        selectedDevice?.let { stringResource(R.string.production_chart_for, it.name) }
+                        selectedDevice?.let { stringResource(R.string.daily_stats_for, it.name) }
                             ?: stringResource(R.string.production_chart),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
@@ -234,13 +249,77 @@ fun DashboardTab(
                         color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    if (chartData == null) {
+                    val loadedChart = chartData
+                    if (loadedChart == null) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             CircularProgressIndicator()
                             Text(stringResource(R.string.dashboard_loading), color = colors.onSurfaceVariant)
                         }
                     } else {
-                        ProductionChart(chartData.orEmpty())
+                        val periodTotal = loadedChart.sumOf { it.yieldWh }
+                        val periodEarnings = loadedChart.sumOf { it.earnings }
+                        val peak = loadedChart.maxByOrNull { it.yieldWh }
+                        val avgWh = if (loadedChart.isEmpty()) 0L else periodTotal / loadedChart.size
+                        val productionDays = loadedChart.count { it.yieldWh > 0L }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            MetricTile(
+                                Modifier.weight(1f),
+                                stringResource(R.string.stats_total_yield),
+                                YieldFormatting.whToKwhLabel(periodTotal),
+                            )
+                            MetricTile(
+                                Modifier.weight(1f),
+                                stringResource(R.string.stats_earnings_short),
+                                YieldFormatting.earningsLabel(periodEarnings, portfolio.currency),
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            MetricTile(
+                                Modifier.weight(1f),
+                                stringResource(R.string.daily_average),
+                                YieldFormatting.whToKwhLabel(avgWh),
+                            )
+                            MetricTile(
+                                Modifier.weight(1f),
+                                stringResource(R.string.daily_peak),
+                                buildString {
+                                    append(YieldFormatting.whToKwhLabel(peak?.yieldWh))
+                                    peak?.let {
+                                        append(" · ")
+                                        append(
+                                            LocalDate.ofEpochDay(it.dateEpochDay).format(
+                                                DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM),
+                                            ),
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                        Text(
+                            stringResource(R.string.daily_production_days, productionDays, loadedChart.size),
+                            color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        ProductionChart(
+                            points = loadedChart,
+                            selectedEpochDay = selectedChartDay?.dateEpochDay,
+                            onPointClick = { selectedChartDay = it },
+                        )
+                        selectedChartDay?.let { selected ->
+                            val dateLabel = LocalDate.ofEpochDay(selected.dateEpochDay).format(
+                                DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL),
+                            )
+                            Text(
+                                stringResource(
+                                    R.string.daily_selected,
+                                    dateLabel,
+                                    YieldFormatting.whToKwhLabel(selected.yieldWh),
+                                    YieldFormatting.earningsLabel(selected.earnings, portfolio.currency),
+                                ),
+                                color = colors.onSurface,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                     exportMessage?.let { message ->
                         Text(
@@ -250,7 +329,10 @@ fun DashboardTab(
                         )
                     }
                     if (selectedDeviceId != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
                             OutlinedButton(
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
@@ -339,9 +421,35 @@ fun DashboardTab(
                             ),
                             color = colors.onSurfaceVariant,
                         )
+                        LiveElectricalDetails(summary)
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun LiveElectricalDetails(summary: DeviceDashboardSummary?) {
+    if (summary == null) return
+    val parts = buildList {
+        summary.pdc1?.let { add("DC1 ${YieldFormatting.wattsLabel(it)}") }
+        summary.pdc2?.let { add("DC2 ${YieldFormatting.wattsLabel(it)}") }
+        summary.pac1?.let { add("AC1 ${YieldFormatting.wattsLabel(it)}") }
+        summary.pac2?.let { add("AC2 ${YieldFormatting.wattsLabel(it)}") }
+        summary.pac3?.let { add("AC3 ${YieldFormatting.wattsLabel(it)}") }
+        summary.temperatureC?.let { add(String.format(Locale.getDefault(), "%.1f °C", it)) }
+        summary.frequencyHz?.let { add(String.format(Locale.getDefault(), "%.2f Hz", it)) }
+        summary.gridRelay?.let { add(it) }
+        summary.btSignalPercent?.let { add(String.format(Locale.getDefault(), "BT %.0f%%", it)) }
+        summary.serial?.let { add("SN $it") }
+    }
+    if (parts.isEmpty()) return
+    Text(
+        parts.joinToString(" · "),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
 }

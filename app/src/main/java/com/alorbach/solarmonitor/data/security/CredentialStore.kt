@@ -44,7 +44,8 @@ class CredentialStore(context: Context) {
 
     fun deleteSecret(id: String?) {
         if (id.isNullOrBlank()) return
-        prefs.edit().remove(id).apply()
+        // commit() for durability, but never throw: device delete must still remove the Room row.
+        prefs.edit().remove(id).commit()
     }
 
     fun putNamed(key: String, value: String) {

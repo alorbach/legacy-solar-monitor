@@ -46,6 +46,7 @@ import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -277,6 +278,22 @@ internal fun DeviceEditorCard(
     var owner by rememberSaveable(device.id) { mutableStateOf(device.ownerName ?: "") }
     var smaPin by remember(device.id) { mutableStateOf(container.repository.displayPin(device)) }
     var timezone by rememberSaveable(device.id) { mutableStateOf(device.timezone) }
+    var serialText by rememberSaveable(device.id) { mutableStateOf(device.serial?.toString().orEmpty()) }
+    var modelText by rememberSaveable(device.id) { mutableStateOf(device.model.orEmpty()) }
+    var serialBaseline by remember(device.id) { mutableStateOf(device.serial?.toString().orEmpty()) }
+    var modelBaseline by remember(device.id) { mutableStateOf(device.model.orEmpty()) }
+    LaunchedEffect(device.serial, device.model) {
+        val incomingSerial = device.serial?.toString().orEmpty()
+        val incomingModel = device.model.orEmpty()
+        if (incomingSerial.isNotEmpty() && serialText == serialBaseline) {
+            serialText = incomingSerial
+        }
+        if (incomingSerial.isNotEmpty()) serialBaseline = incomingSerial
+        if (incomingModel.isNotBlank() && modelText == modelBaseline) {
+            modelText = incomingModel
+        }
+        if (incomingModel.isNotBlank()) modelBaseline = incomingModel
+    }
     var decimalPoint by rememberSaveable(device.id) {
         mutableStateOf(CsvFormat.normalizeDecimalPoint(device.decimalPoint))
     }
@@ -326,6 +343,8 @@ internal fun DeviceEditorCard(
                     return null
                 }
                 .id,
+            serial = if (serialText.isBlank()) null else serialText.trim().toLongOrNull() ?: device.serial,
+            model = modelText.trim().ifBlank { null },
             decimalPoint = CsvFormat.normalizeDecimalPoint(decimalPoint.ifBlank { device.decimalPoint }),
             delimiter = CsvFormat.normalizeDelimiter(delimiter.ifBlank { device.delimiter }),
             dateFormat = dateFormat.trim().ifBlank { device.dateFormat },
@@ -386,6 +405,7 @@ internal fun DeviceEditorCard(
                 onValueChange = { smaPin = it.filter(Char::isDigit).take(12) },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.sma_pin)) },
+                supportingText = { Text(stringResource(R.string.sma_pin_default_hint)) },
                 singleLine = true,
                 visualTransformation = if (showPin) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
@@ -398,6 +418,20 @@ internal fun DeviceEditorCard(
                 },
             )
             OutlinedTextField(value = mac, onValueChange = { mac = it }, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.bluetooth_mac)) }, singleLine = true)
+            OutlinedTextField(
+                value = serialText,
+                onValueChange = { serialText = it.filter(Char::isDigit).take(12) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.device_serial)) },
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = modelText,
+                onValueChange = { modelText = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.device_model)) },
+                singleLine = true,
+            )
             TextButton(onClick = { showAdvanced = !showAdvanced }) {
                 Text(stringResource(R.string.device_advanced))
             }
@@ -409,15 +443,32 @@ internal fun DeviceEditorCard(
                     label = { Text(stringResource(R.string.device_timezone)) },
                     singleLine = true,
                 )
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(
+                        ZoneId.systemDefault().id,
+                        "Europe/Berlin",
+                        "Europe/Vienna",
+                        "UTC",
+                    ).distinct().forEach { zone ->
+                        FilterChip(
+                            selected = timezone == zone,
+                            onClick = { timezone = zone },
+                            label = { Text(zone) },
+                        )
+                    }
+                }
                 Text(stringResource(R.string.csv_decimal_point), style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DeviceChip(
-                        label = "comma",
+                        label = stringResource(R.string.csv_option_comma),
                         selected = decimalPoint == "comma",
                         onClick = { decimalPoint = "comma" },
                     )
                     DeviceChip(
-                        label = "point",
+                        label = stringResource(R.string.csv_option_point),
                         selected = decimalPoint == "point",
                         onClick = { decimalPoint = "point" },
                     )
@@ -425,12 +476,12 @@ internal fun DeviceEditorCard(
                 Text(stringResource(R.string.csv_delimiter), style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DeviceChip(
-                        label = "semicolon",
+                        label = stringResource(R.string.csv_option_semicolon),
                         selected = delimiter == "semicolon",
                         onClick = { delimiter = "semicolon" },
                     )
                     DeviceChip(
-                        label = "comma",
+                        label = stringResource(R.string.csv_option_comma),
                         selected = delimiter == "comma",
                         onClick = { delimiter = "comma" },
                     )
@@ -443,8 +494,9 @@ internal fun DeviceEditorCard(
                     singleLine = true,
                 )
             }
-            Text(stringResource(R.string.last_live_read, device.lastLiveReadAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text(stringResource(R.string.last_history_sync, device.lastArchiveSyncAtEpochSeconds?.let(::formatEpochSeconds) ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            val deviceZone = parseZoneId(timezone)
+            Text(stringResource(R.string.last_live_read, device.lastLiveReadAtEpochSeconds?.let { formatEpochSeconds(it, deviceZone) } ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.last_history_sync, device.lastArchiveSyncAtEpochSeconds?.let { formatEpochSeconds(it, deviceZone) } ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.socket_strategy, device.lastSuccessfulSocketStrategy ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.status_label, device.lastConnectionStatus ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             operationLabel?.let {
@@ -583,10 +635,23 @@ internal fun DeviceEditorCard(
                 Button(
                     enabled = !anyActionRunning && !liveRunning && !continuousLiveActive,
                     onClick = { showClearHistoryConfirm = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.errorContainer,
+                        contentColor = colors.onErrorContainer,
+                    ),
                 ) {
                     Text(stringResource(R.string.clear_history))
                 }
-                Button(enabled = !anyActionRunning, onClick = { showDeleteConfirm = true }) {
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    enabled = !anyActionRunning,
+                    onClick = { showDeleteConfirm = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.error),
+                ) {
                     Text(stringResource(R.string.delete))
                 }
             }
@@ -663,6 +728,7 @@ internal fun DeviceEditorCard(
                 container = container,
                 dataEpoch = dataEpoch + (device.lastLiveReadAtEpochSeconds ?: 0) +
                     (device.lastArchiveSyncAtEpochSeconds ?: 0),
+                zoneId = parseZoneId(timezone),
             )
             if (!device.lastDiagnostics.isNullOrBlank()) {
                 Text(
@@ -697,6 +763,7 @@ internal fun BluetoothDiscoveryRow(
     val colors = MaterialTheme.colorScheme
     val isSma = candidate.name?.contains("SMA", ignoreCase = true) == true
     val proximity = if (candidate.bonded) stringResource(R.string.bonded) else stringResource(R.string.nearby)
+    val rssiLabel = candidate.rssi?.let { stringResource(R.string.rssi_suffix, it.toInt()) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -720,7 +787,7 @@ internal fun BluetoothDiscoveryRow(
                     append(candidate.address)
                     append(" • ")
                     append(proximity)
-                    candidate.rssi?.let { append(" • RSSI $it") }
+                    rssiLabel?.let { append(" • ").append(it) }
                 },
                 color = colors.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,

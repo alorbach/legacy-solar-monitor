@@ -1,5 +1,6 @@
 package com.alorbach.solarmonitor
 
+import com.alorbach.solarmonitor.data.cloud.BackupSkipReason
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,7 +35,7 @@ class CloudBackupPolicyTest {
     @Test
     fun resolveSkipReason_whenDisabledOrBlankUrl() {
         assertEquals(
-            "Cloud backup is not configured",
+            BackupSkipReason.NOT_CONFIGURED,
             CloudBackupPolicy.resolveSkipReason(
                 enabled = false,
                 signedUrlBlank = true,
@@ -43,7 +44,7 @@ class CloudBackupPolicyTest {
             ),
         )
         assertEquals(
-            "Cloud backup is not configured",
+            BackupSkipReason.NOT_CONFIGURED,
             CloudBackupPolicy.resolveSkipReason(
                 enabled = true,
                 signedUrlBlank = true,
@@ -56,7 +57,7 @@ class CloudBackupPolicyTest {
     @Test
     fun resolveSkipReason_whenNoContentSelected() {
         assertEquals(
-            "No backup content selected",
+            BackupSkipReason.NO_CONTENT,
             CloudBackupPolicy.resolveSkipReason(
                 enabled = true,
                 signedUrlBlank = false,

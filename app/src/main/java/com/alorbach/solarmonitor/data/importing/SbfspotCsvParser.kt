@@ -139,7 +139,7 @@ class SbfspotCsvParser(
             val parsedDayYield = parseDecimal(parts[2], metadata.decimalPoint)
             MonthRow(
                 date = date,
-                totalYieldWh = parseDecimalKwh(parts[1], metadata.decimalPoint),
+                totalYieldWh = parseDecimalKwh(parts[1], metadata.decimalPoint) ?: 0L,
                 dayYieldWh = parsedDayYield?.let { (it * 1000.0).toLong() },
             )
         }
@@ -205,8 +205,9 @@ class SbfspotCsvParser(
         }
         val days = grouped.mapNotNull { (date, items) ->
             val ordered = items.sortedBy { it.timestampEpochSeconds }
-            val first = ordered.firstOrNull()?.eTotalWh
-            val last = ordered.lastOrNull()?.eTotalWh
+            val totals = ordered.mapNotNull { it.eTotalWh }
+            val first = totals.firstOrNull()
+            val last = totals.lastOrNull()
             val dayYield = if (first != null && last != null && last > first) last - first else 0L
             val peak = items.mapNotNull { it.totalPac }.maxOrNull()
             // Constant energy (typical EToday / stalled ETotal) would store 0 and REPLACE a
@@ -270,11 +271,11 @@ class SbfspotCsvParser(
         )
     }
 
-    private fun parseDecimalKwh(value: String, decimalPoint: String): Long =
-        ((parseDecimal(value, decimalPoint) ?: 0.0) * 1000.0).toLong()
+    private fun parseDecimalKwh(value: String, decimalPoint: String): Long? =
+        parseDecimal(value, decimalPoint)?.let { (it * 1000.0).toLong() }
 
-    private fun parseDecimalKw(value: String, decimalPoint: String): Int =
-        ((parseDecimal(value, decimalPoint) ?: 0.0) * 1000.0).toInt()
+    private fun parseDecimalKw(value: String, decimalPoint: String): Int? =
+        parseDecimal(value, decimalPoint)?.let { (it * 1000.0).toInt() }
 
     private fun parseDecimal(value: String, decimalPoint: String): Double? {
         val trimmed = value.trim()

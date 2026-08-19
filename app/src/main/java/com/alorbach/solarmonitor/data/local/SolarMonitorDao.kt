@@ -50,6 +50,12 @@ interface SolarMonitorDao {
     @Query("DELETE FROM device_profiles WHERE id = :id")
     suspend fun deleteDevice(id: Long)
 
+    @Transaction
+    suspend fun deleteDeviceWithImportJobs(deviceId: Long) {
+        deleteImportJobsForDevice(deviceId)
+        deleteDevice(deviceId)
+    }
+
     @Query("SELECT * FROM tariff_periods WHERE deviceId = :deviceId ORDER BY validFromEpochDay")
     suspend fun getTariffs(deviceId: Long): List<TariffPeriodEntity>
 
@@ -102,6 +108,17 @@ interface SolarMonitorDao {
     )
     suspend fun deleteHourAggregatesInRange(deviceId: Long, fromHour: Long, toHour: Long)
 
+    @Transaction
+    suspend fun replaceHourAggregatesInRange(
+        deviceId: Long,
+        fromHour: Long,
+        toHour: Long,
+        items: List<HourAggregateEntity>,
+    ) {
+        deleteHourAggregatesInRange(deviceId, fromHour, toHour)
+        if (items.isNotEmpty()) upsertHourAggregates(items)
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertEvents(items: List<DeviceEventEntity>)
 
@@ -136,6 +153,12 @@ interface SolarMonitorDao {
 
     @Query("DELETE FROM hour_aggregates WHERE deviceId = :deviceId")
     suspend fun deleteHourAggregatesForDevice(deviceId: Long)
+
+    @Transaction
+    suspend fun replaceHourAggregatesForDevice(deviceId: Long, items: List<HourAggregateEntity>) {
+        deleteHourAggregatesForDevice(deviceId)
+        if (items.isNotEmpty()) upsertHourAggregates(items)
+    }
 
     @Query("DELETE FROM device_events WHERE deviceId = :deviceId")
     suspend fun deleteEventsForDevice(deviceId: Long)
@@ -232,6 +255,12 @@ interface SolarMonitorDao {
 
     @Query("SELECT * FROM import_jobs WHERE id = :jobId")
     suspend fun getImportJob(jobId: Long): ImportJobEntity?
+
+    @Query("SELECT * FROM import_jobs WHERE deviceId = :deviceId")
+    suspend fun getImportJobsForDevice(deviceId: Long): List<ImportJobEntity>
+
+    @Query("DELETE FROM import_jobs WHERE deviceId = :deviceId")
+    suspend fun deleteImportJobsForDevice(deviceId: Long)
 
     @Query("DELETE FROM import_jobs WHERE id = :jobId")
     suspend fun deleteImportJob(jobId: Long)

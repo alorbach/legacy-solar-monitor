@@ -398,7 +398,8 @@ fun ImportTab(
                             importSourceTypeLabel(job.sourceType),
                             stringResource(
                                 when (job.status) {
-                                    ImportJobStatus.PENDING, ImportJobStatus.RUNNING -> R.string.import_status_running
+                                    ImportJobStatus.PENDING -> R.string.import_status_pending
+                                    ImportJobStatus.RUNNING -> R.string.import_status_running
                                     ImportJobStatus.SUCCEEDED -> R.string.import_status_succeeded
                                     ImportJobStatus.FAILED -> R.string.import_status_failed
                                 },

@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor.data.cloud
 
 import android.content.Context
 import android.os.Build
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.importing.SharedHttpClients
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
 import com.alorbach.solarmonitor.data.settings.AppSettings
@@ -40,7 +41,11 @@ class GoogleCloudStorageBackupRepository(
                 return@withContext persistResult(
                     settings = settings,
                     now = now,
-                    result = BackupResult(skipped = true, success = true, message = skip),
+                    result = BackupResult(
+                        skipped = true,
+                        success = true,
+                        message = skip.toUserMessage(context),
+                    ),
                 )
             }
             if (trigger == BackupTrigger.Auto &&
@@ -56,7 +61,7 @@ class GoogleCloudStorageBackupRepository(
                     result = BackupResult(
                         skipped = true,
                         success = true,
-                        message = "Backup deferred ${defer}s (throttled)",
+                        message = context.getString(R.string.backup_deferred_throttled, defer),
                         deferSeconds = defer,
                     ),
                     updateAttempt = false,
@@ -85,8 +90,7 @@ class GoogleCloudStorageBackupRepository(
                         result = BackupResult(
                             skipped = true,
                             success = true,
-                            message = "No files match the signed object URL " +
-                                "(GCS signatures cover one object path; sign solar-monitor.db or disable import copies)",
+                            message = context.getString(R.string.backup_no_matching_files),
                         ),
                     )
                 }
@@ -97,13 +101,18 @@ class GoogleCloudStorageBackupRepository(
                     val objectName = backupObjectName(importsRoot, file)
                     runCatching { uploadFile(settings, file, objectName) }
                         .onSuccess { uploaded++ }
-                        .onFailure { errors += "$objectName: ${it.message ?: "upload failed"}" }
+                        .onFailure { errors += "$objectName: ${it.message ?: context.getString(R.string.backup_upload_failed)}" }
                 }
                 val ok = errors.isEmpty()
                 val message = if (ok) {
-                    "Uploaded $uploaded file(s)"
+                    context.getString(R.string.backup_uploaded_files, uploaded)
                 } else {
-                    "Uploaded $uploaded/${uploadable.size}; ${errors.joinToString("; ")}"
+                    context.getString(
+                        R.string.backup_uploaded_partial,
+                        uploaded,
+                        uploadable.size,
+                        errors.joinToString("; "),
+                    )
                 }
                 val retryable = !ok && errors.any { CloudBackupPolicy.isTransientUploadFailure(it) }
                 persistResult(
@@ -124,7 +133,7 @@ class GoogleCloudStorageBackupRepository(
                     result = BackupResult(
                         skipped = false,
                         success = false,
-                        message = t.message ?: "Backup failed",
+                        message = t.message ?: context.getString(R.string.backup_failed),
                         retryable = CloudBackupPolicy.isTransientUploadFailure(t.message),
                     ),
                 )

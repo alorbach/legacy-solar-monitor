@@ -18,13 +18,31 @@ object EarningsCalculator {
         return (day.totalYieldWh / 1000.0) * tariff.pricePerKwh
     }
 
-    fun earningsForMonth(month: MonthAggregateEntity, tariffs: List<TariffPeriodEntity>): Double {
+    fun earningsForMonth(
+        month: MonthAggregateEntity,
+        tariffs: List<TariffPeriodEntity>,
+        days: List<DayAggregateEntity> = emptyList(),
+    ): Double {
         val yearMonth = YearMonth.parse(month.monthKey)
+        val inMonth = days.filter {
+            YearMonth.from(LocalDate.ofEpochDay(it.dateEpochDay)) == yearMonth
+        }
         val start = yearMonth.atDay(1).toEpochDay()
         val end = yearMonth.atEndOfMonth().toEpochDay()
-        val matching = matchingTariff(tariffs, start, end) ?: return 0.0
-        // dayYieldWh holds the month production total after the import fix
-        return (month.dayYieldWh / 1000.0) * matching.pricePerKwh
+        val dayYieldWh = inMonth.sumOf { it.totalYieldWh }
+        val dayEarnings = inMonth.sumOf { earningsForDay(it, tariffs) }
+        val scaledDayEarnings = when {
+            month.dayYieldWh <= 0L -> 0.0
+            dayYieldWh > month.dayYieldWh && dayYieldWh > 0L ->
+                dayEarnings * (month.dayYieldWh.toDouble() / dayYieldWh.toDouble())
+            else -> dayEarnings
+        }
+        val uncoveredWh = (month.dayYieldWh - dayYieldWh).coerceAtLeast(0L)
+        if (uncoveredWh == 0L && inMonth.isNotEmpty()) {
+            return scaledDayEarnings
+        }
+        val matching = matchingTariff(tariffs, start, end) ?: return scaledDayEarnings
+        return scaledDayEarnings + (uncoveredWh / 1000.0) * matching.pricePerKwh
     }
 
     fun earningsForHour(
@@ -70,6 +88,23 @@ object DashboardMetrics {
 
     fun monthYieldWh(currentMonthKey: String, months: List<MonthAggregateEntity>): Long? =
         months.firstOrNull { it.monthKey == currentMonthKey }?.dayYieldWh
+
+    fun todayYieldWh(
+        latestETodayWh: Long?,
+        sampleEpochSeconds: Long?,
+        todayEpochDay: Long,
+        zoneId: ZoneId,
+        dayAggregateYieldWh: Long?,
+    ): Long? {
+        val sampleDay = sampleEpochSeconds?.let {
+            Instant.ofEpochSecond(it).atZone(zoneId).toLocalDate().toEpochDay()
+        }
+        return if (sampleDay == todayEpochDay) {
+            latestETodayWh ?: dayAggregateYieldWh
+        } else {
+            dayAggregateYieldWh
+        }
+    }
 }
 
 object YieldFormatting {
@@ -104,7 +139,7 @@ object YieldFormatting {
 }
 
 object StatsSeriesFill {
-    const val VISIBLE_BARS = 12
+    const val VISIBLE_BARS = 10
 
     fun lastInclusiveEpochDay(yearMonth: YearMonth, today: LocalDate): Long {
         val monthEnd = yearMonth.atEndOfMonth().toEpochDay()

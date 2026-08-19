@@ -36,6 +36,9 @@ object DayAggregateMerger {
         else -> 1
     }
 
+    private fun isBluetoothArchive(sourceType: String): Boolean =
+        sourceType == "bluetooth_day_archive" || sourceType == "bluetooth_month_archive"
+
     private data class PickedYield(
         val yieldWh: Long,
         val sourceType: String,
@@ -50,7 +53,14 @@ object DayAggregateMerger {
         val priorRank = sourceRank(prior.sourceType)
         return when {
             incomingRank > priorRank ->
-                PickedYield(incoming.totalYieldWh, incoming.sourceType, incomingWins = true)
+                if (isBluetoothArchive(incoming.sourceType) &&
+                    incoming.totalYieldWh <= 0L &&
+                    prior.totalYieldWh > 0L
+                ) {
+                    PickedYield(prior.totalYieldWh, prior.sourceType, incomingWins = false)
+                } else {
+                    PickedYield(incoming.totalYieldWh, incoming.sourceType, incomingWins = true)
+                }
             incomingRank < priorRank ->
                 PickedYield(prior.totalYieldWh, prior.sourceType, incomingWins = false)
             incoming.totalYieldWh <= 0L && incomingRank < 2 ->

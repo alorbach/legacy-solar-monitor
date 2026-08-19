@@ -93,6 +93,23 @@ class SbfspotCsvParserTest {
         assertEquals(1, result.dayAggregates.size)
         assertEquals(39_295L, result.dayAggregates.first().totalYieldWh)
         assertEquals(3_200, result.dayAggregates.first().powerW)
+        assertEquals(29_933L, result.spotSamples.first().eTotalWh)
+    }
+
+    @Test
+    fun dayCsvBlankEnergyIsNullNotZero() {
+        val csv = """
+            Version CSV1.0;;;;;;Decimalpoint comma;Delimiter semicolon
+            dd.MM.yyyy HH:mm;kWh;kW
+            01.07.2026 11:00;;0,000
+            01.07.2026 12:00;101636,123;4,800
+            01.07.2026 13:00;101638,000;3,200
+        """.trimIndent()
+        val result = parser.parse(1L, "Plant-20260701.csv", csv.byteInputStream())
+        assertEquals(null, result.spotSamples[0].eTotalWh)
+        assertEquals(101_636_123L, result.spotSamples[1].eTotalWh)
+        assertEquals(1, result.dayAggregates.size)
+        assertEquals(1_877L, result.dayAggregates.first().totalYieldWh)
     }
 
     @Test

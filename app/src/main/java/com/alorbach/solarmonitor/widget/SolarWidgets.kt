@@ -135,9 +135,16 @@ class TopDevicesWidget : GlanceAppWidget() {
 }
 
 private suspend fun loadSummaries(context: Context): List<DeviceDashboardSummary> {
-    val repository = (context.applicationContext as SolarMonitorApplication).container.repository
-    val devices = repository.observeDevices().first()
-    return devices.mapNotNull { repository.getDeviceDashboard(it.id) }
+    val container = (context.applicationContext as SolarMonitorApplication).container
+    val devices = container.repository.observeDevices().first()
+    val preferredId = container.settingsStore.settings.first().widgetDeviceId
+    val ordered = if (preferredId != null) {
+        val preferred = devices.filter { it.id == preferredId }
+        preferred + devices.filter { it.id != preferredId }
+    } else {
+        devices
+    }
+    return ordered.mapNotNull { container.repository.getDeviceDashboard(it.id) }
 }
 
 class CompactStatsWidgetReceiver : GlanceAppWidgetReceiver() {

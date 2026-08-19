@@ -49,6 +49,9 @@ class SolarRepository(
     private val settingsStore: AppSettingsStore,
     private val credentialStore: CredentialStore? = null,
 ) {
+    companion object {
+        const val HOUR_AGGREGATES_SCHEMA_VERSION = 2
+    }
     private val dao = db.dao()
     private val hourRecomputeMutexes = ConcurrentHashMap<Long, Mutex>()
 
@@ -150,11 +153,25 @@ class SolarRepository(
     }
 
     suspend fun deleteDevice(deviceId: Long) {
+        val jobs = dao.getImportJobsForDevice(deviceId)
+        ScheduledImportWorker.cancelAll(appContext, jobs.map { it.id })
+        WorkManager.getInstance(appContext)
+            .cancelAllWorkByTag(ScheduledImportWorker.deviceTag(deviceId))
+        val credentialIds = jobs.mapNotNull { it.passwordCredentialId }
+            .filter { it.isNotBlank() }
+            .toSet()
         val device = dao.getDeviceById(deviceId)
-        dao.deleteDevice(deviceId)
+        dao.deleteDeviceWithImportJobs(deviceId)
+        reclaimOrphanImportCredentials(credentialIds, ignoreWork = true)
         val ref = device?.passwordRef
         if (credentialStore?.isCredentialId(ref) == true) {
             credentialStore.deleteSecret(ref)
+        }
+        settingsStore.update { current ->
+            current.copy(
+                widgetDeviceId = current.widgetDeviceId?.takeUnless { it == deviceId },
+                statsSelectedDeviceId = current.statsSelectedDeviceId?.takeUnless { it == deviceId },
+            )
         }
     }
 
@@ -294,33 +311,35 @@ class SolarRepository(
                 samples = samples,
                 zoneId = zoneId,
             ).filter { it.hourEpochSeconds in lookback..toHour }
-            // Replace lookback+window so power-estimate reconciliation is persisted.
-            dao.deleteHourAggregatesInRange(deviceId, lookback, toHour)
-            if (aggregates.isNotEmpty()) {
-                dao.upsertHourAggregates(aggregates)
-            }
+            dao.replaceHourAggregatesInRange(deviceId, lookback, toHour, aggregates)
         }
     }
 
     suspend fun backfillHourAggregatesIfNeeded() {
         val settings = settingsStore.settings.first()
-        if (settings.hourAggregatesBackfilled) return
+        if (settings.hourAggregatesSchemaVersion >= HOUR_AGGREGATES_SCHEMA_VERSION) return
         dao.getAllDevices().forEach { device ->
             hourRecomputeMutex(device.id).withLock {
                 val samples = dao.getAllSpotSamples(device.id)
-                if (samples.isEmpty()) return@withLock
                 val zoneId = runCatching { ZoneId.of(device.timezone) }.getOrDefault(ZoneId.systemDefault())
-                val aggregates = StatisticsAggregator.hourAggregatesFromSamples(
-                    deviceId = device.id,
-                    samples = samples,
-                    zoneId = zoneId,
-                )
-                if (aggregates.isNotEmpty()) {
-                    dao.upsertHourAggregates(aggregates)
+                val aggregates = if (samples.isEmpty()) {
+                    emptyList()
+                } else {
+                    StatisticsAggregator.hourAggregatesFromSamples(
+                        deviceId = device.id,
+                        samples = samples,
+                        zoneId = zoneId,
+                    )
                 }
+                dao.replaceHourAggregatesForDevice(device.id, aggregates)
             }
         }
-        settingsStore.update { it.copy(hourAggregatesBackfilled = true) }
+        settingsStore.update {
+            it.copy(
+                hourAggregatesBackfilled = true,
+                hourAggregatesSchemaVersion = HOUR_AGGREGATES_SCHEMA_VERSION,
+            )
+        }
     }
 
     suspend fun recordImportJob(job: ImportJobEntity): Long = dao.insertImportJob(job)
@@ -355,7 +374,7 @@ class SolarRepository(
         val credentialId = dao.getImportJob(jobId)?.passwordCredentialId
         dao.deleteImportJob(jobId)
         if (!credentialId.isNullOrBlank()) {
-            reclaimOrphanImportCredentials(setOf(credentialId))
+            reclaimOrphanImportCredentials(setOf(credentialId), ignoreWork = true)
         }
     }
 
@@ -365,7 +384,7 @@ class SolarRepository(
             .filter { it.isNotBlank() }
             .toSet()
         dao.deleteAllImportJobs()
-        reclaimOrphanImportCredentials(credentialIds)
+        reclaimOrphanImportCredentials(credentialIds, ignoreWork = true)
     }
 
     /**
@@ -377,11 +396,14 @@ class SolarRepository(
         reclaimOrphanImportCredentials(setOf(credentialId))
     }
 
-    private suspend fun reclaimOrphanImportCredentials(candidates: Set<String>) {
+    private suspend fun reclaimOrphanImportCredentials(
+        candidates: Set<String>,
+        ignoreWork: Boolean = false,
+    ) {
         val store = credentialStore ?: return
         for (id in candidates) {
             if (dao.countImportJobsWithCredential(id) > 0) continue
-            if (isCredentialReferencedByWork(id)) continue
+            if (!ignoreWork && isCredentialReferencedByWork(id)) continue
             store.deleteSecret(id)
         }
     }
@@ -431,13 +453,29 @@ class SolarRepository(
                     ?: device.lastLiveReadAtEpochSeconds,
                 nowEpochSeconds = System.currentTimeMillis() / 1000,
             ),
-            todayYieldWh = latest?.eTodayWh ?: todayAggregate?.totalYieldWh,
+            todayYieldWh = DashboardMetrics.todayYieldWh(
+                latestETodayWh = latest?.eTodayWh,
+                sampleEpochSeconds = latest?.timestampEpochSeconds,
+                todayEpochDay = todayEpochDay,
+                zoneId = zoneId,
+                dayAggregateYieldWh = todayAggregate?.totalYieldWh,
+            ),
             monthYieldWh = monthYield,
             yearlyYieldWh = yearYield,
             estimatedEarnings = earnings,
             currency = tariffs.firstOrNull()?.currency,
             status = device.lastConnectionStatus ?: latest?.status,
             lastUpdateEpochSeconds = device.lastLiveReadAtEpochSeconds ?: latest?.timestampEpochSeconds,
+            temperatureC = latest?.temperatureC,
+            frequencyHz = latest?.frequencyHz,
+            pdc1 = latest?.pdc1,
+            pdc2 = latest?.pdc2,
+            pac1 = latest?.pac1,
+            pac2 = latest?.pac2,
+            pac3 = latest?.pac3,
+            gridRelay = latest?.gridRelay,
+            btSignalPercent = latest?.btSignalPercent,
+            serial = device.serial,
         )
     }
 
@@ -462,22 +500,30 @@ class SolarRepository(
         val end = LocalDate.now(zoneId).toEpochDay()
         val start = LocalDate.now(zoneId).minusDays(days.toLong()).toEpochDay()
         val tariffs = dao.getTariffs(deviceId)
-        return dao.getDayRange(deviceId, start, end).map {
+        val byDay = dao.getDayRange(deviceId, start, end).associateBy { it.dateEpochDay }
+        if (byDay.isEmpty()) return emptyList()
+        return (start..end).map { epochDay ->
+            val row = byDay[epochDay]
             DailyPoint(
-                dateEpochDay = it.dateEpochDay,
-                yieldWh = it.totalYieldWh,
-                earnings = EarningsCalculator.earningsForDay(it, tariffs),
+                dateEpochDay = epochDay,
+                yieldWh = row?.totalYieldWh ?: 0L,
+                earnings = row?.let { EarningsCalculator.earningsForDay(it, tariffs) } ?: 0.0,
             )
         }
     }
 
     suspend fun getMonthlyChart(deviceId: Long): List<MonthlyPoint> {
         val tariffs = dao.getTariffs(deviceId)
-        return dao.getAllMonths(deviceId).map {
+        val months = dao.getAllMonths(deviceId)
+        if (months.isEmpty()) return emptyList()
+        val startDay = months.minOf { java.time.YearMonth.parse(it.monthKey).atDay(1).toEpochDay() }
+        val endDay = months.maxOf { java.time.YearMonth.parse(it.monthKey).atEndOfMonth().toEpochDay() }
+        val days = dao.getDayRange(deviceId, startDay, endDay)
+        return months.map {
             MonthlyPoint(
                 monthKey = it.monthKey,
                 yieldWh = it.dayYieldWh,
-                earnings = EarningsCalculator.earningsForMonth(it, tariffs),
+                earnings = EarningsCalculator.earningsForMonth(it, tariffs, days),
             )
         }
     }
@@ -529,6 +575,10 @@ class SolarRepository(
                 earnings = items.sumOf { it.earnings },
                 eventCount = eventCounts[localHour] ?: 0,
             )
+        }.let { hours ->
+            val first = hours.indexOfFirst { it.yieldWh > 0L || it.eventCount > 0 }
+            val last = hours.indexOfLast { it.yieldWh > 0L || it.eventCount > 0 }
+            if (first < 0 || last < first) emptyList() else hours.subList(first, last + 1)
         }
     }
 
@@ -574,11 +624,18 @@ class SolarRepository(
         val byMonth = months.groupBy { it.monthKey }
         val keys = (byMonth.keys + eventCounts.filterValues { it > 0 }.keys).toSortedSet()
         if (keys.isEmpty()) return emptyList()
+        val startDay = java.time.YearMonth.of(year, 1).atDay(1).toEpochDay()
+        val endDay = java.time.YearMonth.of(year, 12).atEndOfMonth().toEpochDay()
+        val daysByDevice = dao.getDayRangeForDevices(deviceIds, startDay, endDay).groupBy { it.deviceId }
         return keys.map { monthKey ->
             val items = byMonth[monthKey].orEmpty()
             val yieldWh = items.sumOf { it.dayYieldWh }
             val earnings = items.sumOf { month ->
-                EarningsCalculator.earningsForMonth(month, tariffsByDevice[month.deviceId].orEmpty())
+                EarningsCalculator.earningsForMonth(
+                    month,
+                    tariffsByDevice[month.deviceId].orEmpty(),
+                    daysByDevice[month.deviceId].orEmpty(),
+                )
             }
             val yearMonth = YearMonth.parse(monthKey)
             StatsPoint(
@@ -609,13 +666,7 @@ class SolarRepository(
             for (deviceId in deviceIds) {
                 if (tariffsByDevice[deviceId].orEmpty().isEmpty()) continue
                 for (year in years) {
-                    val key = deviceId to year
-                    val monthYield = monthsByDeviceYear[key].orEmpty().sumOf { it.dayYieldWh }
-                    val dayRow = daysByDeviceYear[key]
-                    val dayYield = dayRow?.yieldWh ?: 0L
-                    if (dayRow != null && dayYield >= monthYield && dayYield > 0L) {
-                        add(key)
-                    }
+                    add(deviceId to year)
                 }
             }
         }
@@ -657,7 +708,11 @@ class SolarRepository(
                 } else if (monthItems.isNotEmpty()) {
                     yieldWh += monthYield
                     earnings += monthItems.sumOf { month ->
-                        EarningsCalculator.earningsForMonth(month, tariffsByDevice[deviceId].orEmpty())
+                        EarningsCalculator.earningsForMonth(
+                            month,
+                            tariffsByDevice[deviceId].orEmpty(),
+                            earningsDaysByDeviceYear[key].orEmpty(),
+                        )
                     }
                 }
             }
@@ -865,6 +920,7 @@ class SolarRepository(
         archiveAtEpochSeconds: Long? = null,
         socketStrategy: String? = null,
         diagnostics: String? = null,
+        serial: Long? = null,
     ) {
         val device = dao.getDeviceById(deviceId) ?: return
         dao.updateDevice(
@@ -874,6 +930,7 @@ class SolarRepository(
                 lastDiagnostics = diagnostics ?: device.lastDiagnostics,
                 lastLiveReadAtEpochSeconds = liveAtEpochSeconds ?: device.lastLiveReadAtEpochSeconds,
                 lastArchiveSyncAtEpochSeconds = archiveAtEpochSeconds ?: device.lastArchiveSyncAtEpochSeconds,
+                serial = serial?.takeIf { it > 0L } ?: device.serial,
             )
         )
     }

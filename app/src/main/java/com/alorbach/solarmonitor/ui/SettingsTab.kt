@@ -1,5 +1,6 @@
 package com.alorbach.solarmonitor.ui
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -115,6 +116,7 @@ fun SettingsTab(
     modifier: Modifier,
     container: AppContainer,
     settings: AppSettings,
+    devices: List<DeviceProfileEntity>,
 ) {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -223,6 +225,44 @@ fun SettingsTab(
                 shape = RoundedCornerShape(28.dp),
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.widget_device), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.widget_device_hint), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DeviceChip(
+                            label = stringResource(R.string.widget_device_first),
+                            selected = settings.widgetDeviceId == null,
+                            onClick = {
+                                scope.launch {
+                                    container.settingsStore.update { it.copy(widgetDeviceId = null) }
+                                    com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(context)
+                                }
+                            },
+                        )
+                        devices.forEach { device ->
+                            DeviceChip(
+                                label = device.name,
+                                selected = settings.widgetDeviceId == device.id,
+                                onClick = {
+                                    scope.launch {
+                                        container.settingsStore.update { it.copy(widgetDeviceId = device.id) }
+                                        com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(context)
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(stringResource(R.string.live_poll_interval), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(stringResource(R.string.live_poll_interval_hint), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(
@@ -267,6 +307,9 @@ fun SettingsTab(
                                     scope.launch {
                                         container.settingsStore.update { it.copy(languageTag = tag) }
                                         LocaleController.apply(context, tag)
+                                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                            (context as? Activity)?.recreate()
+                                        }
                                     }
                                 },
                             )

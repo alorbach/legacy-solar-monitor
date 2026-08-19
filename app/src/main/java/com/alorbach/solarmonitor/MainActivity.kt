@@ -264,7 +264,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class BannerAction { APP_SETTINGS, LOCATION_SETTINGS }
+enum class BannerAction { APP_SETTINGS, LOCATION_SETTINGS, BLUETOOTH_SETTINGS }
 
 private enum class AppTab { DASHBOARD, STATISTICS, DEVICES, IMPORT, SETTINGS }
 
@@ -331,17 +331,23 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                 listOf(colors.secondary, colors.secondary.copy(alpha = 0.55f), colors.background)
                             )
                         )
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .padding(horizontal = 20.dp, vertical = 6.dp)
                 ) {
                     Text(
                         stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.ExtraBold,
                         color = colors.onBackground,
                         maxLines = 1,
                     )
                     Text(
-                        stringResource(R.string.app_subtitle),
+                        when (currentTab) {
+                            AppTab.DASHBOARD -> stringResource(R.string.tab_dashboard)
+                            AppTab.STATISTICS -> stringResource(R.string.tab_statistics)
+                            AppTab.DEVICES -> stringResource(R.string.tab_devices)
+                            AppTab.IMPORT -> stringResource(R.string.tab_import)
+                            AppTab.SETTINGS -> stringResource(R.string.tab_settings)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = colors.onSurfaceVariant,
                         maxLines = 1,
@@ -354,6 +360,9 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                 val intent = when (bannerAction) {
                                     BannerAction.LOCATION_SETTINGS ->
                                         Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+
+                                    BannerAction.BLUETOOTH_SETTINGS ->
+                                        Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
 
                                     BannerAction.APP_SETTINGS ->
                                         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -442,6 +451,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     container = container,
                     liveMessage = liveState.message,
                     liveActive = liveState.active,
+                    liveActiveDeviceIds = liveState.activeDeviceIds,
                     dataEpoch = dataRevision,
                     onStartLive = { deviceIds ->
                         ContextCompat.startForegroundService(
@@ -471,7 +481,10 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     bluetoothEnabled = activity.isBluetoothEnabled(),
                     onRefreshBluetooth = {
                         if (!activity.isBluetoothEnabled()) {
-                            activity.setPermissionBanner(activity.getString(R.string.bluetooth_disabled))
+                            activity.setPermissionBanner(
+                                activity.getString(R.string.bluetooth_disabled),
+                                BannerAction.BLUETOOTH_SETTINGS,
+                            )
                         } else if (!activity.ensureBluetoothScanPermissions()) {
                             // System permission dialog is open; do not claim the user denied yet.
                             activity.setPermissionBanner(null)
@@ -488,7 +501,10 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                 "missing_permission" ->
                                     activity.setPermissionBanner(activity.getString(R.string.permissions_denied))
                                 "bluetooth_disabled" ->
-                                    activity.setPermissionBanner(activity.getString(R.string.bluetooth_disabled))
+                                    activity.setPermissionBanner(
+                                        activity.getString(R.string.bluetooth_disabled),
+                                        BannerAction.BLUETOOTH_SETTINGS,
+                                    )
                                 else ->
                                     activity.setPermissionBanner(activity.getString(R.string.bluetooth_scan_failed))
                             }
@@ -535,6 +551,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     modifier = tabModifier,
                     container = container,
                     settings = settings,
+                    devices = devices,
                 )
             }
         }

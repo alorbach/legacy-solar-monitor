@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.AppContainer
@@ -302,6 +303,8 @@ fun StatisticsScreen(
                             periodLabel,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                         IconButton(
                             onClick = {
@@ -416,17 +419,31 @@ fun StatisticsScreen(
             }
         }
         }
+        val eventSource = if (seriesLoading) emptyList() else (selectedBucketEvents ?: periodEvents)
+        val visibleEvents = eventSource.filterByEventFilter(eventFilter)
         item {
-            EventListBlock(
-                events = if (seriesLoading) emptyList() else (selectedBucketEvents ?: periodEvents),
-                zoneId = zoneId,
-                filter = eventFilter,
-                onFilter = { eventFilter = it },
-                title = stringResource(R.string.stats_events),
-                emptyText = stringResource(R.string.stats_events_empty),
-                selectedBucketKey = selectedBucketKey,
-                onClearBucket = { selectedBucketKey = null },
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.stats_events),
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                EventFilterBar(
+                    filter = eventFilter,
+                    onFilter = { eventFilter = it },
+                    selectedBucketKey = selectedBucketKey,
+                    onClearBucket = { selectedBucketKey = null },
+                )
+                if (visibleEvents.isEmpty()) {
+                    Text(
+                        stringResource(R.string.stats_events_empty),
+                        color = colors.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        items(visibleEvents, key = { it.id }) { event ->
+            EventCard(event = event, zoneId = zoneId)
         }
     }
 }

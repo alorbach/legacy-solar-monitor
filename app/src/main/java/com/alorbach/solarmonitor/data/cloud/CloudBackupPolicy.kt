@@ -16,6 +16,19 @@ data class BackupResult(
     val retryable: Boolean = false,
 )
 
+enum class BackupSkipReason {
+    NOT_CONFIGURED,
+    NO_CONTENT,
+}
+
+fun BackupSkipReason.toUserMessage(context: android.content.Context): String =
+    context.getString(
+        when (this) {
+            BackupSkipReason.NOT_CONFIGURED -> com.alorbach.solarmonitor.R.string.backup_skip_not_configured
+            BackupSkipReason.NO_CONTENT -> com.alorbach.solarmonitor.R.string.backup_skip_no_content
+        },
+    )
+
 object CloudBackupPolicy {
     const val UNIQUE_WORK_NAME = "cloud_backup"
     /** Coalesces throttled Auto follow-ups without cancelling an in-flight backup. */
@@ -135,9 +148,9 @@ object CloudBackupPolicy {
         signedUrlBlank: Boolean,
         includeDatabase: Boolean,
         includeImportCopies: Boolean,
-    ): String? = when {
-        !enabled || signedUrlBlank -> "Cloud backup is not configured"
-        !includeDatabase && !includeImportCopies -> "No backup content selected"
+    ): BackupSkipReason? = when {
+        !enabled || signedUrlBlank -> BackupSkipReason.NOT_CONFIGURED
+        !includeDatabase && !includeImportCopies -> BackupSkipReason.NO_CONTENT
         else -> null
     }
 

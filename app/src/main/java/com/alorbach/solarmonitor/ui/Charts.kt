@@ -51,11 +51,18 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 @Composable
-fun ProductionChart(points: List<DailyPoint>) {
+fun ProductionChart(
+    points: List<DailyPoint>,
+    selectedEpochDay: Long? = null,
+    onPointClick: ((DailyPoint) -> Unit)? = null,
+) {
     val colors = MaterialTheme.colorScheme
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
+    val midYield = (maxYield / 2f).toLong()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
+    val selectedColor = colors.tertiary
+    val lineColor = colors.secondary
     val locale = Locale.getDefault()
     val dateFmt = remember(locale) {
         if (locale.language == "de") {
@@ -84,17 +91,67 @@ fun ProductionChart(points: List<DailyPoint>) {
         if (points.isEmpty()) {
             Text(stringResource(R.string.chart_empty_hint))
         } else {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val chartLeft = 8.dp.toPx()
+            Canvas(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (onPointClick == null) {
+                            Modifier
+                        } else {
+                            Modifier.pointerInput(points) {
+                                detectTapGestures { offset ->
+                                    val yAxis = 44.dp.toPx()
+                                    val chartLeft = yAxis
+                                    val chartRight = size.width
+                                    val chartWidth = (chartRight - chartLeft).coerceAtLeast(1f)
+                                    val step = chartWidth / (points.size - 1).coerceAtLeast(1)
+                                    val index = ((offset.x - chartLeft) / step).roundToInt()
+                                        .coerceIn(0, points.lastIndex)
+                                    onPointClick(points[index])
+                                }
+                            }
+                        },
+                    ),
+            ) {
+                val yAxisWidth = 44.dp.toPx()
+                val chartLeft = yAxisWidth
                 val chartRight = size.width
                 val chartTop = 18.dp.toPx()
                 val chartBottom = size.height - 28.dp.toPx()
                 val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
                 val chartWidth = (chartRight - chartLeft).coerceAtLeast(1f)
                 val step = chartWidth / (points.size - 1).coerceAtLeast(1)
-                val axisTextPx = 12.sp.toPx()
-                val peakTextPx = 11.sp.toPx()
 
+                val yPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = axisLabelColor
+                    textSize = 11.sp.toPx()
+                    textAlign = Paint.Align.RIGHT
+                }
+                val labelX = chartLeft - 6.dp.toPx()
+                drawContext.canvas.nativeCanvas.drawText(
+                    YieldFormatting.compactKwhNumber(maxYield.toLong()),
+                    labelX,
+                    chartTop + yPaint.textSize * 0.35f,
+                    yPaint,
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    YieldFormatting.compactKwhNumber(midYield),
+                    labelX,
+                    chartTop + chartHeight / 2f + yPaint.textSize * 0.35f,
+                    yPaint,
+                )
+                drawContext.canvas.nativeCanvas.drawText(
+                    YieldFormatting.compactKwhNumber(0L),
+                    labelX,
+                    chartBottom,
+                    yPaint,
+                )
+                drawLine(
+                    color = axisLineColor.copy(alpha = 0.22f),
+                    start = Offset(chartLeft, chartTop + chartHeight / 2f),
+                    end = Offset(chartRight, chartTop + chartHeight / 2f),
+                    strokeWidth = 1.5f,
+                )
                 drawLine(
                     color = axisLineColor,
                     start = Offset(chartLeft, chartBottom),
@@ -104,22 +161,9 @@ fun ProductionChart(points: List<DailyPoint>) {
 
                 val axisPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = axisLabelColor
-                    textSize = axisTextPx
+                    textSize = 12.sp.toPx()
                     textAlign = Paint.Align.CENTER
                 }
-                val yPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = axisLabelColor
-                    textSize = peakTextPx
-                    textAlign = Paint.Align.LEFT
-                }
-                // Peak label (kWh) at top-left.
-                drawContext.canvas.nativeCanvas.drawText(
-                    YieldFormatting.compactKwhNumber(maxYield.toLong()),
-                    chartLeft,
-                    chartTop - 4f,
-                    yPaint,
-                )
-
                 val labelIndexes = listOf(0, points.size / 2, points.lastIndex).distinct()
                 labelIndexes.forEach { index ->
                     val x = chartLeft + index * step
@@ -145,15 +189,20 @@ fun ProductionChart(points: List<DailyPoint>) {
                 }
                 offsets.zipWithNext().forEach { (start, end) ->
                     drawLine(
-                        color = colors.secondary,
+                        color = lineColor,
                         start = start,
                         end = end,
                         strokeWidth = 10f,
                         cap = StrokeCap.Round,
                     )
                 }
-                offsets.forEach { offset ->
-                    drawCircle(colors.secondary, radius = 7f, center = offset)
+                points.forEachIndexed { index, point ->
+                    val selected = point.dateEpochDay == selectedEpochDay
+                    drawCircle(
+                        color = if (selected) selectedColor else lineColor,
+                        radius = if (selected) 10f else 7f,
+                        center = offsets[index],
+                    )
                 }
             }
         }
@@ -171,7 +220,7 @@ fun StatsBarChart(
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
     val midYield = (maxYield / 2f).toLong()
     val outsideLabelColor = colors.onBackground.toArgb()
-    val insideLabelColor = colors.onBackground.toArgb()
+    val insideLabelColor = colors.onSecondary.toArgb()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
     val eventMarkerColor = colors.error
@@ -397,8 +446,11 @@ fun StatsBarChart(
                         val drawVerticalInside = manyBars || (!isScrolling && barWidth < 36f)
                         val canFitVerticalInside = height > labelWidthEstimate + 12f
                         val canFitHorizontalInside = height > textPaint.textSize * 2.2f && barWidth > 28f
+                        val skipTinyLabel = height < textPaint.textSize * 1.4f &&
+                            point.bucketKey != selectedBucketKey
 
                         when {
+                            skipTinyLabel -> Unit
                             drawVerticalInside && canFitVerticalInside -> {
                                 textPaint.color = insideLabelColor
                                 val pivotY = top + height / 2f

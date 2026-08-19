@@ -37,4 +37,34 @@ class DashboardMetricsTest {
         assertNull(DashboardMetrics.monthYieldWh("2024-05", months))
         assertEquals(50_000L, DashboardMetrics.monthYieldWh("2024-04", months))
     }
+
+    @Test
+    fun todayYieldIgnoresStaleETodayFromYesterday() {
+        val zone = java.time.ZoneId.of("Europe/Berlin")
+        val today = java.time.LocalDate.of(2026, 8, 19)
+        val yesterdaySample = today.minusDays(1).atTime(18, 0).atZone(zone).toEpochSecond()
+        val yield = DashboardMetrics.todayYieldWh(
+            latestETodayWh = 12_000L,
+            sampleEpochSeconds = yesterdaySample,
+            todayEpochDay = today.toEpochDay(),
+            zoneId = zone,
+            dayAggregateYieldWh = 3_500L,
+        )
+        assertEquals(3_500L, yield)
+    }
+
+    @Test
+    fun todayYieldUsesETodayWhenSampleIsToday() {
+        val zone = java.time.ZoneId.of("Europe/Berlin")
+        val today = java.time.LocalDate.of(2026, 8, 19)
+        val sample = today.atTime(10, 0).atZone(zone).toEpochSecond()
+        val yield = DashboardMetrics.todayYieldWh(
+            latestETodayWh = 12_000L,
+            sampleEpochSeconds = sample,
+            todayEpochDay = today.toEpochDay(),
+            zoneId = zone,
+            dayAggregateYieldWh = 3_500L,
+        )
+        assertEquals(12_000L, yield)
+    }
 }

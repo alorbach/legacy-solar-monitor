@@ -93,13 +93,17 @@ fun EmptyStateCard(title: String, body: String) {
     }
 }
 
-fun formatEpochSeconds(value: Long): String {
+fun formatEpochSeconds(value: Long, zoneId: ZoneId = ZoneId.systemDefault()): String {
     val formatter = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
         .withLocale(Locale.getDefault())
     return Instant.ofEpochSecond(value)
-        .atZone(ZoneId.systemDefault())
+        .atZone(zoneId)
         .format(formatter)
 }
+
+fun parseZoneId(timezone: String?): ZoneId =
+    runCatching { ZoneId.of(timezone?.takeIf { it.isNotBlank() } ?: ZoneId.systemDefault().id) }
+        .getOrDefault(ZoneId.systemDefault())
 
 @Preview(showBackground = true)
 @Composable

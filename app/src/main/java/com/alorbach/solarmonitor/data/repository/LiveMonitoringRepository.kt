@@ -9,6 +9,7 @@ import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.coroutines.coroutineContext
@@ -170,6 +171,7 @@ class LiveMonitoringRepository(
                 liveAtEpochSeconds = snapshot.timestampEpochSeconds,
                 socketStrategy = gatewayResult.socketStrategy,
                 diagnostics = gatewayResult.diagnostics,
+                serial = gatewayResult.inverterSerial,
             )
             if (publishState) {
                 publishDevice(
@@ -221,6 +223,7 @@ class LiveMonitoringRepository(
                 status = gatewayResult.value.message,
                 socketStrategy = gatewayResult.socketStrategy,
                 diagnostics = gatewayResult.diagnostics,
+                serial = gatewayResult.inverterSerial,
             )
             gatewayResult.value.message
         }
@@ -237,13 +240,18 @@ class LiveMonitoringRepository(
 
     suspend fun syncHistory(
         device: DeviceProfileEntity,
-        fromDate: LocalDate = LocalDate.now().minusDays(30),
-        fromMonth: YearMonth = YearMonth.now().minusMonths(12),
+        fromDate: LocalDate? = null,
+        fromMonth: YearMonth? = null,
     ): Result<String> {
+        val zoneId = runCatching {
+            ZoneId.of(device.timezone.takeIf { it.isNotBlank() } ?: ZoneId.systemDefault().id)
+        }.getOrDefault(ZoneId.systemDefault())
+        val resolvedFromDate = fromDate ?: LocalDate.now(zoneId).minusDays(30)
+        val resolvedFromMonth = fromMonth ?: YearMonth.now(zoneId).minusMonths(12)
         var aborted = false
         val sessionDevice = repository.withResolvedPin(device)
         val dayResult = withOperation(device.btMac) { op ->
-            bluetoothGateway.syncDayArchive(sessionDevice, fromDate).also { aborted = op.aborted }
+            bluetoothGateway.syncDayArchive(sessionDevice, resolvedFromDate).also { aborted = op.aborted }
         }
         // The gateway reports an aborted session as a failed Result rather than a cancellation, so
         // the second Bluetooth session would otherwise still be opened after Cancel.
@@ -253,7 +261,7 @@ class LiveMonitoringRepository(
             return Result.failure(IllegalStateException(appContext.getString(R.string.archive_sync_cancelled)))
         }
         val monthResult = withOperation(device.btMac) { op ->
-            bluetoothGateway.syncMonthArchive(sessionDevice, fromMonth).also { aborted = op.aborted }
+            bluetoothGateway.syncMonthArchive(sessionDevice, resolvedFromMonth).also { aborted = op.aborted }
         }
         val dayGatewayResult = dayResult.getOrNull()
         val monthGatewayResult = monthResult.getOrNull()
@@ -306,6 +314,7 @@ class LiveMonitoringRepository(
                 diagnostics = listOfNotNull(dayGatewayResult?.diagnostics, monthGatewayResult?.diagnostics)
                     .filter { it.isNotBlank() }
                     .joinToString("\n---\n"),
+                serial = monthGatewayResult?.inverterSerial ?: dayGatewayResult?.inverterSerial,
             )
             "$status: ${dayItems.size} day records, ${monthItems.size} month records, ${spotSamples.size} samples"
         }.onFailure {

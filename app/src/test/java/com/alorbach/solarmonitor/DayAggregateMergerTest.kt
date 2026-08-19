@@ -53,6 +53,24 @@ class DayAggregateMergerTest {
     }
 
     @Test
+    fun bluetoothZeroDoesNotWipeMonthCsvYield() {
+        val prior = day(yieldWh = 10_500L, source = "month_csv")
+        val incoming = day(yieldWh = 0L, source = "bluetooth_day_archive")
+        val merged = DayAggregateMerger.merge(prior, incoming)
+        assertEquals(10_500L, merged.totalYieldWh)
+        assertEquals("month_csv", merged.sourceType)
+    }
+
+    @Test
+    fun sqliteZeroCorrectsMonthCsvYield() {
+        val prior = day(yieldWh = 10_500L, source = "month_csv")
+        val incoming = day(yieldWh = 0L, source = "sqlite")
+        val merged = DayAggregateMerger.merge(prior, incoming)
+        assertEquals(0L, merged.totalYieldWh)
+        assertEquals("sqlite", merged.sourceType)
+    }
+
+    @Test
     fun sqliteArchiveCorrectsMonthCsv() {
         val prior = day(yieldWh = 10_500L, source = "month_csv")
         val incoming = day(yieldWh = 9_800L, source = "sqlite")

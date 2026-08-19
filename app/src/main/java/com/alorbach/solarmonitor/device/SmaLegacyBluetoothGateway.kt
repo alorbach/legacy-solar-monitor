@@ -16,6 +16,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DayArchiveResult
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
@@ -64,6 +65,7 @@ data class SmaGatewayResult<T>(
     val value: T,
     val socketStrategy: String,
     val diagnostics: String,
+    val inverterSerial: Long? = null,
 )
 
 private class SessionTrace(
@@ -112,7 +114,10 @@ class SmaLegacyBluetoothGatewayImpl(
     private val appContext = context.applicationContext
     private val adapter: BluetoothAdapter? =
         (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
-    private val zoneId: ZoneId = ZoneId.systemDefault()
+    private fun zoneFor(device: DeviceProfileEntity?): ZoneId =
+        runCatching {
+            ZoneId.of(device?.timezone?.takeIf { it.isNotBlank() } ?: ZoneId.systemDefault().id)
+        }.getOrDefault(ZoneId.systemDefault())
     private val _discoveredDevices = MutableStateFlow(emptyList<BluetoothDeviceDescriptor>())
     override val discoveredDevices: StateFlow<List<BluetoothDeviceDescriptor>> = _discoveredDevices.asStateFlow()
     private val _isDiscovering = MutableStateFlow(false)
@@ -225,9 +230,13 @@ class SmaLegacyBluetoothGatewayImpl(
             SmaGatewayResult(
                 value = SmaConnectionTestResult(
                     message = buildString {
-                        append("Connection OK")
-                        signal?.let { append(" | BT ${it.roundToInt()}%") }
-                        append(" | SN ${session.inverterSerial}")
+                        append(appContext.getString(R.string.connection_ok))
+                        signal?.let {
+                            append(appContext.getString(R.string.connection_signal_suffix, it.roundToInt()))
+                        }
+                        if (session.inverterSerial > 0L) {
+                            append(appContext.getString(R.string.connection_serial_suffix, session.inverterSerial))
+                        }
                     },
                     signalPercent = signal,
                     socketStrategy = socketStrategy,
@@ -235,6 +244,7 @@ class SmaLegacyBluetoothGatewayImpl(
                 ),
                 socketStrategy = socketStrategy,
                 diagnostics = trace.render(),
+                inverterSerial = session.inverterSerial.takeIf { it > 0L },
             )
         }
     }
@@ -244,11 +254,12 @@ class SmaLegacyBluetoothGatewayImpl(
             val snapshot = session.readLiveSample(device!!.id)
             SmaGatewayResult(
                 value = snapshot.copy(
-                    status = snapshot.status ?: "Live read OK",
+                    status = snapshot.status ?: appContext.getString(R.string.live_read_ok),
                     sourceType = "bluetooth_live",
                 ),
                 socketStrategy = socketStrategy,
                 diagnostics = trace.render(),
+                inverterSerial = session.inverterSerial.takeIf { it > 0L },
             )
         }
     }
@@ -258,7 +269,7 @@ class SmaLegacyBluetoothGatewayImpl(
         fromDate: LocalDate,
     ): Result<SmaGatewayResult<DayArchiveResult>> = runCatching {
         withSession(device) { session, socketStrategy, trace ->
-            val today = LocalDate.now(zoneId)
+            val today = LocalDate.now(zoneFor(device))
             val dayAggregates = mutableListOf<DayAggregateEntity>()
             val spotSamples = mutableListOf<SpotSampleEntity>()
             generateSequence(fromDate) { current ->
@@ -275,6 +286,7 @@ class SmaLegacyBluetoothGatewayImpl(
                 ),
                 socketStrategy = socketStrategy,
                 diagnostics = trace.render(),
+                inverterSerial = session.inverterSerial.takeIf { it > 0L },
             )
         }
     }
@@ -284,7 +296,7 @@ class SmaLegacyBluetoothGatewayImpl(
         fromMonth: YearMonth,
     ): Result<SmaGatewayResult<List<MonthAggregateEntity>>> = runCatching {
         withSession(device) { session, socketStrategy, trace ->
-            val currentMonth = YearMonth.now(zoneId)
+            val currentMonth = YearMonth.now(zoneFor(device))
             val items = generateSequence(fromMonth) { current ->
                 current.plusMonths(1).takeIf { !it.isAfter(currentMonth) }
             }.mapNotNull { month ->
@@ -294,6 +306,7 @@ class SmaLegacyBluetoothGatewayImpl(
                 value = items,
                 socketStrategy = socketStrategy,
                 diagnostics = trace.render(),
+                inverterSerial = session.inverterSerial.takeIf { it > 0L },
             )
         }
     }
@@ -349,7 +362,7 @@ class SmaLegacyBluetoothGatewayImpl(
                     linkEstablished = true
                     trace.record("socket:${strategy.label} connected")
                     return@withLock withTimeout(SESSION_TIMEOUT_MS) {
-                        SmaBluetoothSession(socket, device, zoneId, trace).use { session ->
+                        SmaBluetoothSession(socket, device, zoneFor(device), trace).use { session ->
                             block(session, strategy.label, trace)
                         }
                     }
@@ -609,7 +622,7 @@ private class SmaBluetoothSession(
             eTotalWh = liveValues[Lri.METERING_TOT_WH_OUT],
             frequencyHz = liveValues[Lri.GRID_MS_HZ]?.div(100.0),
             temperatureC = liveValues[Lri.COOLSYS_TMP_NOM]?.div(100.0),
-            status = statusValues[Lri.OPERATION_HEALTH]?.let { "Health 0x${it.toString(16)}" } ?: "Live read OK",
+            status = statusValues[Lri.OPERATION_HEALTH]?.let { "Health 0x${it.toString(16)}" },
             gridRelay = statusValues[Lri.OPERATION_GRI_SW_STT]?.let { "Relay 0x${it.toString(16)}" },
             btSignalPercent = signal,
             sourceType = "bluetooth_live",
@@ -645,7 +658,12 @@ private class SmaBluetoothSession(
                     lastTotalWh = totalWh
                     var watts: Int? = null
                     if (previousTotalWh > 0L && timestamp > previousTimestamp) {
-                        watts = ((totalWh - previousTotalWh) * 3600L / (timestamp - previousTimestamp)).toInt()
+                        val deltaWh = totalWh - previousTotalWh
+                        watts = if (deltaWh <= 0L) {
+                            0
+                        } else {
+                            ((deltaWh * 3600L / (timestamp - previousTimestamp)).toInt()).coerceAtLeast(0)
+                        }
                         maxPower = maxOf(maxPower, watts)
                     }
                     spotSamples += SpotSampleEntity(
@@ -706,7 +724,10 @@ private class SmaBluetoothSession(
                 val totalWh = uint64(packet.payload, offset + 4)
                 if (totalWh != U64_NAN && totalWh >= 0) {
                     if (previousTotalWh > 0 && YearMonth.from(datetime) == month) {
-                        monthYieldWh += (totalWh - previousTotalWh)
+                        val deltaWh = totalWh - previousTotalWh
+                        if (deltaWh > 0L) {
+                            monthYieldWh += deltaWh
+                        }
                     }
                     previousTotalWh = totalWh
                     if (YearMonth.from(datetime) == month) {

@@ -90,6 +90,8 @@ class ScheduledImportWorker(
 
         fun credentialTag(credentialId: String): String = "import_cred_$credentialId"
 
+        fun deviceTag(deviceId: Long): String = "import_device_$deviceId"
+
         fun uniqueName(jobId: Long): String = "scheduled_import_$jobId"
 
         fun cancel(context: Context, jobId: Long) {
@@ -150,6 +152,7 @@ class ScheduledImportWorker(
                 .setInputData(data)
                 .apply {
                     job.passwordCredentialId?.let { addTag(credentialTag(it)) }
+                    addTag(deviceTag(config.deviceId))
                 }
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(

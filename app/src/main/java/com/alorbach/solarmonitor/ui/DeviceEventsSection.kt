@@ -44,13 +44,13 @@ fun DeviceEventsSection(
     deviceId: Long,
     container: AppContainer,
     dataEpoch: Long,
+    zoneId: ZoneId = ZoneId.systemDefault(),
 ) {
     var events by remember { mutableStateOf<List<DeviceEventEntity>>(emptyList()) }
     var filter by remember { mutableStateOf(EventFilter.ALL) }
     LaunchedEffect(deviceId, dataEpoch) {
         events = container.repository.getRecentEvents(deviceId, limit = 50)
     }
-    val zoneId = remember { ZoneId.systemDefault() }
     EventListBlock(
         events = events,
         zoneId = zoneId,
@@ -59,6 +59,50 @@ fun DeviceEventsSection(
         title = stringResource(R.string.device_events),
         emptyText = stringResource(R.string.device_events_empty),
     )
+}
+
+fun List<DeviceEventEntity>.filterByEventFilter(filter: EventFilter): List<DeviceEventEntity> = filter { event ->
+    when (filter) {
+        EventFilter.ALL -> true
+        EventFilter.WARNING -> EventCatalog.severity(event) == EventSeverity.WARNING
+        EventFilter.INFO -> EventCatalog.severity(event) == EventSeverity.INFO
+    }
+}
+
+@Composable
+fun EventFilterBar(
+    filter: EventFilter,
+    onFilter: (EventFilter) -> Unit,
+    selectedBucketKey: String? = null,
+    onClearBucket: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        FilterChip(
+            selected = filter == EventFilter.ALL,
+            onClick = { onFilter(EventFilter.ALL) },
+            label = { Text(stringResource(R.string.stats_events_all)) },
+        )
+        FilterChip(
+            selected = filter == EventFilter.WARNING,
+            onClick = { onFilter(EventFilter.WARNING) },
+            label = { Text(stringResource(R.string.stats_events_warning)) },
+        )
+        FilterChip(
+            selected = filter == EventFilter.INFO,
+            onClick = { onFilter(EventFilter.INFO) },
+            label = { Text(stringResource(R.string.stats_events_info)) },
+        )
+        if (selectedBucketKey != null && onClearBucket != null) {
+            FilterChip(
+                selected = true,
+                onClick = onClearBucket,
+                label = { Text(stringResource(R.string.event_bar_filter_clear)) },
+            )
+        }
+    }
 }
 
 @Composable
@@ -73,42 +117,15 @@ fun EventListBlock(
     onClearBucket: (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
-    val visible = events.filter { event ->
-        when (filter) {
-            EventFilter.ALL -> true
-            EventFilter.WARNING -> EventCatalog.severity(event) == EventSeverity.WARNING
-            EventFilter.INFO -> EventCatalog.severity(event) == EventSeverity.INFO
-        }
-    }
+    val visible = events.filterByEventFilter(filter)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
         Text(title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            FilterChip(
-                selected = filter == EventFilter.ALL,
-                onClick = { onFilter(EventFilter.ALL) },
-                label = { Text(stringResource(R.string.stats_events_all)) },
-            )
-            FilterChip(
-                selected = filter == EventFilter.WARNING,
-                onClick = { onFilter(EventFilter.WARNING) },
-                label = { Text(stringResource(R.string.stats_events_warning)) },
-            )
-            FilterChip(
-                selected = filter == EventFilter.INFO,
-                onClick = { onFilter(EventFilter.INFO) },
-                label = { Text(stringResource(R.string.stats_events_info)) },
-            )
-            if (selectedBucketKey != null && onClearBucket != null) {
-                FilterChip(
-                    selected = true,
-                    onClick = onClearBucket,
-                    label = { Text(stringResource(R.string.event_bar_filter_clear)) },
-                )
-            }
-        }
+        EventFilterBar(
+            filter = filter,
+            onFilter = onFilter,
+            selectedBucketKey = selectedBucketKey,
+            onClearBucket = onClearBucket,
+        )
         if (visible.isEmpty()) {
             Text(emptyText, color = colors.onSurfaceVariant)
         } else {

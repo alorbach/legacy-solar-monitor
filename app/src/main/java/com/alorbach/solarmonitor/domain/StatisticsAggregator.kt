@@ -17,6 +17,9 @@ import java.time.ZonedDateTime
  */
 object StatisticsAggregator {
     internal const val MAX_POWER_GAP_SECONDS = 30 * 60L
+    /** Lifetime ETotal jumps (empty CSV → 0, then a 100 MWh meter) are not hourly production. */
+    internal const val MAX_PLAUSIBLE_HOUR_YIELD_WH = 50_000L
+
     fun hourAggregatesFromSamples(
         deviceId: Long,
         samples: List<SpotSampleEntity>,
@@ -39,7 +42,7 @@ object StatisticsAggregator {
         val result = mutableListOf<HourAggregateEntity>()
         for ((index, hourStart) in hourStarts.withIndex()) {
             val hourSamples = byHour.getValue(hourStart)
-            val totalsInHour = hourSamples.mapNotNull { it.eTotalWh }
+            val totalsInHour = hourSamples.mapNotNull { usableTotalWh(it.eTotalWh) }
             val endTotal = totalsInHour.lastOrNull()
             val baseline = previousTotalWh ?: totalsInHour.firstOrNull()
             val previousSample = hourStarts.getOrNull(index - 1)?.let { byHour.getValue(it).lastOrNull() }
@@ -57,7 +60,11 @@ object StatisticsAggregator {
                 }
                 endTotal > baseline -> {
                     val raw = endTotal - baseline
-                    if (previousTotalWh == null) {
+                    if (raw > MAX_PLAUSIBLE_HOUR_YIELD_WH) {
+                        pendingPowerEstimateWh = 0L
+                        estimatedIndices.clear()
+                        0L
+                    } else if (previousTotalWh == null) {
                         pendingPowerEstimateWh = 0L
                         estimatedIndices.clear()
                         raw
@@ -102,6 +109,9 @@ object StatisticsAggregator {
         }
         return result
     }
+
+    internal fun usableTotalWh(eTotalWh: Long?): Long? =
+        eTotalWh?.takeIf { it > 0L }
 
     private fun reduceEstimatedHours(
         result: MutableList<HourAggregateEntity>,

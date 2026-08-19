@@ -43,6 +43,99 @@ class EarningsCalculatorTest {
 
         assertEquals(15.0, earnings, 0.0001)
     }
+
+    @Test
+    fun monthEarningsSumDayTariffsWhenRateChangesMidMonth() {
+        val month = MonthAggregateEntity(
+            deviceId = 1,
+            monthKey = "2024-04",
+            totalYieldWh = 20_000,
+            dayYieldWh = 20_000,
+        )
+        val tariffs = listOf(
+            TariffPeriodEntity(
+                deviceId = 1,
+                validFromEpochDay = LocalDate.of(2024, 1, 1).toEpochDay(),
+                validToEpochDay = LocalDate.of(2024, 4, 10).toEpochDay(),
+                pricePerKwh = 0.40,
+                currency = "EUR",
+            ),
+            TariffPeriodEntity(
+                deviceId = 1,
+                validFromEpochDay = LocalDate.of(2024, 4, 11).toEpochDay(),
+                validToEpochDay = null,
+                pricePerKwh = 0.10,
+                currency = "EUR",
+            ),
+        )
+        val days = listOf(
+            DayAggregateEntity(deviceId = 1, dateEpochDay = LocalDate.of(2024, 4, 10).toEpochDay(), totalYieldWh = 10_000),
+            DayAggregateEntity(deviceId = 1, dateEpochDay = LocalDate.of(2024, 4, 11).toEpochDay(), totalYieldWh = 10_000),
+        )
+        val earnings = EarningsCalculator.earningsForMonth(month, tariffs, days)
+        assertEquals(5.0, earnings, 0.0001)
+    }
+
+    @Test
+    fun sparseDaysKeepUncoveredMonthYield() {
+        val month = MonthAggregateEntity(
+            deviceId = 1,
+            monthKey = "2024-04",
+            totalYieldWh = 50_000,
+            dayYieldWh = 50_000,
+        )
+        val tariffs = listOf(
+            TariffPeriodEntity(
+                deviceId = 1,
+                validFromEpochDay = LocalDate.of(2024, 1, 1).toEpochDay(),
+                validToEpochDay = null,
+                pricePerKwh = 0.20,
+                currency = "EUR",
+            ),
+        )
+        val days = listOf(
+            DayAggregateEntity(
+                deviceId = 1,
+                dateEpochDay = LocalDate.of(2024, 4, 30).toEpochDay(),
+                totalYieldWh = 5_000,
+            ),
+        )
+        val earnings = EarningsCalculator.earningsForMonth(month, tariffs, days)
+        assertEquals(10.0, earnings, 0.0001)
+    }
+
+    @Test
+    fun monthEarningsCapWhenDaysExceedMonthYield() {
+        val month = MonthAggregateEntity(
+            deviceId = 1,
+            monthKey = "2024-04",
+            totalYieldWh = 10_000,
+            dayYieldWh = 10_000,
+        )
+        val tariffs = listOf(
+            TariffPeriodEntity(
+                deviceId = 1,
+                validFromEpochDay = LocalDate.of(2024, 1, 1).toEpochDay(),
+                validToEpochDay = null,
+                pricePerKwh = 0.20,
+                currency = "EUR",
+            ),
+        )
+        val days = listOf(
+            DayAggregateEntity(
+                deviceId = 1,
+                dateEpochDay = LocalDate.of(2024, 4, 1).toEpochDay(),
+                totalYieldWh = 10_000,
+            ),
+            DayAggregateEntity(
+                deviceId = 1,
+                dateEpochDay = LocalDate.of(2024, 4, 2).toEpochDay(),
+                totalYieldWh = 10_000,
+            ),
+        )
+        val earnings = EarningsCalculator.earningsForMonth(month, tariffs, days)
+        assertEquals(2.0, earnings, 0.0001)
+    }
 }
 
 class YieldFormattingTest {

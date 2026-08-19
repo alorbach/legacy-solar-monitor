@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -33,8 +34,12 @@ data class AppSettings(
     /** Empty string means follow the system locale. */
     val languageTag: String = "",
     val hourAggregatesBackfilled: Boolean = false,
+    /** Bump to force a full hour-aggregate recompute after aggregator/parser fixes. */
+    val hourAggregatesSchemaVersion: Int = 0,
     /** Seconds between live Bluetooth polls while the foreground service runs. */
     val livePollIntervalSeconds: Long = 60,
+    /** Home-screen compact/medium widgets; null = first device by name. */
+    val widgetDeviceId: Long? = null,
 )
 
 class AppSettingsStore(
@@ -96,7 +101,13 @@ class AppSettingsStore(
             }
             prefs[Keys.languageTag] = updated.languageTag
             prefs[Keys.hourAggregatesBackfilled] = updated.hourAggregatesBackfilled
+            prefs[Keys.hourAggregatesSchemaVersion] = updated.hourAggregatesSchemaVersion
             prefs[Keys.livePollIntervalSeconds] = updated.livePollIntervalSeconds.coerceIn(15L, 3600L)
+            if (updated.widgetDeviceId == null) {
+                prefs.remove(Keys.widgetDeviceId)
+            } else {
+                prefs[Keys.widgetDeviceId] = updated.widgetDeviceId
+            }
         }
     }
 
@@ -130,7 +141,9 @@ class AppSettingsStore(
             statsSelectedDeviceId = prefs[Keys.statsSelectedDeviceId],
             languageTag = prefs[Keys.languageTag] ?: "",
             hourAggregatesBackfilled = prefs[Keys.hourAggregatesBackfilled] ?: false,
+            hourAggregatesSchemaVersion = prefs[Keys.hourAggregatesSchemaVersion] ?: 0,
             livePollIntervalSeconds = prefs[Keys.livePollIntervalSeconds] ?: 60L,
+            widgetDeviceId = prefs[Keys.widgetDeviceId],
         )
 
     private object Keys {
@@ -148,6 +161,8 @@ class AppSettingsStore(
         val statsSelectedDeviceId = longPreferencesKey("stats_selected_device_id")
         val languageTag = stringPreferencesKey("language_tag")
         val hourAggregatesBackfilled = booleanPreferencesKey("hour_aggregates_backfilled")
+        val hourAggregatesSchemaVersion = intPreferencesKey("hour_aggregates_schema_version")
         val livePollIntervalSeconds = longPreferencesKey("live_poll_interval_seconds")
+        val widgetDeviceId = longPreferencesKey("widget_device_id")
     }
 }

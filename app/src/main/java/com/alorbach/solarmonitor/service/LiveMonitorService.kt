@@ -28,6 +28,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicInteger
 
 class LiveMonitorService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -35,6 +38,9 @@ class LiveMonitorService : Service() {
     private val jobsMutex = Mutex()
     /** Tracks the onStartCommand restart coordinator so stop can cancel it. */
     @Volatile private var coordinatorJob: Job? = null
+    private var stopJob: Job? = null
+    /** Bumped on each start so an in-flight stop cannot teardown or stopSelf a newer session. */
+    private val runGeneration = AtomicInteger(0)
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleController.wrap(newBase))
@@ -48,14 +54,28 @@ class LiveMonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             clearPersistedDeviceIds()
-            stopMonitoring()
+            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+            val stopGen = runGeneration.get()
+            val stopStartId = startId
+            coordinatorJob?.cancel()
+            stopJob?.cancel()
+            (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
+            stopJob = scope.launch {
+                teardownSessions(USER_STOP_JOIN_TIMEOUT_MS, stopGen)
+                if (runGeneration.get() == stopGen) {
+                    stopSelf(stopStartId)
+                }
+            }
             return START_NOT_STICKY
         }
 
-        val fromIntent = resolveDeviceIds(intent)
-        val deviceIds = if (fromIntent.isNotEmpty()) fromIntent else loadPersistedDeviceIds()
+        val incoming = resolveDeviceIds(intent)
+        val deviceIds = (loadPersistedDeviceIds().toList() + incoming.toList()).distinct().toLongArray()
         if (deviceIds.isEmpty()) return START_NOT_STICKY
         persistDeviceIds(deviceIds)
+        val startGen = runGeneration.incrementAndGet()
+        stopJob?.cancel()
+        stopJob = null
 
         ServiceCompat.startForeground(
             this,
@@ -72,7 +92,8 @@ class LiveMonitorService : Service() {
         coordinatorJob?.cancel()
         coordinatorJob = scope.launch {
             jobsMutex.withLock {
-                // Replace the whole set when a new start request arrives. Abort RFCOMM before
+                if (runGeneration.get() != startGen) return@launch
+                // Unioned device list when a new start request arrives. Abort RFCOMM before
                 // joining so cancelled poll loops are not stuck on a blocked Bluetooth read.
                 val previous = pollJobs.values.toList()
                 pollJobs.clear()
@@ -84,7 +105,7 @@ class LiveMonitorService : Service() {
                 container.liveMonitoringRepository.stopAll()
                 ensureActive()
                 deviceIds.forEach { deviceId ->
-                    pollJobs[deviceId] = scope.launch {
+                    pollJobs[deviceId] = launch {
                         while (isActive) {
                             val result = container.liveMonitoringRepository.start(deviceId, continuous = true)
                             val aggregate = container.liveMonitoringRepository.state.value.message
@@ -104,7 +125,11 @@ class LiveMonitorService : Service() {
     }
 
     override fun onDestroy() {
-        stopMonitoring()
+        runBlocking {
+            withTimeoutOrNull(SYSTEM_HALT_JOIN_TIMEOUT_MS) {
+                teardownSessions(SYSTEM_HALT_JOIN_TIMEOUT_MS, expectedGeneration = null)
+            }
+        }
         scope.cancel()
         super.onDestroy()
     }
@@ -118,28 +143,41 @@ class LiveMonitorService : Service() {
         return if (one != null) longArrayOf(one) else longArrayOf()
     }
 
-    private fun stopMonitoring() {
-        // Cancel the restart coordinator first so it cannot relaunch polls after teardown.
-        // Then cancel -> abort RFCOMM -> join. Joining before abort can block for a full
-        // Bluetooth read timeout because live reads ignore coroutine cancellation until
-        // the socket closes.
-        runBlocking {
-            val coordinator = coordinatorJob
-            coordinatorJob = null
-            coordinator?.cancel()
-            coordinator?.join()
-            jobsMutex.withLock {
-                val jobs = pollJobs.values.toList()
-                pollJobs.clear()
-                jobs.forEach { it.cancel() }
-                (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
-                jobs.forEach { it.join() }
-                // Clear anything a late start(..., continuous=true) re-registered after abort.
-                (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
+    /**
+     * Abort RFCOMM and join poll jobs. Caller must not block the main thread for the user-stop
+     * timeout; [onStartCommand] launches this on [scope] (IO) and [onDestroy] uses the short
+     * system halt timeout.
+     */
+    private suspend fun teardownSessions(joinTimeoutMs: Long, expectedGeneration: Int?) {
+        withContext(Dispatchers.IO) {
+            withTimeoutOrNull(joinTimeoutMs) {
+                if (expectedGeneration != null && runGeneration.get() != expectedGeneration) return@withTimeoutOrNull
+                val coordinator = coordinatorJob
+                coordinator?.cancel()
+                if (coordinatorJob === coordinator) {
+                    coordinatorJob = null
+                }
+                coordinator?.join()
+                jobsMutex.withLock {
+                    if (expectedGeneration != null && runGeneration.get() != expectedGeneration) return@withLock
+                    val jobs = pollJobs.values.toList()
+                    pollJobs.clear()
+                    jobs.forEach { it.cancel() }
+                    (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
+                    jobs.forEach { it.join() }
+                    (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
+                }
+            } ?: run {
+                if (expectedGeneration == null || runGeneration.get() == expectedGeneration) {
+                    jobsMutex.withLock {
+                        val jobs = pollJobs.values.toList()
+                        pollJobs.clear()
+                        jobs.forEach { it.cancel() }
+                    }
+                    (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
+                }
             }
         }
-        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        stopSelf()
     }
 
     private fun buildNotification(message: String): Notification =
@@ -196,6 +234,8 @@ class LiveMonitorService : Service() {
         private const val CHANNEL_ID = "live_monitor"
         private const val NOTIFICATION_ID = 4001
         private const val POLL_INTERVAL_MS = 60_000L
+        private const val SYSTEM_HALT_JOIN_TIMEOUT_MS = 3_000L
+        private const val USER_STOP_JOIN_TIMEOUT_MS = 30_000L
         private const val PREFS = "live_monitor"
         private const val KEY_DEVICE_IDS = "device_ids"
 
