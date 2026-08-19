@@ -3,10 +3,12 @@ package com.alorbach.solarmonitor.domain
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
+import java.text.NumberFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.util.Currency
 import java.util.Locale
 
 object EarningsCalculator {
@@ -79,6 +81,37 @@ object YieldFormatting {
         if (watts == null) "--"
         else "$watts W"
 
-    fun earningsLabel(amount: Double, currency: String?, locale: Locale = Locale.getDefault()): String =
-        String.format(locale, "%.2f %s", amount, currency.orEmpty()).trim()
+    fun earningsLabel(amount: Double, currency: String?, locale: Locale = Locale.getDefault()): String {
+        val code = currency?.trim()?.takeIf { it.isNotEmpty() } ?: "EUR"
+        return runCatching {
+            NumberFormat.getCurrencyInstance(locale).apply {
+                this.currency = Currency.getInstance(code)
+            }.format(amount)
+        }.getOrElse {
+            String.format(locale, "%.2f %s", amount, code)
+        }
+    }
+
+    /** Compact kWh for bar / Y-axis labels (no unit). */
+    fun compactKwhNumber(yieldWh: Long, locale: Locale = Locale.getDefault()): String {
+        val kwh = yieldWh / 1000.0
+        return when {
+            kwh >= 100 -> String.format(locale, "%.0f", kwh)
+            kwh >= 10 -> String.format(locale, "%.1f", kwh)
+            else -> String.format(locale, "%.2f", kwh)
+        }
+    }
+}
+
+object StatsSeriesFill {
+    const val VISIBLE_BARS = 12
+
+    fun lastInclusiveEpochDay(yearMonth: YearMonth, today: LocalDate): Long {
+        val monthEnd = yearMonth.atEndOfMonth().toEpochDay()
+        return if (YearMonth.from(today) == yearMonth) {
+            minOf(monthEnd, today.toEpochDay())
+        } else {
+            monthEnd
+        }
+    }
 }

@@ -5,26 +5,34 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ForegroundInfo
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.alorbach.solarmonitor.SolarMonitorApplication
+import com.alorbach.solarmonitor.data.importing.ImportAlreadyRunningException
 import com.alorbach.solarmonitor.data.importing.ImportRequest
 import com.alorbach.solarmonitor.data.importing.replayConfig
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
+import com.alorbach.solarmonitor.service.ImportNotifications
 import java.util.concurrent.TimeUnit
 
 class ScheduledImportWorker(
     context: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
+    override suspend fun getForegroundInfo(): ForegroundInfo =
+        ImportNotifications.foregroundInfo(applicationContext, 0, 0)
+
     override suspend fun doWork(): Result {
         val sourceType = inputData.getString(KEY_SOURCE_TYPE) ?: return Result.failure()
         val deviceId = inputData.getLong(KEY_DEVICE_ID, -1).takeIf { it > 0 } ?: return Result.failure()
         val sourceLabel = inputData.getString(KEY_SOURCE_LABEL) ?: "Scheduled import"
         val container = (applicationContext as SolarMonitorApplication).container
+
+        setForeground(ImportNotifications.foregroundInfo(applicationContext, 0, 0))
 
         val request = when (sourceType) {
             "URL" -> {
@@ -63,17 +71,7 @@ class ScheduledImportWorker(
             .fold(
                 onSuccess = { Result.success() },
                 onFailure = { error ->
-                    // Retry only transient failures
-                    val message = error.message.orEmpty().lowercase()
-                    if (message.contains("timeout") ||
-                        message.contains("connection") ||
-                        message.contains("unavailable") ||
-                        message.contains("temporary")
-                    ) {
-                        Result.retry()
-                    } else {
-                        Result.failure()
-                    }
+                    if (error.shouldRetryScheduledImport()) Result.retry() else Result.failure()
                 },
             )
     }
@@ -161,34 +159,23 @@ class ScheduledImportWorker(
             )
             return true
         }
-
-        fun enqueueUrlImport(
-            context: Context,
-            deviceId: Long,
-            url: String,
-            sourceLabel: String = "Scheduled URL import",
-            intervalHours: Long = 6,
-        ) {
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-            val request = PeriodicWorkRequestBuilder<ScheduledImportWorker>(intervalHours, TimeUnit.HOURS)
-                .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
-                .setInputData(
-                    workDataOf(
-                        KEY_SOURCE_TYPE to "URL",
-                        KEY_SOURCE_LABEL to sourceLabel,
-                        KEY_DEVICE_ID to deviceId,
-                        KEY_URL to url,
-                    )
-                )
-                .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                UNIQUE_WORK_NAME,
-                ExistingPeriodicWorkPolicy.KEEP,
-                request,
-            )
-        }
     }
+}
+
+internal fun Throwable.shouldRetryScheduledImport(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        if (current is ImportAlreadyRunningException) return true
+        when (current) {
+            is java.net.SocketTimeoutException,
+            is java.net.ConnectException,
+            is java.net.UnknownHostException,
+            is java.net.NoRouteToHostException,
+            is java.net.SocketException,
+            is java.io.InterruptedIOException,
+            -> return true
+        }
+        current = current.cause
+    }
+    return false
 }

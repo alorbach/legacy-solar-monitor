@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor.data.repository
 
 import android.content.Context
 import androidx.work.WorkManager
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
@@ -23,6 +24,7 @@ import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.domain.DashboardMetrics
 import com.alorbach.solarmonitor.domain.EarningsCalculator
 import com.alorbach.solarmonitor.domain.StatisticsAggregator
+import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
@@ -328,7 +330,7 @@ class SolarRepository(
      */
     suspend fun failOrphanedImportJobs(processStartedAtEpochSeconds: Long): Int = dao.failRunningImportJobs(
         completedAt = System.currentTimeMillis() / 1000,
-        message = "Import interrupted (app closed or process stopped)",
+        message = appContext.getString(R.string.import_interrupted),
         createdBeforeEpochSeconds = processStartedAtEpochSeconds,
     )
 
@@ -498,19 +500,20 @@ class SolarRepository(
                 )
             }
         }
-        return rows
-            .groupBy { it.localHour }
-            .toSortedMap()
-            .map { (localHour, items) ->
-                val label = String.format(locale, "%02d:00", localHour)
-                StatsPoint(
-                    label = label,
-                    bucketKey = localHour.toString(),
-                    yieldWh = items.sumOf { it.yieldWh },
-                    peakPowerW = items.mapNotNull { it.maxPowerW }.maxOrNull(),
-                    earnings = items.sumOf { it.earnings },
-                )
-            }
+        val byHour = rows.groupBy { it.localHour }
+        val eventCounts = eventCountsByHour(deviceIds, date)
+        if (byHour.isEmpty() && eventCounts.values.none { it > 0 }) return emptyList()
+        return (0..23).map { localHour ->
+            val items = byHour[localHour].orEmpty()
+            StatsPoint(
+                label = String.format(locale, "%02d:00", localHour),
+                bucketKey = localHour.toString(),
+                yieldWh = items.sumOf { it.yieldWh },
+                peakPowerW = items.mapNotNull { it.maxPowerW }.maxOrNull(),
+                earnings = items.sumOf { it.earnings },
+                eventCount = eventCounts[localHour] ?: 0,
+            )
+        }
     }
 
     suspend fun getDailySeries(deviceIds: List<Long>, yearMonth: YearMonth): List<StatsPoint> {
@@ -522,23 +525,26 @@ class SolarRepository(
         val tariffsByDevice = tariffsByDevice(deviceIds)
         val locale = Locale.getDefault()
         val labelFormatter = DateTimeFormatter.ofPattern("dd", locale)
-        return days
-            .groupBy { it.dateEpochDay }
-            .toSortedMap()
-            .map { (epochDay, items) ->
-                val yieldWh = items.sumOf { it.totalYieldWh }
-                val peak = items.mapNotNull { it.powerW }.maxOrNull()
-                val earnings = items.sumOf { day ->
-                    EarningsCalculator.earningsForDay(day, tariffsByDevice[day.deviceId].orEmpty())
-                }
-                StatsPoint(
-                    label = LocalDate.ofEpochDay(epochDay).format(labelFormatter),
-                    bucketKey = epochDay.toString(),
-                    yieldWh = yieldWh,
-                    peakPowerW = peak,
-                    earnings = earnings,
-                )
+        val byDay = days.groupBy { it.dateEpochDay }
+        val lastDay = StatsSeriesFill.lastInclusiveEpochDay(yearMonth, LocalDate.now(zoneId))
+        val eventCounts = eventCountsByEpochDay(deviceIds, yearMonth, lastDay)
+        if (byDay.isEmpty() && eventCounts.values.none { it > 0 }) return emptyList()
+        return (start..lastDay).map { epochDay ->
+            val items = byDay[epochDay].orEmpty()
+            val yieldWh = items.sumOf { it.totalYieldWh }
+            val peak = items.mapNotNull { it.powerW }.maxOrNull()
+            val earnings = items.sumOf { day ->
+                EarningsCalculator.earningsForDay(day, tariffsByDevice[day.deviceId].orEmpty())
             }
+            StatsPoint(
+                label = LocalDate.ofEpochDay(epochDay).format(labelFormatter),
+                bucketKey = epochDay.toString(),
+                yieldWh = yieldWh,
+                peakPowerW = peak,
+                earnings = earnings,
+                eventCount = eventCounts[epochDay] ?: 0,
+            )
+        }
     }
 
     suspend fun getMonthlySeries(deviceIds: List<Long>, year: Int): List<StatsPoint> {
@@ -548,23 +554,26 @@ class SolarRepository(
         val months = dao.getMonthRangeForDevices(deviceIds, fromKey, toKey)
         val tariffsByDevice = tariffsByDevice(deviceIds)
         val locale = Locale.getDefault()
-        return months
-            .groupBy { it.monthKey }
-            .toSortedMap()
-            .map { (monthKey, items) ->
-                val yieldWh = items.sumOf { it.dayYieldWh }
-                val earnings = items.sumOf { month ->
-                    EarningsCalculator.earningsForMonth(month, tariffsByDevice[month.deviceId].orEmpty())
-                }
-                val yearMonth = YearMonth.parse(monthKey)
-                StatsPoint(
-                    label = yearMonth.month.getDisplayName(TextStyle.SHORT, locale),
-                    bucketKey = monthKey,
-                    yieldWh = yieldWh,
-                    peakPowerW = null,
-                    earnings = earnings,
-                )
+        val eventCounts = eventCountsByMonthKey(deviceIds, year)
+        val byMonth = months.groupBy { it.monthKey }
+        val keys = (byMonth.keys + eventCounts.filterValues { it > 0 }.keys).toSortedSet()
+        if (keys.isEmpty()) return emptyList()
+        return keys.map { monthKey ->
+            val items = byMonth[monthKey].orEmpty()
+            val yieldWh = items.sumOf { it.dayYieldWh }
+            val earnings = items.sumOf { month ->
+                EarningsCalculator.earningsForMonth(month, tariffsByDevice[month.deviceId].orEmpty())
             }
+            val yearMonth = YearMonth.parse(monthKey)
+            StatsPoint(
+                label = yearMonth.month.getDisplayName(TextStyle.SHORT, locale),
+                bucketKey = monthKey,
+                yieldWh = yieldWh,
+                peakPowerW = null,
+                earnings = earnings,
+                eventCount = eventCounts[monthKey] ?: 0,
+            )
+        }
     }
 
     suspend fun getYearlySeries(deviceIds: List<Long>): List<StatsPoint> {
@@ -575,8 +584,10 @@ class SolarRepository(
         val monthsByDeviceYear = months.groupBy { it.deviceId to it.monthKey.take(4) }
         val daysByDeviceYear = dayYears.associateBy { it.deviceId to it.yearKey }
         val years = (
-            months.map { it.monthKey.take(4) } + dayYears.map { it.yearKey }
+            months.map { it.monthKey.take(4) } + dayYears.map { it.yearKey } + eventYearsForDevices(deviceIds)
             ).toSortedSet()
+        if (years.isEmpty()) return emptyList()
+        val eventCounts = eventCountsByYearKey(deviceIds, years)
         // Only load day rows for device/year pairs that actually use day fallback + tariffs.
         val dayFallbackKeys = buildList {
             for (deviceId in deviceIds) {
@@ -640,12 +651,139 @@ class SolarRepository(
                 yieldWh = yieldWh,
                 peakPowerW = peak,
                 earnings = earnings,
+                eventCount = eventCounts[year] ?: 0,
             )
-        }.filter { it.yieldWh > 0L || it.peakPowerW != null || it.earnings != 0.0 }
+        }.filter { it.yieldWh > 0L || it.peakPowerW != null || it.earnings != 0.0 || it.eventCount > 0 }
     }
 
     suspend fun getRecentEvents(deviceId: Long, limit: Int = 25): List<DeviceEventEntity> =
         dao.getRecentEvents(deviceId, limit)
+
+    suspend fun getEventsForRange(
+        deviceIds: List<Long>,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+        limit: Int = 150,
+    ): List<DeviceEventEntity> {
+        if (deviceIds.isEmpty()) return emptyList()
+        return dao.getEventsForRange(deviceIds, fromEpochSeconds, toEpochSeconds, limit)
+    }
+
+    suspend fun getEventsForLocalWindows(
+        deviceIds: List<Long>,
+        limit: Int = 150,
+        windowForZone: (ZoneId) -> Pair<Long, Long>,
+    ): List<DeviceEventEntity> {
+        if (deviceIds.isEmpty()) return emptyList()
+        if (deviceIds.size == 1) {
+            val zoneId = deviceZone(deviceIds.first())
+            val (fromEpoch, toEpoch) = windowForZone(zoneId)
+            return dao.getEventsForRange(deviceIds, fromEpoch, toEpoch, limit)
+        }
+        return deviceIds.flatMap { deviceId ->
+            val zoneId = deviceZone(deviceId)
+            val (fromEpoch, toEpoch) = windowForZone(zoneId)
+            dao.getEventsForRange(listOf(deviceId), fromEpoch, toEpoch, limit)
+        }.sortedByDescending { it.timestampEpochSeconds }.take(limit)
+    }
+
+    suspend fun currencyForDevices(deviceIds: List<Long>): String? {
+        if (deviceIds.isEmpty()) return null
+        return dao.getTariffsForDevices(deviceIds).firstOrNull()?.currency
+    }
+
+    private suspend fun eventYearsForDevices(deviceIds: List<Long>): Set<String> {
+        val minTs = dao.getMinEventTimestamp(deviceIds) ?: return emptySet()
+        val maxTs = dao.getMaxEventTimestamp(deviceIds) ?: return emptySet()
+        val years = mutableSetOf<String>()
+        for (deviceId in deviceIds) {
+            val zoneId = deviceZone(deviceId)
+            val minYear = Instant.ofEpochSecond(minTs).atZone(zoneId).year
+            val maxYear = Instant.ofEpochSecond(maxTs).atZone(zoneId).year
+            for (year in minYear..maxYear) {
+                years += year.toString()
+            }
+        }
+        return years
+    }
+
+    private suspend fun eventTimestamps(deviceIds: List<Long>, fromEpoch: Long, toEpoch: Long): List<Long> {
+        if (deviceIds.isEmpty()) return emptyList()
+        return dao.getEventTimestamps(deviceIds, fromEpoch, toEpoch)
+    }
+
+    private suspend fun eventCountsByHour(
+        deviceIds: List<Long>,
+        date: LocalDate,
+    ): Map<Int, Int> {
+        val counts = mutableMapOf<Int, Int>()
+        for (deviceId in deviceIds) {
+            val zoneId = deviceZone(deviceId)
+            val fromEpoch = date.atStartOfDay(zoneId).toEpochSecond()
+            val toEpoch = date.plusDays(1).atStartOfDay(zoneId).toEpochSecond() - 1
+            eventTimestamps(listOf(deviceId), fromEpoch, toEpoch).forEach { timestamp ->
+                val hour = Instant.ofEpochSecond(timestamp).atZone(zoneId).hour
+                counts[hour] = (counts[hour] ?: 0) + 1
+            }
+        }
+        return counts
+    }
+
+    private suspend fun eventCountsByEpochDay(
+        deviceIds: List<Long>,
+        yearMonth: YearMonth,
+        lastInclusiveEpochDay: Long,
+    ): Map<Long, Int> {
+        val counts = mutableMapOf<Long, Int>()
+        for (deviceId in deviceIds) {
+            val zoneId = deviceZone(deviceId)
+            val fromEpoch = yearMonth.atDay(1).atStartOfDay(zoneId).toEpochSecond()
+            val toEpoch = LocalDate.ofEpochDay(lastInclusiveEpochDay).plusDays(1)
+                .atStartOfDay(zoneId).toEpochSecond() - 1
+            eventTimestamps(listOf(deviceId), fromEpoch, toEpoch).forEach { timestamp ->
+                val epochDay = Instant.ofEpochSecond(timestamp).atZone(zoneId).toLocalDate().toEpochDay()
+                counts[epochDay] = (counts[epochDay] ?: 0) + 1
+            }
+        }
+        return counts
+    }
+
+    private suspend fun eventCountsByMonthKey(
+        deviceIds: List<Long>,
+        year: Int,
+    ): Map<String, Int> {
+        val counts = mutableMapOf<String, Int>()
+        for (deviceId in deviceIds) {
+            val zoneId = deviceZone(deviceId)
+            val fromEpoch = LocalDate.of(year, 1, 1).atStartOfDay(zoneId).toEpochSecond()
+            val toEpoch = LocalDate.of(year + 1, 1, 1).atStartOfDay(zoneId).toEpochSecond() - 1
+            eventTimestamps(listOf(deviceId), fromEpoch, toEpoch).forEach { timestamp ->
+                val date = Instant.ofEpochSecond(timestamp).atZone(zoneId).toLocalDate()
+                val key = "%04d-%02d".format(date.year, date.monthValue)
+                counts[key] = (counts[key] ?: 0) + 1
+            }
+        }
+        return counts
+    }
+
+    private suspend fun eventCountsByYearKey(
+        deviceIds: List<Long>,
+        years: Set<String>,
+    ): Map<String, Int> {
+        val minYear = years.minOrNull()?.toIntOrNull() ?: return emptyMap()
+        val maxYear = years.maxOrNull()?.toIntOrNull() ?: return emptyMap()
+        val counts = mutableMapOf<String, Int>()
+        for (deviceId in deviceIds) {
+            val zoneId = deviceZone(deviceId)
+            val fromEpoch = LocalDate.of(minYear, 1, 1).atStartOfDay(zoneId).toEpochSecond()
+            val toEpoch = LocalDate.of(maxYear + 1, 1, 1).atStartOfDay(zoneId).toEpochSecond() - 1
+            eventTimestamps(listOf(deviceId), fromEpoch, toEpoch).forEach { timestamp ->
+                val year = Instant.ofEpochSecond(timestamp).atZone(zoneId).year.toString()
+                counts[year] = (counts[year] ?: 0) + 1
+            }
+        }
+        return counts
+    }
 
     suspend fun getRecentSpotSamples(deviceId: Long, limit: Int = 60): List<SpotSampleEntity> =
         dao.getRecentSpotSamples(deviceId, limit)

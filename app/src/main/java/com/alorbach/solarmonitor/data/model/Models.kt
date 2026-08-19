@@ -212,6 +212,7 @@ data class StatsPoint(
     val yieldWh: Long,
     val peakPowerW: Int?,
     val earnings: Double,
+    val eventCount: Int = 0,
 )
 
 /** Per-device yearly day yield projection (avoids loading every day row into memory). */

@@ -1,16 +1,35 @@
 package com.alorbach.solarmonitor.data.importing
 
 import android.content.Context
+import androidx.core.content.ContextCompat
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportJobStatus
 import com.alorbach.solarmonitor.data.repository.SolarRepository
 import com.alorbach.solarmonitor.data.security.CredentialStore
+import com.alorbach.solarmonitor.service.ImportForegroundService
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
+
+class ImportAlreadyRunningException(message: String) : IllegalStateException(message)
+
+data class ImportProgress(
+    val running: Boolean = false,
+    val current: Int = 0,
+    val total: Int = 0,
+    val generation: Long = 0L,
+    val lastMessage: String? = null,
+    val lastSuccess: Boolean? = null,
+)
 
 class ImportManager(
     private val appContext: Context,
@@ -24,13 +43,89 @@ class ImportManager(
         val copyPath: String? = null,
     )
 
+    data class PendingForegroundImport(
+        val request: ImportRequest,
+        val overwriteCopyPath: String?,
+    )
+
+    private val importBusy = AtomicBoolean(false)
+    private val _progress = MutableStateFlow(ImportProgress())
+    val progress: StateFlow<ImportProgress> = _progress.asStateFlow()
+
+    @Volatile private var pendingForeground: PendingForegroundImport? = null
+    @Volatile private var foregroundReserved = false
+
+    /**
+     * Starts a data-sync foreground service so folder/FTP imports keep running
+     * after the screen turns off or the activity stops.
+     */
+    fun startForegroundImport(
+        context: Context,
+        request: ImportRequest,
+        overwriteCopyPath: String? = null,
+    ): Boolean {
+        if (!importBusy.compareAndSet(false, true)) return false
+        foregroundReserved = true
+        pendingForeground = PendingForegroundImport(request, overwriteCopyPath)
+        return try {
+            ContextCompat.startForegroundService(
+                context.applicationContext,
+                ImportForegroundService.startIntent(context.applicationContext),
+            )
+            true
+        } catch (_: Throwable) {
+            pendingForeground = null
+            foregroundReserved = false
+            importBusy.set(false)
+            false
+        }
+    }
+
+    fun takePendingForegroundImport(): PendingForegroundImport? {
+        val pending = pendingForeground
+        pendingForeground = null
+        return pending
+    }
+
+    fun abortForegroundReservation() {
+        pendingForeground = null
+        if (!_progress.value.running) {
+            foregroundReserved = false
+            importBusy.set(false)
+        }
+    }
+
+    fun forceReleaseReservation() {
+        pendingForeground = null
+        foregroundReserved = false
+        importBusy.set(false)
+    }
+
     suspend fun run(
         request: ImportRequest,
         overwriteCopyPath: String? = null,
+        consumeForegroundReservation: Boolean = false,
         onProgress: ((current: Int, total: Int) -> Unit)? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val deviceId = requireNotNull(request.deviceId) { "Device must be selected for import" }
+        if (consumeForegroundReservation) {
+            foregroundReserved = false
+        } else if (!importBusy.compareAndSet(false, true)) {
+            return@withContext Result.failure(
+                ImportAlreadyRunningException(appContext.getString(R.string.import_already_running)),
+            )
+        }
+        _progress.value = ImportProgress(
+            running = true,
+            generation = _progress.value.generation,
+        )
+        var successMessage: String? = null
+        val bridgedProgress: (Int, Int) -> Unit = { current, total ->
+            _progress.update { it.copy(current = current, total = total) }
+            onProgress?.invoke(current, total)
+        }
+        try {
+            runCatching {
+            val deviceId = requireNotNull(request.deviceId) { appContext.getString(R.string.import_device_required) }
             val replay = ImportReplayConfig.fromRequest(request)?.let { config ->
                 if (request is ImportRequest.UrlRequest &&
                     ImportReplayConfig.isSensitiveImportUrl(request.url)
@@ -105,7 +200,7 @@ class ImportManager(
                         importFolderSession(
                             deviceId = deviceId,
                             clearBeforeImport = request.clearBeforeImport,
-                            onProgress = onProgress,
+                            onProgress = bridgedProgress,
                         ) { handle, progress ->
                             val password = resolvePassword(request.password, request.passwordCredentialId)
                             importers.forEachCsvInFtpFolder(
@@ -122,7 +217,7 @@ class ImportManager(
                         importFolderSession(
                             deviceId = deviceId,
                             clearBeforeImport = request.clearBeforeImport,
-                            onProgress = onProgress,
+                            onProgress = bridgedProgress,
                         ) { handle, progress ->
                             val password = resolvePassword(request.password, request.passwordCredentialId)
                             importers.forEachCsvInSftpFolder(
@@ -135,7 +230,7 @@ class ImportManager(
                                 onFile = handle,
                             )
                         }
-                    else -> importSingleSources(deviceId, request, onProgress, overwriteCopyPath)
+                    else -> importSingleSources(deviceId, request, bridgedProgress, overwriteCopyPath)
                 }
 
                 repository.completeImportJob(
@@ -144,6 +239,7 @@ class ImportManager(
                     message = outcome.message,
                     copyPath = outcome.copyPath,
                 )
+                successMessage = outcome.message
                 cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
                 runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
                 Unit
@@ -152,6 +248,20 @@ class ImportManager(
                 runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
                 throw t
             }
+        }.also { result ->
+            _progress.update {
+                it.copy(
+                    running = false,
+                    current = 0,
+                    total = 0,
+                    generation = it.generation + 1,
+                    lastMessage = result.exceptionOrNull()?.message ?: successMessage,
+                    lastSuccess = result.isSuccess,
+                )
+            }
+        }
+        } finally {
+            importBusy.set(false)
         }
     }
 
@@ -229,15 +339,22 @@ class ImportManager(
                 },
                 onProgress,
             )
-            require(fileCount > 0) { "No importable files found" }
-            require(committedFiles > 0) { "No usable CSV data found under folder import" }
+            require(fileCount > 0) { appContext.getString(R.string.import_no_files) }
+            require(committedFiles > 0) { appContext.getString(R.string.import_no_usable_folder) }
             val from = spotFrom
             val to = spotTo
             if (from != null && to != null) {
                 repository.recomputeHourAggregates(deviceId, from, to)
             }
             return ImportOutcome(
-                message = "Imported $committedFiles file(s): $spot spot samples, $days days, $months months, $events events",
+                message = appContext.getString(
+                    R.string.import_result,
+                    committedFiles,
+                    spot,
+                    days,
+                    months,
+                    events,
+                ),
             )
         } catch (t: Throwable) {
             val from = spotFrom
@@ -250,16 +367,16 @@ class ImportManager(
                 }
             }
             val prefix = buildString {
-                if (historyCleared) append("Device history was cleared. ")
+                if (historyCleared) append(appContext.getString(R.string.import_history_cleared)).append(' ')
                 if (committedFiles > 0) {
-                    append("Partial import: $committedFiles file(s) already saved. ")
+                    append(appContext.getString(R.string.import_partial, committedFiles)).append(' ')
                 }
             }
             if (committedFiles > 0) {
                 cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
             }
             if (prefix.isEmpty()) throw t
-            throw IllegalStateException(prefix + (t.message ?: "Import failed"), t)
+            throw IllegalStateException(prefix + (t.message ?: appContext.getString(R.string.import_failed_generic)), t)
         }
     }
 
@@ -288,7 +405,7 @@ class ImportManager(
                         parsed.dayAggregates.isNotEmpty() ||
                         parsed.monthAggregates.isNotEmpty() ||
                         parsed.events.isNotEmpty()
-                    require(hasData) { "Import file $name contained no usable data" }
+                    require(hasData) { appContext.getString(R.string.import_file_no_data, name) }
                     if (clearBeforeImport && !historyCleared) {
                         repository.clearDeviceHistory(deviceId)
                         historyCleared = true
@@ -307,7 +424,7 @@ class ImportManager(
                         events = parsed.events,
                     )
                 }
-                require(fileCount > 0) { "No importable files found" }
+                require(fileCount > 0) { appContext.getString(R.string.import_no_files) }
                 for ((preservedName, staged) in stagedCopies) {
                     lastPreserved = repository.storeImportedCopy(
                         deviceId = deviceId,
@@ -318,17 +435,24 @@ class ImportManager(
                 }
             } catch (t: Throwable) {
                 val prefix = buildString {
-                    if (historyCleared) append("Device history was cleared. ")
-                    if (fileCount > 0) append("Partial import: $fileCount file(s) already saved. ")
+                    if (historyCleared) append(appContext.getString(R.string.import_history_cleared)).append(' ')
+                    if (fileCount > 0) append(appContext.getString(R.string.import_partial, fileCount)).append(' ')
                 }
                 if (prefix.isEmpty()) throw t
-                throw IllegalStateException(prefix + (t.message ?: "Import failed"), t)
+                throw IllegalStateException(prefix + (t.message ?: appContext.getString(R.string.import_failed_generic)), t)
             }
         } finally {
             stagedCopies.forEach { (_, file) -> runCatching { file.delete() } }
         }
         return ImportOutcome(
-            message = "Imported $fileCount file(s): $spot spot samples, $days days, $months months, $events events",
+            message = appContext.getString(
+                R.string.import_result,
+                fileCount,
+                spot,
+                days,
+                months,
+                events,
+            ),
             copyPath = lastPreserved,
         )
     }
@@ -339,7 +463,11 @@ class ImportManager(
     ) {
         suspend fun accept(name: String, bytes: ByteArray) {
             require(bytes.size <= RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES) {
-                "Import file $name exceeds ${RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)} MiB limit"
+                appContext.getString(
+                    R.string.import_file_too_large,
+                    name,
+                    (RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)).toInt(),
+                )
             }
             handle(name, bytes)
         }
@@ -381,7 +509,7 @@ class ImportManager(
         // Empty string is intentional (e.g. anonymous FTP); only null falls back to credentials.
         if (inlinePassword != null) return inlinePassword
         return credentialStore.getSecret(credentialId)
-            ?: error("Missing import password credential")
+            ?: error(appContext.getString(R.string.import_password_missing))
     }
 
     /**
@@ -395,7 +523,7 @@ class ImportManager(
         portOverride: Int? = null,
         urlOverride: String? = null,
     ): ImportRequest {
-        val config = job.replayConfig() ?: error("Import job is not re-runnable")
+        val config = job.replayConfig() ?: error(appContext.getString(R.string.import_not_rerunnable))
         val effective = if (usernameOverride != null) config.copy(username = usernameOverride) else config
         return when {
             passwordOverride != null ->
@@ -408,7 +536,7 @@ class ImportManager(
                 val url = urlOverride?.takeIf { it.isNotBlank() }
                     ?: effective.url
                     ?: job.passwordCredentialId?.let { credentialStore.getSecret(it) }
-                    ?: error("URL missing")
+                    ?: error(appContext.getString(R.string.import_url_missing))
                 ImportRequest.UrlRequest(
                     deviceId = effective.deviceId,
                     url = url,
@@ -422,7 +550,7 @@ class ImportManager(
                     passwordCredentialId = job.passwordCredentialId,
                     portOverride = portOverride,
                 )
-            else -> error("Password required to re-run this import")
+            else -> error(appContext.getString(R.string.import_password_required))
         }
     }
 }

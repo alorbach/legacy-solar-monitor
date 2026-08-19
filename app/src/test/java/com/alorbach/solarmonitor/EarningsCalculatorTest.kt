@@ -6,6 +6,7 @@ import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.domain.EarningsCalculator
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EarningsCalculatorTest {
@@ -41,5 +42,40 @@ class EarningsCalculatorTest {
         val earnings = EarningsCalculator.earningsForMonth(month, tariffs)
 
         assertEquals(15.0, earnings, 0.0001)
+    }
+}
+
+class YieldFormattingTest {
+    @Test
+    fun earningsLabelIncludesEuroSymbol() {
+        val label = com.alorbach.solarmonitor.domain.YieldFormatting.earningsLabel(
+            124.67,
+            "EUR",
+            java.util.Locale.GERMANY,
+        )
+        assertTrue(label.contains("124,67"))
+        assertTrue(label.contains("€") || label.contains("EUR"))
+    }
+}
+
+class StatsSeriesFillTest {
+    @Test
+    fun currentMonthStopsAtToday() {
+        val today = LocalDate.of(2026, 8, 18)
+        val last = com.alorbach.solarmonitor.domain.StatsSeriesFill.lastInclusiveEpochDay(
+            java.time.YearMonth.of(2026, 8),
+            today,
+        )
+        assertEquals(today.toEpochDay(), last)
+    }
+
+    @Test
+    fun pastMonthFillsThroughMonthEnd() {
+        val today = LocalDate.of(2026, 8, 18)
+        val last = com.alorbach.solarmonitor.domain.StatsSeriesFill.lastInclusiveEpochDay(
+            java.time.YearMonth.of(2026, 4),
+            today,
+        )
+        assertEquals(LocalDate.of(2026, 4, 30).toEpochDay(), last)
     }
 }

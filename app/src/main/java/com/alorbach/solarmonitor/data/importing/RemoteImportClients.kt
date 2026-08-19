@@ -1,5 +1,7 @@
 package com.alorbach.solarmonitor.data.importing
 
+import android.content.Context
+import com.alorbach.solarmonitor.R
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.HostKey
 import com.jcraft.jsch.HostKeyRepository
@@ -30,17 +32,25 @@ object SharedHttpClients {
 }
 
 class UrlImportClient(
+    private val context: Context? = null,
     private val okHttpClient: OkHttpClient = SharedHttpClients.okHttp,
 ) {
     fun download(url: String): ByteArray {
         val request = Request.Builder().url(url).build()
         okHttpClient.newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "URL import failed: ${response.code}" }
-            val body = response.body ?: error("Empty response body")
+            require(response.isSuccessful) {
+                context?.getString(R.string.import_url_http_failed, response.code)
+                    ?: "URL import failed: ${response.code}"
+            }
+            val body = response.body ?: error(
+                context?.getString(R.string.import_empty_response) ?: "Empty response body",
+            )
             val declared = body.contentLength()
             if (declared >= 0) {
                 require(declared <= RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES) {
-                    "Import file exceeds ${RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)} MiB limit"
+                    val mib = (RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)).toInt()
+                    context?.getString(R.string.import_file_too_large_mib, mib)
+                        ?: "Import file exceeds $mib MiB limit"
                 }
             }
             return body.byteStream().use { RemoteBrowseHelpers.readBytesCapped(it) }
@@ -48,41 +58,15 @@ class UrlImportClient(
     }
 }
 
-class FtpImportClient {
-    fun download(
-        host: String,
-        port: Int = DEFAULT_PORT,
-        username: String,
-        password: String,
-        path: String,
-    ): ByteArray = withClient(host, port, username, password) { ftp ->
-        downloadOn(ftp, path)
-    }
-
-    fun list(
-        host: String,
-        port: Int = DEFAULT_PORT,
-        username: String,
-        password: String,
-        path: String,
-    ): List<RemoteEntry> = withClient(host, port, username, password) { ftp ->
-        listOn(ftp, path)
-    }
-
-    /** Keep one FTP login for recursive listing + many downloads. */
-    fun <T> withSession(
-        host: String,
-        port: Int = DEFAULT_PORT,
-        username: String,
-        password: String,
-        block: (FtpSession) -> T,
-    ): T = withClient(host, port, username, password) { ftp ->
-        block(FtpSession(ftp))
-    }
-
-    class FtpSession internal constructor(private val ftp: FTPClient) {
-        fun list(path: String): List<RemoteEntry> = listOn(ftp, path)
-        fun download(path: String): ByteArray = downloadOn(ftp, path)
+class FtpImportClient(
+    private val context: Context? = null,
+) {
+    class FtpSession internal constructor(
+        private val ftp: FTPClient,
+        private val context: Context?,
+    ) {
+        fun list(path: String): List<RemoteEntry> = listOn(ftp, path, context)
+        fun download(path: String): ByteArray = downloadOn(ftp, path, context)
         fun noop() {
             check(ftp.sendNoOp()) { "FTP NOOP failed" }
         }
@@ -96,6 +80,37 @@ class FtpImportClient {
         password: String,
     ): String = withClient(host, port, username, password) { ftp ->
         RemoteBrowseHelpers.normalizeDirectory(ftp.printWorkingDirectory().orEmpty().ifBlank { "/" })
+    }
+
+    fun download(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): ByteArray = withClient(host, port, username, password) { ftp ->
+        downloadOn(ftp, path, context)
+    }
+
+    fun list(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        path: String,
+    ): List<RemoteEntry> = withClient(host, port, username, password) { ftp ->
+        listOn(ftp, path, context)
+    }
+
+    /** Keep one FTP login for recursive listing + many downloads. */
+    fun <T> withSession(
+        host: String,
+        port: Int = DEFAULT_PORT,
+        username: String,
+        password: String,
+        block: (FtpSession) -> T,
+    ): T = withClient(host, port, username, password) { ftp ->
+        block(FtpSession(ftp, context))
     }
 
     private fun <T> withClient(
@@ -128,10 +143,10 @@ class FtpImportClient {
     companion object {
         const val DEFAULT_PORT = 21
 
-        private fun listOn(ftp: FTPClient, path: String): List<RemoteEntry> {
+        private fun listOn(ftp: FTPClient, path: String, context: Context?): List<RemoteEntry> {
             val dir = RemoteBrowseHelpers.normalizeDirectory(path)
             val files: Array<FTPFile> = ftp.listFiles(dir)
-                ?: error("FTP list failed for $dir")
+                ?: error(context?.getString(R.string.import_ftp_list_failed, dir) ?: "FTP list failed for $dir")
             return files.mapNotNull { file ->
                 val name = file.name ?: return@mapNotNull null
                 if (name == "." || name == "..") return@mapNotNull null
@@ -144,13 +159,16 @@ class FtpImportClient {
             }
         }
 
-        private fun downloadOn(ftp: FTPClient, path: String): ByteArray {
-            val stream = ftp.retrieveFileStream(path) ?: error("FTP retrieve failed for $path")
+        private fun downloadOn(ftp: FTPClient, path: String, context: Context?): ByteArray {
+            val stream = ftp.retrieveFileStream(path)
+                ?: error(context?.getString(R.string.import_ftp_retrieve_failed, path) ?: "FTP retrieve failed for $path")
             try {
                 return RemoteBrowseHelpers.readBytesCapped(stream)
             } finally {
                 runCatching { stream.close() }
-                check(ftp.completePendingCommand()) { "FTP retrieve failed for $path" }
+                check(ftp.completePendingCommand()) {
+                    context?.getString(R.string.import_ftp_retrieve_failed, path) ?: "FTP retrieve failed for $path"
+                }
             }
         }
     }

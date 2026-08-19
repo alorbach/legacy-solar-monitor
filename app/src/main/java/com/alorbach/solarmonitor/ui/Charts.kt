@@ -4,9 +4,11 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -41,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.StatsPoint
+import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -106,7 +110,7 @@ fun ProductionChart(points: List<DailyPoint>) {
                 }
                 // Peak label (kWh) at top-left.
                 drawContext.canvas.nativeCanvas.drawText(
-                    compactKwhLabel(maxYield.toLong()),
+                    YieldFormatting.compactKwhNumber(maxYield.toLong()),
                     chartLeft,
                     chartTop - 4f,
                     yPaint,
@@ -153,24 +157,30 @@ fun ProductionChart(points: List<DailyPoint>) {
 }
 
 @Composable
-fun StatsBarChart(points: List<StatsPoint>) {
+fun StatsBarChart(
+    points: List<StatsPoint>,
+    selectedBucketKey: String? = null,
+    onBarClick: ((String) -> Unit)? = null,
+) {
     val colors = MaterialTheme.colorScheme
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
+    val midYield = (maxYield / 2f).toLong()
     val outsideLabelColor = colors.onBackground.toArgb()
     val insideLabelColor = Color(0xFF17212B).toArgb()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
+    val eventMarkerColor = colors.error
+    val selectedBarColor = Color(0xFFE09B00)
+    val defaultBarColor = Color(0xFFF4B400)
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
-    // >10 bars: scroll sideways so year/day/hour labels stay readable.
-    val enableScroll = points.size > 10
-    val minSlotWidth = 52.dp
     val emptyHint = stringResource(R.string.chart_empty_hint)
     val chartDescription = stringResource(
         R.string.chart_description,
         points.size,
         YieldFormatting.whToKwhLabel(points.maxOfOrNull { it.yieldWh }),
     )
+    val yAxisWidth = 44.dp
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -190,23 +200,42 @@ fun StatsBarChart(points: List<StatsPoint>) {
             Text(stringResource(R.string.chart_empty_hint))
         } else {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val contentWidth = if (enableScroll) {
-                    maxOf(maxWidth, minSlotWidth * points.size)
-                } else {
-                    maxWidth
+                val barViewport = (maxWidth - yAxisWidth).coerceAtLeast(1.dp)
+                val visibleBars = StatsSeriesFill.VISIBLE_BARS
+                val slotWidth = barViewport / visibleBars
+                val contentWidth = slotWidth * points.size
+                val isScrolling = contentWidth > barViewport
+                val manyBars = points.size >= StatsSeriesFill.VISIBLE_BARS && !isScrolling
+                val hasEventMarkers = points.any { it.eventCount > 0 }
+                val longestAxisLabel = points.maxOf { it.label.length }
+                val verticalAxisLabels = longestAxisLabel >= 5
+                val chartTopPx = with(density) {
+                    val base = if (manyBars) 8.dp else 28.dp
+                    (if (hasEventMarkers) base + 10.dp else base).toPx()
                 }
-                val isScrolling = contentWidth > maxWidth
+                val axisProbe = remember(points, isScrolling) {
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        textSize = with(density) { if (isScrolling) 11.sp.toPx() else 10.sp.toPx() }
+                    }
+                }
+                val longestAxisWidth = points.maxOf { axisProbe.measureText(it.label) }
+                val chartBottomPx = with(density) {
+                    if (verticalAxisLabels) {
+                        (longestAxisWidth + 16f).coerceAtLeast(48.dp.toPx())
+                    } else {
+                        28.dp.toPx()
+                    }
+                }
                 val scrollModifier = if (isScrolling) {
                     Modifier.horizontalScroll(scrollState)
                 } else {
                     Modifier
                 }
-                // Auto-jump once per bucket structure (not on every live yield update).
                 val structureKey = remember(points) {
                     points.joinToString("\u0000") { it.bucketKey }
                 }
                 var scrolledStructure by remember { mutableStateOf<String?>(null) }
-                LaunchedEffect(structureKey, contentWidth, maxWidth, scrollState.maxValue) {
+                LaunchedEffect(structureKey, contentWidth, barViewport, scrollState.maxValue) {
                     if (!isScrolling) {
                         scrollState.scrollTo(0)
                         scrolledStructure = structureKey
@@ -215,43 +244,83 @@ fun StatsBarChart(points: List<StatsPoint>) {
                     val maxScroll = scrollState.maxValue
                     if (maxScroll <= 0) return@LaunchedEffect
                     if (scrolledStructure == structureKey) return@LaunchedEffect
-                    val firstProd = points.indexOfFirst { it.yieldWh > 0 }.coerceAtLeast(0)
+                    val firstProd = points.indexOfFirst { it.yieldWh > 0 || it.eventCount > 0 }.coerceAtLeast(0)
                     val slotPx = with(density) { contentWidth.toPx() } / points.size.coerceAtLeast(1)
-                    val viewportPx = with(density) { maxWidth.toPx() }
+                    val viewportPx = with(density) { barViewport.toPx() }
                     val target = (firstProd * slotPx - viewportPx * 0.08f)
                         .roundToInt()
                         .coerceIn(0, maxScroll)
                     scrollState.scrollTo(target)
                     scrolledStructure = structureKey
                 }
-                Canvas(
-                    modifier = scrollModifier
-                        .width(contentWidth)
-                        .fillMaxHeight(),
-                ) {
-                    val manyBars = points.size >= 12 && !isScrolling
-                    val longestAxisLabel = points.maxOf { it.label.length }
-                    // Hours ("14:00") and years ("2025"): upright vertical is clearer than diagonal.
-                    val verticalAxisLabels = longestAxisLabel >= 4 || points.size >= 12
-                    val chartTop = if (manyBars) 8.dp.toPx() else 28.dp.toPx()
+                Row(modifier = Modifier.fillMaxSize()) {
+                    Canvas(
+                        modifier = Modifier
+                            .width(yAxisWidth)
+                            .fillMaxHeight(),
+                    ) {
+                        val chartHeight = (size.height - chartTopPx - chartBottomPx).coerceAtLeast(1f)
+                        val axisY = chartTopPx + chartHeight
+                        val yPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            color = axisLabelColor
+                            textSize = 10.sp.toPx()
+                            textAlign = Paint.Align.RIGHT
+                        }
+                        val labelX = size.width - 4.dp.toPx()
+                        drawContext.canvas.nativeCanvas.drawText(
+                            YieldFormatting.compactKwhNumber(maxYield.toLong()),
+                            labelX,
+                            chartTopPx + yPaint.textSize * 0.35f,
+                            yPaint,
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            YieldFormatting.compactKwhNumber(midYield),
+                            labelX,
+                            chartTopPx + chartHeight / 2f + yPaint.textSize * 0.35f,
+                            yPaint,
+                        )
+                        drawContext.canvas.nativeCanvas.drawText(
+                            YieldFormatting.compactKwhNumber(0L),
+                            labelX,
+                            axisY,
+                            yPaint,
+                        )
+                    }
+                    Canvas(
+                        modifier = scrollModifier
+                            .width(contentWidth)
+                            .fillMaxHeight()
+                            .then(
+                                if (onBarClick == null) {
+                                    Modifier
+                                } else {
+                                    Modifier.pointerInput(points, contentWidth) {
+                                        detectTapGestures { offset ->
+                                            val inset = with(density) { 12.dp.toPx() }
+                                            val usableWidth = (size.width - inset * 2f).coerceAtLeast(1f)
+                                            val slot = usableWidth / points.size.coerceAtLeast(1)
+                                            val index = ((offset.x - inset) / slot).toInt()
+                                            if (index in points.indices) {
+                                                onBarClick(points[index].bucketKey)
+                                            }
+                                        }
+                                    }
+                                },
+                            ),
+                    ) {
                     val minSp = 10.sp.toPx()
-                    val axisPaintProbe = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        textSize = if (isScrolling || enableScroll) 11.sp.toPx() else 10.sp.toPx()
-                    }
-                    val longestAxisWidth = points.maxOf { axisPaintProbe.measureText(it.label) }
-                    val chartBottom = if (verticalAxisLabels) {
-                        (longestAxisWidth + 16f).coerceAtLeast(48.dp.toPx())
-                    } else {
-                        24.dp.toPx()
-                    }
+                    val chartTop = chartTopPx
+                    val chartBottom = chartBottomPx
+                    val inset = 12.dp.toPx()
+                    val usableWidth = (size.width - inset * 2f).coerceAtLeast(1f)
+                    val slot = usableWidth / points.size.coerceAtLeast(1)
                     val chartHeight = (size.height - chartTop - chartBottom).coerceAtLeast(1f)
-                    val barWidth = size.width / (points.size * 1.4f)
-                    val gap = barWidth * 0.4f
+                    val barWidth = slot * 0.62f
                     val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                         textSize = when {
-                            isScrolling || enableScroll -> min(barWidth * 0.55f, 13.sp.toPx()).coerceAtLeast(minSp)
+                            isScrolling -> min(barWidth * 0.55f, 13.sp.toPx()).coerceAtLeast(minSp)
                             manyBars -> min(barWidth * 0.85f, 12.sp.toPx()).coerceAtLeast(minSp)
                             else -> min(barWidth * 0.42f, 14.sp.toPx()).coerceAtLeast(11.sp.toPx())
                         }
@@ -261,36 +330,57 @@ fun StatsBarChart(points: List<StatsPoint>) {
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
                         textSize = when {
-                            isScrolling || enableScroll -> min(barWidth * 0.7f, 12.sp.toPx()).coerceIn(minSp, 13.sp.toPx())
+                            isScrolling -> min(barWidth * 0.7f, 12.sp.toPx()).coerceIn(minSp, 13.sp.toPx())
                             verticalAxisLabels -> min(barWidth * 0.95f, 12.sp.toPx()).coerceIn(minSp, 12.sp.toPx())
                             else -> min(barWidth * 0.55f, 13.sp.toPx()).coerceIn(minSp, 14.sp.toPx())
                         }
                     }
                     val axisStep = when {
-                        isScrolling || enableScroll || points.size <= 14 -> 1
+                        isScrolling || points.size <= 14 -> 1
                         points.size <= 24 -> 2
                         else -> (points.size / 12).coerceAtLeast(2)
                     }
 
                     val axisY = chartTop + chartHeight
+                    val gridColor = axisLineColor.copy(alpha = 0.22f)
+                    listOf(0.5f, 1f).forEach { fraction ->
+                        val y = axisY - chartHeight * fraction
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(inset, y),
+                            end = Offset(size.width - inset, y),
+                            strokeWidth = 1.5f,
+                        )
+                    }
                     drawLine(
                         color = axisLineColor,
-                        start = Offset(0f, axisY),
-                        end = Offset(size.width, axisY),
+                        start = Offset(inset, axisY),
+                        end = Offset(size.width - inset, axisY),
                         strokeWidth = 2f,
                     )
 
                     points.forEachIndexed { index, point ->
                         val height = if (maxYield <= 0f) 0f else (point.yieldWh / maxYield) * chartHeight
-                        val left = index * (barWidth + gap)
+                        val left = inset + index * slot + (slot - barWidth) / 2f
                         val top = chartTop + chartHeight - height
                         drawRect(
-                            color = Color(0xFFF4B400),
+                            color = if (point.bucketKey == selectedBucketKey) selectedBarColor else defaultBarColor,
                             topLeft = Offset(left, top),
                             size = Size(barWidth, height.coerceAtLeast(0f)),
                         )
+                        if (point.eventCount > 0) {
+                            val markerRadius = 5.dp.toPx()
+                            drawCircle(
+                                color = eventMarkerColor,
+                                radius = markerRadius,
+                                center = Offset(
+                                    left + barWidth / 2f,
+                                    (top - markerRadius - 2.dp.toPx()).coerceAtLeast(markerRadius + 1f),
+                                ),
+                            )
+                        }
 
-                        val label = compactKwhLabel(point.yieldWh)
+                        val label = YieldFormatting.compactKwhNumber(point.yieldWh)
                         val centerX = left + barWidth / 2f
                         val labelWidthEstimate = textPaint.measureText(label)
                         val drawVerticalInside = manyBars || (!isScrolling && barWidth < 36f)
@@ -361,17 +451,9 @@ fun StatsBarChart(points: List<StatsPoint>) {
                         }
                     }
                 }
+                }
             }
         }
     }
 }
 
-/** Compact kWh for bar labels, e.g. "496,3" / "0,85" (no unit — unit is implied by the chart). */
-private fun compactKwhLabel(yieldWh: Long, locale: Locale = Locale.getDefault()): String {
-    val kwh = yieldWh / 1000.0
-    return when {
-        kwh >= 100 -> String.format(locale, "%.0f", kwh)
-        kwh >= 10 -> String.format(locale, "%.1f", kwh)
-        else -> String.format(locale, "%.2f", kwh)
-    }
-}

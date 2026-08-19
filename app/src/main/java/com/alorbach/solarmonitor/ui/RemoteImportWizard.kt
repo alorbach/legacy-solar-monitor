@@ -50,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -91,10 +92,10 @@ fun RemoteImportWizard(
     importManager: ImportManager,
     initialDeviceId: Long?,
     onDismiss: () -> Unit,
-    onImportSucceeded: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val colors = MaterialTheme.colorScheme
+    val context = LocalContext.current
 
     var step by rememberSaveable { mutableStateOf(WizardStep.Protocol.name) }
     val currentStep = WizardStep.valueOf(step)
@@ -256,7 +257,7 @@ fun RemoteImportWizard(
                     selectedCsvCount = 0
                     step = WizardStep.Browse.name
                 },
-                onFailure = { errorMessage = it.message ?: "Connection failed" },
+                onFailure = { errorMessage = it.message ?: context.getString(R.string.remote_import_connection_failed) },
             )
         }
     }
@@ -275,7 +276,7 @@ fun RemoteImportWizard(
                     selectedIsDirectory = false
                     selectedCsvCount = 0
                 },
-                onFailure = { errorMessage = it.message ?: "List failed" },
+                onFailure = { errorMessage = it.message ?: context.getString(R.string.remote_import_list_failed) },
             )
         }
     }
@@ -289,7 +290,7 @@ fun RemoteImportWizard(
                 .fold(
                     onSuccess = { count ->
                         if (count == 0) {
-                            errorMessage = "No CSV files found under $normalized"
+                            errorMessage = context.getString(R.string.import_no_csv_under, normalized)
                         } else {
                             selectedPath = normalized
                             selectedIsDirectory = true
@@ -298,7 +299,7 @@ fun RemoteImportWizard(
                             errorMessage = null
                         }
                     },
-                    onFailure = { errorMessage = it.message ?: "List failed" },
+                    onFailure = { errorMessage = it.message ?: context.getString(R.string.remote_import_list_failed) },
                 )
             busy = false
         }
@@ -346,7 +347,7 @@ fun RemoteImportWizard(
                         result.fold(
                             onSuccess = { count ->
                                 if (count == 0) {
-                                    errorMessage = "No CSV files found under $normalized"
+                                    errorMessage = context.getString(R.string.import_no_csv_under, normalized)
                                 } else {
                                     selectedPath = normalized
                                     selectedIsDirectory = true
@@ -355,7 +356,7 @@ fun RemoteImportWizard(
                                     step = WizardStep.Confirm.name
                                 }
                             },
-                            onFailure = { errorMessage = it.message ?: "List failed" },
+                            onFailure = { errorMessage = it.message ?: context.getString(R.string.remote_import_list_failed) },
                         )
                     }
                 } else {
@@ -372,8 +373,11 @@ fun RemoteImportWizard(
                 if (path.isBlank()) return
                 val asDirectory = selectedIsDirectory || RemoteBrowseHelpers.looksLikeDirectory(path)
                 if (asDirectory && selectedCsvCount > RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES) {
-                    errorMessage = "Folder import exceeds ${RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES} CSV files " +
-                        "(found $selectedCsvCount). Choose a smaller subfolder."
+                    errorMessage = context.getString(
+                        R.string.import_folder_too_many,
+                        RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES,
+                        selectedCsvCount,
+                    )
                     return
                 }
                 scope.launch {
@@ -391,7 +395,11 @@ fun RemoteImportWizard(
                             path = path,
                             directory = asDirectory,
                             clearBeforeImport = clearBeforeImport,
-                            sourceLabel = if (asDirectory) "FTP folder $host:$path" else "FTP $host:$path",
+                            sourceLabel = if (asDirectory) {
+                                context.getString(R.string.import_source_ftp_folder, host.trim(), path)
+                            } else {
+                                context.getString(R.string.import_source_ftp_file, host.trim(), path)
+                            },
                         )
                         RemoteImportProtocol.SFTP -> ImportRequest.SftpRequest(
                             deviceId = deviceId,
@@ -402,28 +410,19 @@ fun RemoteImportWizard(
                             path = path,
                             directory = asDirectory,
                             clearBeforeImport = clearBeforeImport,
-                            sourceLabel = if (asDirectory) "SFTP folder $host:$path" else "SFTP $host:$path",
+                            sourceLabel = if (asDirectory) {
+                                context.getString(R.string.import_source_sftp_folder, host.trim(), path)
+                            } else {
+                                context.getString(R.string.import_source_sftp_file, host.trim(), path)
+                            },
                         )
                     }
-                    val result = importManager.run(request) { current, total ->
-                        // Throttle Main updates: avoid one coroutine per file on ~25k imports.
-                        if (current == 1 || current == total || current % 25 == 0) {
-                            scope.launch(Dispatchers.Main.immediate) {
-                                progressCurrent = current
-                                progressTotal = total
-                            }
-                        }
+                    if (!importManager.startForegroundImport(context, request)) {
+                        errorMessage = context.getString(R.string.import_already_running)
+                        busy = false
+                        return@launch
                     }
-                    busy = false
-                    progressCurrent = 0
-                    progressTotal = 0
-                    result.fold(
-                        onSuccess = {
-                            onImportSucceeded()
-                            onDismiss()
-                        },
-                        onFailure = { errorMessage = it.message ?: "Import failed" },
-                    )
+                    onDismiss()
                 }
             }
         }

@@ -23,6 +23,7 @@ data class DeviceLiveState(
     val active: Boolean = false,
     val message: String = "",
     val latest: SpotSampleEntity? = null,
+    val connected: Boolean = false,
 )
 
 data class LiveMonitoringState(
@@ -38,14 +39,11 @@ data class LiveMonitoringState(
                 return devices.values.lastOrNull()?.message?.takeIf { it.isNotBlank() } ?: idleLabel
             }
             val activeStates = activeDeviceIds.mapNotNull { devices[it] }
-            val connected = activeStates.count {
-                it.message.contains("OK", ignoreCase = true) ||
-                    it.message.contains("Connected", ignoreCase = true) ||
-                    it.latest != null
-            }
+            val connected = activeStates.count { it.connected }
             return if (activeDeviceIds.size == 1) {
                 activeStates.firstOrNull()?.message ?: idleLabel
             } else {
+                // Keep "total / connected" formatting; values are digits only.
                 "${activeDeviceIds.size} / $connected"
             }
         }
@@ -108,6 +106,7 @@ class LiveMonitoringRepository(
         message: String,
         latest: SpotSampleEntity? = null,
         keepLatest: Boolean = false,
+        connected: Boolean? = null,
     ) {
         _state.update { current ->
             val previous = current.devices[deviceId]
@@ -121,6 +120,7 @@ class LiveMonitoringRepository(
                         keepLatest -> previous?.latest
                         else -> previous?.latest
                     },
+                    connected = connected ?: previous?.connected ?: false,
                 )
             )
             current.copy(
@@ -177,6 +177,7 @@ class LiveMonitoringRepository(
                     active = continuousDeviceIds.contains(deviceId),
                     message = snapshot.status ?: appContext.getString(R.string.live_connected),
                     latest = snapshot,
+                    connected = true,
                 )
             }
             runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
@@ -195,6 +196,7 @@ class LiveMonitoringRepository(
                     active = continuousDeviceIds.contains(deviceId),
                     message = message,
                     keepLatest = true,
+                    connected = false,
                 )
             }
         }

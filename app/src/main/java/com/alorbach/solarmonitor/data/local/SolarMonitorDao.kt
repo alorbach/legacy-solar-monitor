@@ -141,6 +141,34 @@ interface SolarMonitorDao {
     @Query("SELECT * FROM device_events WHERE deviceId = :deviceId ORDER BY timestampEpochSeconds DESC LIMIT :limit")
     suspend fun getRecentEvents(deviceId: Long, limit: Int): List<DeviceEventEntity>
 
+    @Query(
+        "SELECT * FROM device_events WHERE deviceId IN (:deviceIds) " +
+            "AND timestampEpochSeconds BETWEEN :fromEpochSeconds AND :toEpochSeconds " +
+            "ORDER BY timestampEpochSeconds DESC LIMIT :limit",
+    )
+    suspend fun getEventsForRange(
+        deviceIds: List<Long>,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+        limit: Int,
+    ): List<DeviceEventEntity>
+
+    @Query("SELECT MIN(timestampEpochSeconds) FROM device_events WHERE deviceId IN (:deviceIds)")
+    suspend fun getMinEventTimestamp(deviceIds: List<Long>): Long?
+
+    @Query("SELECT MAX(timestampEpochSeconds) FROM device_events WHERE deviceId IN (:deviceIds)")
+    suspend fun getMaxEventTimestamp(deviceIds: List<Long>): Long?
+
+    @Query(
+        "SELECT timestampEpochSeconds FROM device_events WHERE deviceId IN (:deviceIds) " +
+            "AND timestampEpochSeconds BETWEEN :fromEpochSeconds AND :toEpochSeconds",
+    )
+    suspend fun getEventTimestamps(
+        deviceIds: List<Long>,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+    ): List<Long>
+
     @Query("SELECT * FROM import_jobs ORDER BY createdAtEpochSeconds DESC LIMIT 50")
     fun observeImportJobs(): Flow<List<ImportJobEntity>>
 

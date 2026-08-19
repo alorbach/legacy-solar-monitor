@@ -1,6 +1,5 @@
 package com.alorbach.solarmonitor.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,11 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.AppContainer
+import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.domain.YieldFormatting
+import java.time.Instant
 import java.time.LocalDate
 import java.time.Year
 import java.time.YearMonth
@@ -73,6 +74,11 @@ fun StatisticsScreen(
     }
     var anchorDate by remember { mutableStateOf(LocalDate.now(zoneId)) }
     var points by remember { mutableStateOf<List<StatsPoint>>(emptyList()) }
+    var periodEvents by remember { mutableStateOf<List<DeviceEventEntity>>(emptyList()) }
+    var selectedBucketKey by remember { mutableStateOf<String?>(null) }
+    var selectedBucketEvents by remember { mutableStateOf<List<DeviceEventEntity>?>(null) }
+    var eventFilter by remember { mutableStateOf(EventFilter.ALL) }
+    var currency by remember { mutableStateOf("EUR") }
 
     LaunchedEffect(devices) {
         if (selectedDeviceId != null && devices.none { it.id == selectedDeviceId }) {
@@ -105,7 +111,7 @@ fun StatisticsScreen(
     } else {
         ""
     }
-    LaunchedEffect(granularity, selectedDeviceId, anchorDate, dataEpoch, deviceIdsKey, liveRevision) {
+    LaunchedEffect(granularity, selectedDeviceId, anchorDate, dataEpoch, deviceIdsKey, liveRevision, zoneId) {
         val ids = if (selectedDeviceId == null) {
             devices.map { it.id }
         } else {
@@ -116,6 +122,28 @@ fun StatisticsScreen(
             StatsGranularity.DAY -> container.repository.getDailySeries(ids, YearMonth.from(anchorDate))
             StatsGranularity.MONTH -> container.repository.getMonthlySeries(ids, anchorDate.year)
             StatsGranularity.YEAR -> container.repository.getYearlySeries(ids)
+        }
+        currency = container.repository.currencyForDevices(ids) ?: "EUR"
+        periodEvents = container.repository.getEventsForLocalWindows(ids) { zone ->
+            eventWindow(granularity, anchorDate, zone)
+        }
+        selectedBucketKey = null
+        selectedBucketEvents = null
+    }
+
+    LaunchedEffect(selectedBucketKey, granularity, selectedDeviceId, anchorDate, deviceIdsKey) {
+        val key = selectedBucketKey
+        if (key == null) {
+            selectedBucketEvents = null
+            return@LaunchedEffect
+        }
+        val ids = if (selectedDeviceId == null) {
+            devices.map { it.id }
+        } else {
+            listOfNotNull(selectedDeviceId)
+        }
+        selectedBucketEvents = container.repository.getEventsForLocalWindows(ids) { zone ->
+            bucketWindow(granularity, key, anchorDate, zone) ?: (0L to -1L)
         }
     }
 
@@ -252,17 +280,33 @@ fun StatisticsScreen(
                     Text(
                         stringResource(
                             R.string.stats_earnings,
-                            YieldFormatting.earningsLabel(totalEarnings, null),
+                            YieldFormatting.earningsLabel(totalEarnings, currency),
                         ),
                         color = colors.onSurfaceVariant,
                     )
-                    StatsBarChart(points)
+                    Text(
+                        stringResource(R.string.stats_chart_unit),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                    StatsBarChart(
+                        points = points,
+                        selectedBucketKey = selectedBucketKey,
+                        onBarClick = { key ->
+                            selectedBucketKey = if (selectedBucketKey == key) null else key
+                        },
+                    )
                 }
             }
         }
         if (points.isEmpty()) {
             item {
-                Text(stringResource(R.string.chart_empty_hint), color = colors.onSurfaceVariant)
+                Text(
+                    stringResource(
+                        if (periodEvents.isEmpty()) R.string.chart_empty_hint else R.string.chart_empty_with_events,
+                    ),
+                    color = colors.onSurfaceVariant,
+                )
             }
         }
         items(points, key = { it.bucketKey }) { point ->
@@ -289,13 +333,84 @@ fun StatisticsScreen(
                     Column(horizontalAlignment = Alignment.End) {
                         Text(YieldFormatting.whToKwhLabel(point.yieldWh), fontWeight = FontWeight.Bold)
                         Text(
-                            YieldFormatting.earningsLabel(point.earnings, null),
+                            YieldFormatting.earningsLabel(point.earnings, currency),
                             color = colors.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
             }
+        }
+        item {
+            EventListBlock(
+                events = selectedBucketEvents ?: periodEvents,
+                zoneId = zoneId,
+                filter = eventFilter,
+                onFilter = { eventFilter = it },
+                title = stringResource(R.string.stats_events),
+                emptyText = stringResource(R.string.stats_events_empty),
+                selectedBucketKey = selectedBucketKey,
+                onClearBucket = { selectedBucketKey = null },
+            )
+        }
+    }
+}
+
+private fun eventWindow(
+    granularity: StatsGranularity,
+    anchorDate: LocalDate,
+    zoneId: ZoneId,
+): Pair<Long, Long> {
+    return when (granularity) {
+        StatsGranularity.HOUR -> {
+            val start = anchorDate.atStartOfDay(zoneId).toEpochSecond()
+            val end = anchorDate.plusDays(1).atStartOfDay(zoneId).toEpochSecond() - 1
+            start to end
+        }
+        StatsGranularity.DAY -> {
+            val month = YearMonth.from(anchorDate)
+            val start = month.atDay(1).atStartOfDay(zoneId).toEpochSecond()
+            val end = month.plusMonths(1).atDay(1).atStartOfDay(zoneId).toEpochSecond() - 1
+            start to end
+        }
+        StatsGranularity.MONTH -> {
+            val start = LocalDate.of(anchorDate.year, 1, 1).atStartOfDay(zoneId).toEpochSecond()
+            val end = LocalDate.of(anchorDate.year + 1, 1, 1).atStartOfDay(zoneId).toEpochSecond() - 1
+            start to end
+        }
+        StatsGranularity.YEAR -> 0L to Instant.now().epochSecond
+    }
+}
+
+private fun bucketWindow(
+    granularity: StatsGranularity,
+    bucketKey: String,
+    anchorDate: LocalDate,
+    zoneId: ZoneId,
+): Pair<Long, Long>? {
+    return when (granularity) {
+        StatsGranularity.HOUR -> {
+            val hour = bucketKey.toIntOrNull()?.coerceIn(0, 23) ?: return null
+            val local = java.time.LocalDateTime.of(anchorDate, java.time.LocalTime.of(hour, 0))
+            val start = local.atZone(zoneId).withEarlierOffsetAtOverlap().toEpochSecond()
+            val endExclusive = local.plusHours(1).atZone(zoneId).withLaterOffsetAtOverlap().toEpochSecond()
+            start to (endExclusive - 1)
+        }
+        StatsGranularity.DAY -> {
+            val epochDay = bucketKey.toLongOrNull() ?: return null
+            val date = LocalDate.ofEpochDay(epochDay)
+            val start = date.atStartOfDay(zoneId).toEpochSecond()
+            start to (date.plusDays(1).atStartOfDay(zoneId).toEpochSecond() - 1)
+        }
+        StatsGranularity.MONTH -> {
+            val month = runCatching { YearMonth.parse(bucketKey) }.getOrNull() ?: return null
+            val start = month.atDay(1).atStartOfDay(zoneId).toEpochSecond()
+            start to (month.plusMonths(1).atDay(1).atStartOfDay(zoneId).toEpochSecond() - 1)
+        }
+        StatsGranularity.YEAR -> {
+            val year = bucketKey.toIntOrNull() ?: return null
+            val start = LocalDate.of(year, 1, 1).atStartOfDay(zoneId).toEpochSecond()
+            start to (LocalDate.of(year + 1, 1, 1).atStartOfDay(zoneId).toEpochSecond() - 1)
         }
     }
 }
@@ -307,18 +422,4 @@ private fun SelectChip(label: String, selected: Boolean, onClick: () -> Unit) {
         onClick = onClick,
         label = { Text(label) },
     )
-}
-
-@Composable
-private fun MetricTile(modifier: Modifier = Modifier, label: String, value: String) {
-    val colors = MaterialTheme.colorScheme
-    Column(
-        modifier = modifier
-            .background(colors.surfaceVariant, RoundedCornerShape(18.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(label, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
-        Text(value, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-    }
 }

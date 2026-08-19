@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor.data.importing
 
 import android.content.Context
 import android.net.Uri
+import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.model.ImportSourceType
 import com.alorbach.solarmonitor.data.repository.SolarRepository
 import java.io.File
@@ -11,8 +12,8 @@ class LegacySbfspotImporters(
     private val context: Context,
     private val repository: SolarRepository,
 ) {
-    private val urlClient = UrlImportClient()
-    private val ftpClient = FtpImportClient()
+    private val urlClient = UrlImportClient(context)
+    private val ftpClient = FtpImportClient(context)
     private val sftpClient = SftpImportClient(File(context.filesDir, "known_hosts"))
 
     suspend fun parseFile(deviceId: Long, name: String, bytes: ByteArray): ParsedImportBundle {
@@ -56,7 +57,7 @@ class LegacySbfspotImporters(
         val name = uri.lastPathSegment?.substringAfterLast('/') ?: "import.csv"
         val bytes = context.contentResolver.openInputStream(uri)?.use {
             RemoteBrowseHelpers.readBytesCapped(it)
-        } ?: error("Unable to open $uri")
+        } ?: error(context.getString(R.string.import_unable_open_uri, uri.toString()))
         return name to bytes
     }
 
@@ -190,20 +191,30 @@ class LegacySbfspotImporters(
         onFile: (name: String, bytes: ByteArray) -> Unit,
     ): Int {
         val files = RemoteBrowseHelpers.collectCsvFiles(root = path, listDirectory = listDir)
-        require(files.isNotEmpty()) { "No CSV files found under $path" }
+        require(files.isNotEmpty()) { context.getString(R.string.import_no_csv_under, path) }
         require(files.size <= RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES) {
-            "Folder import exceeds ${RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES} CSV files " +
-                "(found ${files.size})"
+            context.getString(
+                R.string.import_folder_too_many,
+                RemoteBrowseHelpers.MAX_FOLDER_IMPORT_FILES,
+                files.size,
+            )
         }
         var totalBytes = 0L
         files.forEachIndexed { index, entry ->
             val bytes = download(entry.path)
             require(bytes.size <= RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES) {
-                "Import file ${entry.name} exceeds ${RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)} MiB limit"
+                context.getString(
+                    R.string.import_file_too_large,
+                    entry.name,
+                    (RemoteBrowseHelpers.MAX_IMPORT_FILE_BYTES / (1024 * 1024)).toInt(),
+                )
             }
             totalBytes += bytes.size
             require(totalBytes <= RemoteBrowseHelpers.MAX_FOLDER_IMPORT_TOTAL_BYTES) {
-                "Folder import exceeds ${RemoteBrowseHelpers.MAX_FOLDER_IMPORT_TOTAL_BYTES / (1024 * 1024)} MiB total"
+                context.getString(
+                    R.string.import_folder_too_large_mib,
+                    (RemoteBrowseHelpers.MAX_FOLDER_IMPORT_TOTAL_BYTES / (1024 * 1024)).toInt(),
+                )
             }
             onFile(entry.name, bytes)
             // Local parse/persist can idle the socket; ping before the next download.
