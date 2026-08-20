@@ -42,7 +42,42 @@ object CloudBackupPolicy {
     const val KEY_TRIGGER = "trigger"
     const val AUTO_THROTTLE_SECONDS = 15 * 60L
     const val DATABASE_BACKUP_FILENAME = "solar-monitor.db"
-    const val DRIVE_FOLDER_NAME = "SMA Solar Monitor"
+    const val DRIVE_FOLDER_NAME = "Legacy Solar Monitor"
+    /** Pre-rebrand folder name; still resolved so existing Drive backups are not orphaned. */
+    const val DRIVE_FOLDER_NAME_PREVIOUS = "SMA Solar Monitor"
+
+    fun driveFolderFallbackNames(): List<String> = listOf(DRIVE_FOLDER_NAME_PREVIOUS)
+
+    data class DriveFolderCandidate(
+        val id: String,
+        val name: String,
+        val hasDatabaseBackup: Boolean = false,
+    )
+
+    /**
+     * Prefer a folder that already holds solar-monitor.db so an empty rebranded
+     * folder cannot steal backup/restore from the pre-rebrand directory.
+     */
+    fun pickDriveFolder(
+        preferredName: String,
+        candidates: List<DriveFolderCandidate>,
+    ): DriveFolderCandidate? {
+        if (candidates.isEmpty()) return null
+        val withDb = candidates.filter { it.hasDatabaseBackup }
+        return withDb.firstOrNull { it.name == preferredName }
+            ?: withDb.firstOrNull()
+            ?: candidates.firstOrNull { it.name == preferredName }
+            ?: candidates.first()
+    }
+
+    fun shouldRenameDriveFolder(
+        preferredName: String,
+        chosen: DriveFolderCandidate,
+        candidates: List<DriveFolderCandidate>,
+    ): Boolean {
+        if (chosen.name == preferredName) return false
+        return candidates.none { it.id != chosen.id && it.name == preferredName }
+    }
 
     fun isAccountConfigured(email: String): Boolean = email.trim().isNotBlank()
 

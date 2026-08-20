@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "sb-solar-monitor"
+rootProject.name = "legacy-solar-monitor"
 include(":app")

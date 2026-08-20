@@ -253,6 +253,7 @@ class GoogleDriveBackupRepository(
         val folderId = remote.findOrCreateFolder(
             CloudBackupPolicy.DRIVE_FOLDER_NAME,
             settings.driveFolderId,
+            CloudBackupPolicy.driveFolderFallbackNames(),
         )
         if (folderId != settings.driveFolderId) {
             settingsStore.update { it.copy(driveFolderId = folderId) }

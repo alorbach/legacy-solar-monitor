@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SMA Solar Monitor</string>
+    <string name="app_name">Legacy Solar Monitor</string>
     <string name="widget_compact_name">Solar Kompaktstatistik</string>
     <string name="widget_medium_name">Solar Geräteübersicht</string>
     <string name="widget_top_devices_name">Solar Top-Geräte</string>
@@ -9,7 +9,7 @@
     <string name="tab_statistics">Statistik</string>
     <string name="tab_import">Import</string>
     <string name="tab_settings">Einstellungen</string>
-    <string name="app_subtitle">Legacy-Bluetooth-Solarüberwachung, Importe, Berichte und Widgets</string>
+    <string name="app_subtitle">Kostenlose Überwachung für alte Bluetooth-Solarwechselrichter: Livedaten, Importe, Berichte und Widgets.</string>
     <string name="add_device">Gerät hinzufügen</string>
     <string name="scan_bluetooth">Suchen</string>
     <string name="scanning">Suche…</string>
@@ -158,7 +158,7 @@
     <string name="backup_sign_in">Mit Google anmelden</string>
     <string name="backup_sign_out">Abmelden</string>
     <string name="backup_signed_in_as">Angemeldet als %1$s</string>
-    <string name="backup_drive_folder_hint">Sicherungen liegen im Google-Drive-Ordner „SMA Solar Monitor“.</string>
+    <string name="backup_drive_folder_hint">Sicherungen liegen im Google-Drive-Ordner „Legacy Solar Monitor“.</string>
     <string name="backup_sign_in_not_built">Google-Login ist in diesem Build nicht konfiguriert. google.web.client.id in local.properties setzen.</string>
     <string name="backup_sign_in_failed">Google-Anmeldung fehlgeschlagen</string>
     <string name="backup_sign_in_failed_detail">Google-Anmeldung fehlgeschlagen: %1$s</string>
@@ -234,6 +234,11 @@
     <string name="schedule_import_saved">Geplanter Import alle %1$d Stunden</string>
     <string name="schedule_import_failed">Import konnte nicht geplant werden. Bitte einmal erneut ausführen, damit Zugangsdaten gespeichert sind.</string>
     <string name="about">Info</string>
+    <string name="about_author">Autor: Andre Lorbach</string>
+    <string name="about_email">alorbach@adiscon.com</string>
+    <string name="about_free">Kostenlose App für alte Bluetooth-Wechselrichter.</string>
+    <string name="about_not_affiliated">Nicht verbunden mit SMA Solar Technology AG.</string>
+    <string name="about_github">Quellcode auf GitHub</string>
     <string name="app_version">Version %1$s Build %2$d</string>
     <string name="live_poll_interval">Live-Abfrageintervall (Sekunden)</string>
     <string name="live_poll_interval_hint">Wie oft der Live-Monitor den Wechselrichter während des Betriebs abfragt.</string>
@@ -242,7 +247,7 @@
     <string name="import_in_progress">Import läuft…</string>
     <string name="default_device_name">SMA-Gerät %1$d</string>
     <string name="default_plant_name">Meine PV-Anlage</string>
-    <string name="report_title">SMA Solar Monitor Bericht</string>
+    <string name="report_title">Legacy Solar Monitor Bericht</string>
     <string name="report_device">Gerät: %1$s</string>
     <string name="report_power">Aktuelle Leistung: %1$s</string>
     <string name="report_today">Heute: %1$s</string>

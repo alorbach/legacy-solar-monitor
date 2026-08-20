@@ -134,8 +134,104 @@ class CloudBackupPolicyTest {
         assertEquals("solar-monitor.db", files[0].name)
         assertEquals("def", files[1].id)
         assertEquals("user@gmail.com", DriveJson.stringField("""{"user":{"emailAddress":"user@gmail.com"}}""", "emailAddress"))
-        assertEquals("\"SMA Solar Monitor\"", DriveJson.jsonString("SMA Solar Monitor"))
+        assertEquals("\"Legacy Solar Monitor\"", DriveJson.jsonString("Legacy Solar Monitor"))
         assertEquals("O\\'Brien", DriveJson.driveQueryLiteral("O'Brien"))
+    }
+
+    @Test
+    fun driveFolder_prefersNewNameAndFallsBackToPrevious() {
+        assertEquals("Legacy Solar Monitor", CloudBackupPolicy.DRIVE_FOLDER_NAME)
+        assertEquals("SMA Solar Monitor", CloudBackupPolicy.DRIVE_FOLDER_NAME_PREVIOUS)
+        assertEquals(listOf("SMA Solar Monitor"), CloudBackupPolicy.driveFolderFallbackNames())
+    }
+
+    @Test
+    fun pickDriveFolder_usesFallbackWhenPreferredIsEmpty() {
+        val preferred = CloudBackupPolicy.DriveFolderCandidate(
+            id = "new",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            hasDatabaseBackup = false,
+        )
+        val previous = CloudBackupPolicy.DriveFolderCandidate(
+            id = "old",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME_PREVIOUS,
+            hasDatabaseBackup = true,
+        )
+        val chosen = CloudBackupPolicy.pickDriveFolder(
+            CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            listOf(preferred, previous),
+        )
+        assertEquals("old", chosen?.id)
+        assertFalse(
+            CloudBackupPolicy.shouldRenameDriveFolder(
+                CloudBackupPolicy.DRIVE_FOLDER_NAME,
+                chosen!!,
+                listOf(preferred, previous),
+            ),
+        )
+    }
+
+    @Test
+    fun pickDriveFolder_prefersCachedBackupOverEmptyPreferred() {
+        val cachedEmpty = CloudBackupPolicy.DriveFolderCandidate(
+            id = "cached",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            hasDatabaseBackup = false,
+        )
+        val previous = CloudBackupPolicy.DriveFolderCandidate(
+            id = "old",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME_PREVIOUS,
+            hasDatabaseBackup = true,
+        )
+        assertEquals(
+            "old",
+            CloudBackupPolicy.pickDriveFolder(
+                CloudBackupPolicy.DRIVE_FOLDER_NAME,
+                listOf(cachedEmpty, previous),
+            )?.id,
+        )
+    }
+
+    @Test
+    fun pickDriveFolder_keepsDuplicateNamedFolderThatHasBackup() {
+        val emptyPreferred = CloudBackupPolicy.DriveFolderCandidate(
+            id = "empty",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            hasDatabaseBackup = false,
+        )
+        val preferredWithDb = CloudBackupPolicy.DriveFolderCandidate(
+            id = "full",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            hasDatabaseBackup = true,
+        )
+        assertEquals(
+            "full",
+            CloudBackupPolicy.pickDriveFolder(
+                CloudBackupPolicy.DRIVE_FOLDER_NAME,
+                listOf(emptyPreferred, preferredWithDb),
+            )?.id,
+        )
+    }
+
+    @Test
+    fun pickDriveFolder_renamesPreviousWhenPreferredMissing() {
+        val previous = CloudBackupPolicy.DriveFolderCandidate(
+            id = "old",
+            name = CloudBackupPolicy.DRIVE_FOLDER_NAME_PREVIOUS,
+            hasDatabaseBackup = true,
+        )
+        val chosen = CloudBackupPolicy.pickDriveFolder(
+            CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            listOf(previous),
+        )
+        assertEquals("old", chosen?.id)
+        assertTrue(
+            CloudBackupPolicy.shouldRenameDriveFolder(
+                CloudBackupPolicy.DRIVE_FOLDER_NAME,
+                chosen!!,
+                listOf(previous),
+            ),
+        )
     }
 
     @Test

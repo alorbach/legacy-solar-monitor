@@ -14,7 +14,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 interface DriveRemote {
     suspend fun userEmail(): String
-    suspend fun findOrCreateFolder(name: String, cachedId: String?): String
+    suspend fun findOrCreateFolder(
+        name: String,
+        cachedId: String?,
+        fallbackNames: List<String> = emptyList(),
+    ): String
     suspend fun upsertFile(folderId: String, name: String, file: File)
     suspend fun downloadFile(folderId: String, name: String, target: File)
 }
@@ -40,14 +44,44 @@ class GoogleDriveRemote(
             ?: error("Drive about response missing email")
     }
 
-    override suspend fun findOrCreateFolder(name: String, cachedId: String?): String {
+    override suspend fun findOrCreateFolder(
+        name: String,
+        cachedId: String?,
+        fallbackNames: List<String>,
+    ): String {
+        val lookupNames = (listOf(name) + fallbackNames).distinct()
+        val byId = linkedMapOf<String, CloudBackupPolicy.DriveFolderCandidate>()
+
+        suspend fun addCandidate(id: String, folderName: String) {
+            if (id.isBlank() || byId.containsKey(id)) return
+            byId[id] = CloudBackupPolicy.DriveFolderCandidate(
+                id = id,
+                name = folderName,
+                hasDatabaseBackup = findInFolder(id, CloudBackupPolicy.DATABASE_BACKUP_FILENAME) != null,
+            )
+        }
+
         val cached = cachedId?.trim().orEmpty()
-        if (cached.isNotBlank() && fileExists(cached)) return cached
-        val existing = findFiles(
-            "name='${DriveJson.driveQueryLiteral(name)}' and " +
-                "mimeType='$FOLDER_MIME' and trashed=false and 'root' in parents",
-        ).firstOrNull()
-        if (existing != null) return existing.id
+        if (cached.isNotBlank()) {
+            val meta = getFileMeta(cached)
+            if (meta != null && !meta.trashed) {
+                addCandidate(cached, meta.name?.ifBlank { name } ?: name)
+            }
+        }
+        for (folderName in lookupNames) {
+            for (ref in findFoldersByName(folderName)) {
+                addCandidate(ref.id, ref.name.ifBlank { folderName })
+            }
+        }
+
+        val candidates = byId.values.toList()
+        val chosen = CloudBackupPolicy.pickDriveFolder(name, candidates)
+        if (chosen != null) {
+            if (CloudBackupPolicy.shouldRenameDriveFolder(name, chosen, candidates)) {
+                runCatching { renameFile(chosen.id, name) }
+            }
+            return chosen.id
+        }
         val body = """{"name":${DriveJson.jsonString(name)},"mimeType":${DriveJson.jsonString(FOLDER_MIME)}}"""
         val json = execute(
             Request.Builder()
@@ -107,6 +141,12 @@ class GoogleDriveRemote(
         require(target.exists() && target.length() > 0L) { "Drive download empty" }
     }
 
+    private suspend fun findFoldersByName(name: String): List<DriveFileRef> =
+        findFiles(
+            "name='${DriveJson.driveQueryLiteral(name)}' and " +
+                "mimeType='$FOLDER_MIME' and trashed=false and 'root' in parents",
+        )
+
     private suspend fun findInFolder(folderId: String, name: String): DriveFileRef? =
         findFiles(
             "name='${DriveJson.driveQueryLiteral(name)}' and " +
@@ -117,27 +157,42 @@ class GoogleDriveRemote(
         val encoded = URLEncoder.encode(query, Charsets.UTF_8.name()).replace("+", "%20")
         val json = execute(
             Request.Builder()
-                .url("$DRIVE_API/files?q=$encoded&spaces=drive&fields=files(id,name)&pageSize=10")
+                .url("$DRIVE_API/files?q=$encoded&spaces=drive&fields=files(id,name)&pageSize=50")
                 .get()
                 .build(),
         )
         return DriveJson.files(json)
     }
 
-    private suspend fun fileExists(id: String): Boolean {
+    private suspend fun getFileMeta(id: String): DriveFileMeta? {
         val encoded = URLEncoder.encode(id, Charsets.UTF_8.name())
         val request = authorized(
             Request.Builder()
-                .url("$DRIVE_API/files/$encoded?fields=id,trashed")
+                .url("$DRIVE_API/files/$encoded?fields=id,name,trashed")
                 .get()
                 .build(),
         )
         http.newCall(request).execute().use { response ->
-            if (response.code == 404) return false
+            if (response.code == 404) return null
             require(response.isSuccessful) { "Drive request failed: ${response.code}" }
             val json = response.body?.string().orEmpty()
-            return DriveJson.booleanField(json, "trashed") != true
+            val fileId = DriveJson.stringField(json, "id") ?: return null
+            return DriveFileMeta(
+                id = fileId,
+                name = DriveJson.stringField(json, "name"),
+                trashed = DriveJson.booleanField(json, "trashed") == true,
+            )
         }
+    }
+
+    private suspend fun renameFile(id: String, newName: String) {
+        val encoded = URLEncoder.encode(id, Charsets.UTF_8.name())
+        execute(
+            Request.Builder()
+                .url("$DRIVE_API/files/$encoded")
+                .patch("""{"name":${DriveJson.jsonString(newName)}}""".toRequestBody(JSON))
+                .build(),
+        )
     }
 
     private suspend fun execute(request: Request): String {
@@ -164,3 +219,9 @@ class GoogleDriveRemote(
         private val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }
+
+private data class DriveFileMeta(
+    val id: String,
+    val name: String?,
+    val trashed: Boolean,
+)

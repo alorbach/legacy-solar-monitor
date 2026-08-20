@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SMA Solar Monitor</string>
+    <string name="app_name">Legacy Solar Monitor</string>
     <string name="widget_compact_name">Solar Compact Stats</string>
     <string name="widget_medium_name">Solar Device Summary</string>
     <string name="widget_top_devices_name">Solar Top Devices</string>
@@ -9,7 +9,7 @@
     <string name="tab_statistics">Stats</string>
     <string name="tab_import">Import</string>
     <string name="tab_settings">Settings</string>
-    <string name="app_subtitle">Legacy Bluetooth solar monitoring, imports, reports, and widgets</string>
+    <string name="app_subtitle">Free monitoring for old Bluetooth solar inverters: live data, imports, reports, and widgets.</string>
     <string name="add_device">Add device</string>
     <string name="scan_bluetooth">Scan</string>
     <string name="scanning">Scanning…</string>
@@ -159,7 +159,7 @@
     <string name="backup_sign_in">Sign in with Google</string>
     <string name="backup_sign_out">Sign out</string>
     <string name="backup_signed_in_as">Signed in as %1$s</string>
-    <string name="backup_drive_folder_hint">Backups go to Google Drive folder “SMA Solar Monitor”.</string>
+    <string name="backup_drive_folder_hint">Backups go to Google Drive folder “Legacy Solar Monitor”.</string>
     <string name="backup_sign_in_not_built">Google login is not configured in this build. Set google.web.client.id in local.properties.</string>
     <string name="backup_sign_in_failed">Google sign-in failed</string>
     <string name="backup_sign_in_failed_detail">Google sign-in failed: %1$s</string>
@@ -234,6 +234,13 @@
     <string name="schedule_import_saved">Scheduled import every %1$d hours</string>
     <string name="schedule_import_failed">Could not schedule this import. Re-run it once so credentials are stored.</string>
     <string name="about">About</string>
+    <string name="about_author">Author: Andre Lorbach</string>
+    <string name="about_email">alorbach@adiscon.com</string>
+    <string name="about_email_uri" translatable="false">mailto:alorbach@adiscon.com</string>
+    <string name="about_free">Free application for old Bluetooth inverters.</string>
+    <string name="about_not_affiliated">Not affiliated with SMA Solar Technology AG.</string>
+    <string name="about_github">Source on GitHub</string>
+    <string name="about_github_url" translatable="false">https://github.com/alorbach/legacy-solar-monitor</string>
     <string name="app_version">Version %1$s Build %2$d</string>
     <string name="live_poll_interval">Live poll interval (seconds)</string>
     <string name="live_poll_interval_hint">How often the live monitor reads the inverter while running.</string>
@@ -242,7 +249,7 @@
     <string name="import_in_progress">Import in progress…</string>
     <string name="default_device_name">SMA Device %1$d</string>
     <string name="default_plant_name">My PV plant</string>
-    <string name="report_title">SMA Solar Monitor Report</string>
+    <string name="report_title">Legacy Solar Monitor Report</string>
     <string name="report_device">Device: %1$s</string>
     <string name="report_power">Current power: %1$s</string>
     <string name="report_today">Today: %1$s</string>
