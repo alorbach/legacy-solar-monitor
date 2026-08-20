@@ -18,6 +18,7 @@ import com.alorbach.solarmonitor.data.importing.replayConfig
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.service.ImportNotifications
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class ScheduledImportWorker(
     context: Context,
@@ -27,6 +28,15 @@ class ScheduledImportWorker(
         ImportNotifications.foregroundInfo(applicationContext, 0, 0)
 
     override suspend fun doWork(): Result {
+        inFlight.incrementAndGet()
+        try {
+            return doScheduledImport()
+        } finally {
+            inFlight.decrementAndGet()
+        }
+    }
+
+    private suspend fun doScheduledImport(): Result {
         val sourceType = inputData.getString(KEY_SOURCE_TYPE) ?: return Result.failure()
         val deviceId = inputData.getLong(KEY_DEVICE_ID, -1).takeIf { it > 0 } ?: return Result.failure()
         val sourceLabel = inputData.getString(KEY_SOURCE_LABEL) ?: "Scheduled import"
@@ -78,6 +88,9 @@ class ScheduledImportWorker(
 
     companion object {
         const val UNIQUE_WORK_NAME = "scheduled_import"
+        private val inFlight = AtomicInteger(0)
+
+        fun isInFlight(): Boolean = inFlight.get() > 0
         const val KEY_SOURCE_TYPE = "source_type"
         const val KEY_SOURCE_LABEL = "source_label"
         const val KEY_DEVICE_ID = "device_id"
@@ -102,6 +115,7 @@ class ScheduledImportWorker(
             val workManager = WorkManager.getInstance(context)
             jobIds.forEach { workManager.cancelUniqueWork(uniqueName(it)) }
             workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
+            workManager.cancelAllWorkByTag(UNIQUE_WORK_NAME)
         }
 
         fun enqueueJob(
@@ -151,6 +165,7 @@ class ScheduledImportWorker(
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                 .setInputData(data)
                 .apply {
+                    addTag(UNIQUE_WORK_NAME)
                     job.passwordCredentialId?.let { addTag(credentialTag(it)) }
                     addTag(deviceTag(config.deviceId))
                 }

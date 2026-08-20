@@ -5,6 +5,7 @@ import androidx.core.content.ContextCompat
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
+import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportJobStatus
 import com.alorbach.solarmonitor.data.repository.SolarRepository
@@ -49,8 +50,22 @@ class ImportManager(
     )
 
     private val importBusy = AtomicBoolean(false)
+    private val restoreHold = AtomicBoolean(false)
+    private val importGate = Any()
     private val _progress = MutableStateFlow(ImportProgress())
     val progress: StateFlow<ImportProgress> = _progress.asStateFlow()
+
+    fun isImportActive(): Boolean =
+        importBusy.get() || progress.value.running ||
+            foregroundReserved || pendingForeground != null
+
+    fun holdForRestore() {
+        synchronized(importGate) { restoreHold.set(true) }
+    }
+
+    fun clearRestoreHold() {
+        synchronized(importGate) { restoreHold.set(false) }
+    }
 
     @Volatile private var pendingForeground: PendingForegroundImport? = null
     @Volatile private var foregroundReserved = false
@@ -64,9 +79,12 @@ class ImportManager(
         request: ImportRequest,
         overwriteCopyPath: String? = null,
     ): Boolean {
-        if (!importBusy.compareAndSet(false, true)) return false
-        foregroundReserved = true
-        pendingForeground = PendingForegroundImport(request, overwriteCopyPath)
+        synchronized(importGate) {
+            if (restoreHold.get()) return false
+            if (!importBusy.compareAndSet(false, true)) return false
+            foregroundReserved = true
+            pendingForeground = PendingForegroundImport(request, overwriteCopyPath)
+        }
         return try {
             ContextCompat.startForegroundService(
                 context.applicationContext,
@@ -108,11 +126,32 @@ class ImportManager(
         onProgress: ((current: Int, total: Int) -> Unit)? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         if (consumeForegroundReservation) {
+            val held = synchronized(importGate) { restoreHold.get() }
+            if (held) {
+                abortForegroundReservation()
+                return@withContext Result.failure(
+                    IllegalStateException(appContext.getString(R.string.restore_import_busy)),
+                )
+            }
             foregroundReserved = false
-        } else if (!importBusy.compareAndSet(false, true)) {
-            return@withContext Result.failure(
-                ImportAlreadyRunningException(appContext.getString(R.string.import_already_running)),
-            )
+        } else {
+            val admitted = synchronized(importGate) {
+                when {
+                    restoreHold.get() -> null
+                    importBusy.compareAndSet(false, true) -> true
+                    else -> false
+                }
+            }
+            if (admitted == null) {
+                return@withContext Result.failure(
+                    IllegalStateException(appContext.getString(R.string.restore_import_busy)),
+                )
+            }
+            if (!admitted) {
+                return@withContext Result.failure(
+                    ImportAlreadyRunningException(appContext.getString(R.string.import_already_running)),
+                )
+            }
         }
         _progress.value = ImportProgress(
             running = true,
@@ -290,6 +329,7 @@ class ImportManager(
         var spotFrom: Long? = null
         var spotTo: Long? = null
         var lastHourRecomputeTo: Long? = null
+        val importedEvents = mutableListOf<DeviceEventEntity>()
         val bridgeContext = coroutineContext
         try {
             // Synchronous FTP/SFTP session APIs require a bridge to Room suspend calls.
@@ -314,6 +354,7 @@ class ImportManager(
                             events = parsed.events,
                             recomputeHours = false,
                         )
+                        if (parsed.events.isNotEmpty()) importedEvents += parsed.events
                         if (parsed.spotSamples.isNotEmpty()) {
                             val minTs = parsed.spotSamples.minOf { it.timestampEpochSeconds }
                             val maxTs = parsed.spotSamples.maxOf { it.timestampEpochSeconds }
@@ -346,6 +387,7 @@ class ImportManager(
             if (from != null && to != null) {
                 repository.recomputeHourAggregates(deviceId, from, to)
             }
+            repository.considerEventAlerts(importedEvents)
             return ImportOutcome(
                 message = appContext.getString(
                     R.string.import_result,
@@ -373,6 +415,7 @@ class ImportManager(
                 }
             }
             if (committedFiles > 0) {
+                runCatching { runBlocking(bridgeContext) { repository.considerEventAlerts(importedEvents) } }
                 cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
             }
             if (prefix.isEmpty()) throw t
@@ -395,6 +438,7 @@ class ImportManager(
         var historyCleared = false
         val clearBeforeImport = request.clearBeforeImport
         val stagedCopies = mutableListOf<Pair<String, java.io.File>>()
+        val importedEvents = mutableListOf<DeviceEventEntity>()
         try {
             try {
                 forEachDownload(request) { name, bytes ->
@@ -423,8 +467,10 @@ class ImportManager(
                         monthAggregates = parsed.monthAggregates,
                         events = parsed.events,
                     )
+                    if (parsed.events.isNotEmpty()) importedEvents += parsed.events
                 }
                 require(fileCount > 0) { appContext.getString(R.string.import_no_files) }
+                repository.considerEventAlerts(importedEvents)
                 for ((preservedName, staged) in stagedCopies) {
                     lastPreserved = repository.storeImportedCopy(
                         deviceId = deviceId,
@@ -434,6 +480,9 @@ class ImportManager(
                     )
                 }
             } catch (t: Throwable) {
+                if (importedEvents.isNotEmpty()) {
+                    runCatching { repository.considerEventAlerts(importedEvents) }
+                }
                 val prefix = buildString {
                     if (historyCleared) append(appContext.getString(R.string.import_history_cleared)).append(' ')
                     if (fileCount > 0) append(appContext.getString(R.string.import_partial, fileCount)).append(' ')

@@ -28,11 +28,13 @@ class AppContainer(context: Context) {
         database = database,
     )
     val cloudBackupCoordinator = CloudBackupCoordinator(appContext)
+    val eventAlertNotifier = com.alorbach.solarmonitor.service.EventAlertNotifier(appContext, settingsStore)
     val repository = SolarRepository(
         appContext = appContext,
         db = database,
         settingsStore = settingsStore,
         credentialStore = credentialStore,
+        eventAlertNotifier = eventAlertNotifier,
     )
     val importers = LegacySbfspotImporters(appContext, repository)
     val importManager = ImportManager(

@@ -12,6 +12,7 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,6 +78,9 @@ class LiveMonitoringRepository(
     private val continuousDeviceIds = ConcurrentHashMap.newKeySet<Long>()
     /** deviceId -> MAC for continuous sessions. */
     private val continuousMacByDevice = ConcurrentHashMap<Long, String>()
+    private val inFlightWork = AtomicInteger(0)
+
+    fun hasInFlightWork(): Boolean = inFlightWork.get() > 0
 
     private suspend fun <T> withOperation(
         mac: String?,
@@ -141,6 +145,8 @@ class LiveMonitoringRepository(
      * @param continuous true when called from LiveMonitorService so UI shows an active session.
      */
     suspend fun start(deviceId: Long, continuous: Boolean = false): Result<SpotSampleEntity> {
+        inFlightWork.incrementAndGet()
+        try {
         val device = repository.getDevice(deviceId)
         if (continuous) {
             continuousDeviceIds.add(deviceId)
@@ -203,6 +209,9 @@ class LiveMonitoringRepository(
             }
         }
         return result.map { it.value }.cancelledIfAborted(aborted)
+        } finally {
+            inFlightWork.decrementAndGet()
+        }
     }
 
     /**
@@ -213,6 +222,8 @@ class LiveMonitoringRepository(
         if (aborted && isFailure) Result.failure(IllegalStateException(message, exceptionOrNull())) else this
 
     suspend fun testConnection(device: DeviceProfileEntity): Result<String> {
+        inFlightWork.incrementAndGet()
+        try {
         var aborted = false
         val sessionDevice = repository.withResolvedPin(device)
         val result = withOperation(device.btMac) { op ->
@@ -236,6 +247,9 @@ class LiveMonitoringRepository(
             repository.updateDeviceStatus(device.id, message)
         }
         return result.cancelledIfAborted(aborted)
+        } finally {
+            inFlightWork.decrementAndGet()
+        }
     }
 
     suspend fun syncHistory(
@@ -243,6 +257,8 @@ class LiveMonitoringRepository(
         fromDate: LocalDate? = null,
         fromMonth: YearMonth? = null,
     ): Result<String> {
+        inFlightWork.incrementAndGet()
+        try {
         val zoneId = runCatching {
             ZoneId.of(device.timezone.takeIf { it.isNotBlank() } ?: ZoneId.systemDefault().id)
         }.getOrDefault(ZoneId.systemDefault())
@@ -330,6 +346,9 @@ class LiveMonitoringRepository(
                 saved
             }
         }
+        } finally {
+            inFlightWork.decrementAndGet()
+        }
     }
 
     /**
@@ -363,9 +382,10 @@ class LiveMonitoringRepository(
     fun stopAll() {
         continuousDeviceIds.clear()
         continuousMacByDevice.clear()
-        val keys = continuousOps.keys.toList()
+        val keys = (continuousOps.keys + oneShotOps.keys).toSet()
         keys.forEach { key ->
             continuousOps[key]?.aborted = true
+            oneShotOps[key]?.forEach { it.aborted = true }
             bluetoothGateway.abortSession(key)
         }
         continuousOps.clear()

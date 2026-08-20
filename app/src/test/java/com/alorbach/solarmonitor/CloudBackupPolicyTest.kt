@@ -234,6 +234,41 @@ class CloudBackupPolicyTest {
     }
 
     @Test
+    fun isRestoreConfigured_requiresHttpsQueryAndDatabaseObject() {
+        assertFalse(CloudBackupPolicy.isRestoreConfigured(""))
+        assertFalse(
+            CloudBackupPolicy.isRestoreConfigured(
+                "https://storage.googleapis.com/my-bucket/solar-monitor/solar-monitor.db",
+            ),
+        )
+        assertFalse(
+            CloudBackupPolicy.isRestoreConfigured(
+                "http://storage.googleapis.com/my-bucket/solar-monitor/solar-monitor.db?X-Goog-Signature=abc",
+            ),
+        )
+        assertFalse(
+            CloudBackupPolicy.isRestoreConfigured(
+                "https://storage.googleapis.com/my-bucket/solar-monitor/day.csv?X-Goog-Signature=abc",
+            ),
+        )
+        assertTrue(
+            CloudBackupPolicy.isRestoreConfigured(
+                CloudBackupPolicy.buildDatabaseObjectUrl("my-bucket", "solar-monitor") +
+                    "?X-Goog-Signature=abc",
+            ),
+        )
+    }
+
+    @Test
+    fun isSqliteDatabaseHeader_acceptsSqliteMagic() {
+        val header = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
+        assertTrue(CloudBackupPolicy.isSqliteDatabaseHeader(header))
+        assertTrue(CloudBackupPolicy.isSqliteDatabaseHeader(header + byteArrayOf(1, 2, 3)))
+        assertFalse(CloudBackupPolicy.isSqliteDatabaseHeader("not-sqlite".toByteArray()))
+        assertFalse(CloudBackupPolicy.isSqliteDatabaseHeader(ByteArray(8)))
+    }
+
+    @Test
     fun isTransientUploadFailure_coversDnsAndConnectOutages() {
         assertTrue(
             CloudBackupPolicy.isTransientUploadFailure(

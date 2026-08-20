@@ -148,6 +148,7 @@ fun DashboardTab(
     }
     val colors = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -373,6 +374,57 @@ fun DashboardTab(
                                     }
                                 },
                             ) { Text(stringResource(R.string.export_pdf)) }
+                            OutlinedButton(
+                                enabled = loadedChart != null,
+                                onClick = {
+                                    val id = selectedDeviceId ?: return@OutlinedButton
+                                    val series = loadedChart ?: return@OutlinedButton
+                                    scope.launch {
+                                        runCatching {
+                                            container.reportExporter.share(
+                                                container.reportExporter.exportSeriesCsv(
+                                                    fileStem = "device-$id-daily",
+                                                    points = com.alorbach.solarmonitor.domain.SeriesReportFormat.dailyPointsToStats(series),
+                                                ),
+                                                "text/csv",
+                                            )
+                                        }.onFailure {
+                                            exportSuccess = false
+                                            exportMessage = exportFailedLabel
+                                        }.onSuccess {
+                                            exportSuccess = true
+                                            exportMessage = null
+                                        }
+                                    }
+                                },
+                            ) { Text(stringResource(R.string.export_period_csv)) }
+                            OutlinedButton(
+                                enabled = loadedChart != null,
+                                onClick = {
+                                    val id = selectedDeviceId ?: return@OutlinedButton
+                                    val series = loadedChart ?: return@OutlinedButton
+                                    scope.launch {
+                                        runCatching {
+                                            container.reportExporter.share(
+                                                container.reportExporter.exportSeriesPdf(
+                                                    fileStem = "device-$id-daily",
+                                                    deviceLabel = selectedDevice?.name ?: "",
+                                                    periodLabel = context.getString(R.string.production_chart_subtitle),
+                                                    currency = portfolio.currency,
+                                                    points = com.alorbach.solarmonitor.domain.SeriesReportFormat.dailyPointsToStats(series),
+                                                ),
+                                                "application/pdf",
+                                            )
+                                        }.onFailure {
+                                            exportSuccess = false
+                                            exportMessage = exportFailedLabel
+                                        }.onSuccess {
+                                            exportSuccess = true
+                                            exportMessage = null
+                                        }
+                                    }
+                                },
+                            ) { Text(stringResource(R.string.export_period_pdf)) }
                         }
                     }
                 }

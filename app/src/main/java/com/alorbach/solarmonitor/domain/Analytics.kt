@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor.domain
 
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
+import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import java.text.NumberFormat
 import java.time.Instant
@@ -139,7 +140,11 @@ object YieldFormatting {
 }
 
 object StatsSeriesFill {
-    const val VISIBLE_BARS = 10
+    const val VISIBLE_HOUR_BARS = 16
+    const val VISIBLE_PERIOD_BARS = 12
+
+    fun visibleBars(granularity: StatsGranularity): Int =
+        if (granularity == StatsGranularity.HOUR) VISIBLE_HOUR_BARS else VISIBLE_PERIOD_BARS
 
     fun lastInclusiveEpochDay(yearMonth: YearMonth, today: LocalDate): Long {
         val monthEnd = yearMonth.atEndOfMonth().toEpochDay()

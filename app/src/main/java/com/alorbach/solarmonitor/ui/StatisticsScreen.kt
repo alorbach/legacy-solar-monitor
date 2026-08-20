@@ -7,6 +7,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +28,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,6 +51,9 @@ import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.settings.AppSettings
+import com.alorbach.solarmonitor.domain.EventListGrouping
+import com.alorbach.solarmonitor.domain.EventListRow
+import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import java.time.Instant
 import java.time.LocalDate
@@ -58,6 +65,7 @@ import java.time.format.FormatStyle
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatisticsScreen(
     modifier: Modifier,
@@ -67,6 +75,7 @@ fun StatisticsScreen(
     dataEpoch: Long,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val colors = MaterialTheme.colorScheme
     var granularity by remember(settings.statsGranularity) { mutableStateOf(settings.statsGranularity) }
     var selectedDeviceId by remember(settings.statsSelectedDeviceId) {
@@ -202,6 +211,12 @@ fun StatisticsScreen(
         StatsGranularity.MONTH -> anchorDate.year < today.year
         StatsGranularity.YEAR -> false
     }
+    val eventSource = if (seriesLoading) emptyList() else (selectedBucketEvents ?: periodEvents)
+    val visibleEvents = eventSource.filterByEventFilter(eventFilter)
+    val eventRows = remember(visibleEvents, zoneId) { EventListGrouping.rows(visibleEvents, zoneId) }
+    var expandedEventKey by remember { mutableStateOf<String?>(null) }
+    val deviceNames = remember(devices) { devices.associate { it.id to it.name } }
+    LaunchedEffect(visibleEvents) { expandedEventKey = null }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -349,6 +364,53 @@ fun StatisticsScreen(
                         color = colors.onSurfaceVariant,
                         style = MaterialTheme.typography.labelSmall,
                     )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        OutlinedButton(
+                            enabled = !seriesLoading,
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        container.reportExporter.share(
+                                            container.reportExporter.exportSeriesCsv(
+                                                fileStem = "stats-${granularity.name.lowercase()}",
+                                                points = points,
+                                                events = periodEvents,
+                                                eventZone = zoneId,
+                                            ),
+                                            "text/csv",
+                                        )
+                                    }
+                                }
+                            },
+                        ) { Text(stringResource(R.string.export_period_csv)) }
+                        OutlinedButton(
+                            enabled = !seriesLoading,
+                            onClick = {
+                                val deviceLabel = selectedDeviceId?.let { id ->
+                                    devices.firstOrNull { it.id == id }?.name
+                                } ?: context.getString(R.string.stats_all_inverters)
+                                scope.launch {
+                                    runCatching {
+                                        container.reportExporter.share(
+                                            container.reportExporter.exportSeriesPdf(
+                                                fileStem = "stats-${granularity.name.lowercase()}",
+                                                deviceLabel = deviceLabel,
+                                                periodLabel = periodLabel,
+                                                currency = currency,
+                                                points = points,
+                                                events = periodEvents,
+                                                eventZone = zoneId,
+                                            ),
+                                            "application/pdf",
+                                        )
+                                    }
+                                }
+                            },
+                        ) { Text(stringResource(R.string.export_period_pdf)) }
+                    }
                     if (seriesLoading) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             CircularProgressIndicator()
@@ -357,6 +419,7 @@ fun StatisticsScreen(
                     } else {
                         StatsBarChart(
                             points = points,
+                            visibleBars = StatsSeriesFill.visibleBars(granularity),
                             selectedBucketKey = selectedBucketKey,
                             onBarClick = { key ->
                                 selectedBucketKey = if (selectedBucketKey == key) null else key
@@ -419,8 +482,6 @@ fun StatisticsScreen(
             }
         }
         }
-        val eventSource = if (seriesLoading) emptyList() else (selectedBucketEvents ?: periodEvents)
-        val visibleEvents = eventSource.filterByEventFilter(eventFilter)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Text(
@@ -442,8 +503,19 @@ fun StatisticsScreen(
                 }
             }
         }
-        items(visibleEvents, key = { it.id }) { event ->
-            EventCard(event = event, zoneId = zoneId)
+        items(eventRows, key = { it.key }) { row ->
+            when (row) {
+                is EventListRow.DateHeader -> EventDateHeader(epochDay = row.epochDay, zoneId = zoneId)
+                is EventListRow.Cluster -> CompactEventRow(
+                    item = row.item,
+                    zoneId = zoneId,
+                    expanded = expandedEventKey == row.key,
+                    onToggle = {
+                        expandedEventKey = if (expandedEventKey == row.key) null else row.key
+                    },
+                    deviceNames = deviceNames,
+                )
+            }
         }
     }
 }

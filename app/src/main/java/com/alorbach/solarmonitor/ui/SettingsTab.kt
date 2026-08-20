@@ -143,6 +143,21 @@ fun SettingsTab(
     var includeDatabaseDirty by rememberSaveable { mutableStateOf(false) }
     var includeImportsDirty by rememberSaveable { mutableStateOf(false) }
     var showSignedUrl by rememberSaveable { mutableStateOf(false) }
+    var signedGetUrl by remember {
+        mutableStateOf(
+            CloudBackupPolicy.displaySignedUrlTemplate(
+                settings.gcsSignedGetUrl,
+                settings.gcsBucket,
+                settings.gcsPrefix,
+            ),
+        )
+    }
+    var signedGetUrlDirty by remember { mutableStateOf(false) }
+    var showSignedGetUrl by rememberSaveable { mutableStateOf(false) }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+    var restoreRunning by remember { mutableStateOf(false) }
+    var restoreMessage by remember { mutableStateOf<String?>(null) }
+    var restoreSuccess by remember { mutableStateOf(false) }
     var pollSeconds by rememberSaveable { mutableStateOf(settings.livePollIntervalSeconds.toString()) }
     val colors = MaterialTheme.colorScheme
     val neverLabel = stringResource(R.string.backup_never)
@@ -171,6 +186,33 @@ fun SettingsTab(
         return trimmed
     }
 
+    suspend fun persistBackupSettings() {
+        container.settingsStore.update { stored ->
+            val nextBucket = if (bucketDirty) bucket else stored.gcsBucket
+            val nextPrefix = if (prefixDirty) prefix else stored.gcsPrefix
+            val raw = if (signedUrlDirty) signedUrl.trim() else stored.gcsSignedUrl
+            val url = normalizeStoredSignedUrl(raw, nextBucket, nextPrefix)
+            val rawGet = if (signedGetUrlDirty) signedGetUrl.trim() else stored.gcsSignedGetUrl
+            val getUrl = normalizeStoredSignedUrl(rawGet, nextBucket, nextPrefix)
+            stored.copy(
+                cloudBackupEnabled = CloudBackupPolicy.isUploadConfigured(url),
+                gcsBucket = nextBucket,
+                gcsPrefix = nextPrefix,
+                gcsSignedUrl = url,
+                gcsSignedGetUrl = getUrl,
+                backupIncludeDatabase = if (includeDatabaseDirty) includeDatabase else stored.backupIncludeDatabase,
+                backupIncludeImportCopies = if (includeImportsDirty) includeImports else stored.backupIncludeImportCopies,
+            )
+        }
+        bucketDirty = false
+        prefixDirty = false
+        signedUrlDirty = false
+        signedUrlPathLocked = false
+        signedGetUrlDirty = false
+        includeDatabaseDirty = false
+        includeImportsDirty = false
+    }
+
     val signedUrlCoversOnlyDatabase = CloudBackupPolicy.selectableBackupFilenames(
         signedUrl,
         listOf(CloudBackupPolicy.DATABASE_BACKUP_FILENAME, "example.csv"),
@@ -180,6 +222,7 @@ fun SettingsTab(
         settings.gcsBucket,
         settings.gcsPrefix,
         settings.gcsSignedUrl,
+        settings.gcsSignedGetUrl,
         settings.backupIncludeDatabase,
         settings.backupIncludeImportCopies,
     ) {
@@ -192,6 +235,13 @@ fun SettingsTab(
                 if (prefixDirty) prefix else settings.gcsPrefix,
             )
             signedUrlPathLocked = false
+        }
+        if (!signedGetUrlDirty) {
+            signedGetUrl = CloudBackupPolicy.displaySignedUrlTemplate(
+                settings.gcsSignedGetUrl,
+                if (bucketDirty) bucket else settings.gcsBucket,
+                if (prefixDirty) prefix else settings.gcsPrefix,
+            )
         }
         if (!includeDatabaseDirty) includeDatabase = settings.backupIncludeDatabase
         if (!includeImportsDirty) includeImports = settings.backupIncludeImportCopies
@@ -280,6 +330,32 @@ fun SettingsTab(
                         }
                     }) {
                         Text(stringResource(R.string.save))
+                    }
+                }
+            }
+        }
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.inverter_warnings), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.inverter_warnings_hint), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(stringResource(R.string.inverter_warnings), modifier = Modifier.weight(1f))
+                        Switch(
+                            checked = settings.inverterWarningAlertsEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    container.settingsStore.update { it.copy(inverterWarningAlertsEnabled = enabled) }
+                                }
+                            },
+                        )
                     }
                 }
             }
@@ -382,6 +458,37 @@ fun SettingsTab(
                             }
                         },
                     )
+                    OutlinedTextField(
+                        value = signedGetUrl,
+                        onValueChange = {
+                            signedGetUrl = it
+                            signedGetUrlDirty = true
+                        },
+                        label = { Text(stringResource(R.string.signed_get_url)) },
+                        supportingText = { Text(stringResource(R.string.signed_get_url_hint)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        minLines = 2,
+                        visualTransformation = if (showSignedGetUrl) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { showSignedGetUrl = !showSignedGetUrl }) {
+                                Icon(
+                                    imageVector = if (showSignedGetUrl) {
+                                        Icons.Rounded.VisibilityOff
+                                    } else {
+                                        Icons.Rounded.Visibility
+                                    },
+                                    contentDescription = stringResource(
+                                        if (showSignedGetUrl) R.string.hide else R.string.show,
+                                    ),
+                                )
+                            }
+                        },
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -428,11 +535,19 @@ fun SettingsTab(
                             Text(stringResource(R.string.backup_running), color = colors.onSurfaceVariant)
                         }
                     }
-                    Text(
-                        stringResource(R.string.backup_restore_not_supported),
-                        color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                    if (restoreRunning) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
+                            Text(stringResource(R.string.restore_running), color = colors.onSurfaceVariant)
+                        }
+                    }
+                    restoreMessage?.let { message ->
+                        Text(
+                            message,
+                            color = if (restoreSuccess) colors.primary else colors.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Text(
                         stringResource(
                             R.string.backup_last_attempt,
@@ -468,26 +583,7 @@ fun SettingsTab(
                     }
                     Button(onClick = {
                         scope.launch {
-                            container.settingsStore.update { stored ->
-                                val nextBucket = if (bucketDirty) bucket else stored.gcsBucket
-                                val nextPrefix = if (prefixDirty) prefix else stored.gcsPrefix
-                                val raw = if (signedUrlDirty) signedUrl.trim() else stored.gcsSignedUrl
-                                val url = normalizeStoredSignedUrl(raw, nextBucket, nextPrefix)
-                                stored.copy(
-                                    cloudBackupEnabled = CloudBackupPolicy.isUploadConfigured(url),
-                                    gcsBucket = nextBucket,
-                                    gcsPrefix = nextPrefix,
-                                    gcsSignedUrl = url,
-                                    backupIncludeDatabase = if (includeDatabaseDirty) includeDatabase else stored.backupIncludeDatabase,
-                                    backupIncludeImportCopies = if (includeImportsDirty) includeImports else stored.backupIncludeImportCopies,
-                                )
-                            }
-                            bucketDirty = false
-                            prefixDirty = false
-                            signedUrlDirty = false
-                            signedUrlPathLocked = false
-                            includeDatabaseDirty = false
-                            includeImportsDirty = false
+                            persistBackupSettings()
                         }
                     }) {
                         Text(stringResource(R.string.save_backup_settings))
@@ -495,27 +591,10 @@ fun SettingsTab(
                     Button(
                         onClick = {
                             scope.launch {
-                                if (bucketDirty || prefixDirty || signedUrlDirty || includeDatabaseDirty || includeImportsDirty) {
-                                    container.settingsStore.update { stored ->
-                                        val nextBucket = if (bucketDirty) bucket else stored.gcsBucket
-                                        val nextPrefix = if (prefixDirty) prefix else stored.gcsPrefix
-                                        val raw = if (signedUrlDirty) signedUrl.trim() else stored.gcsSignedUrl
-                                        val url = normalizeStoredSignedUrl(raw, nextBucket, nextPrefix)
-                                        stored.copy(
-                                            cloudBackupEnabled = CloudBackupPolicy.isUploadConfigured(url),
-                                            gcsBucket = nextBucket,
-                                            gcsPrefix = nextPrefix,
-                                            gcsSignedUrl = url,
-                                            backupIncludeDatabase = if (includeDatabaseDirty) includeDatabase else stored.backupIncludeDatabase,
-                                            backupIncludeImportCopies = if (includeImportsDirty) includeImports else stored.backupIncludeImportCopies,
-                                        )
-                                    }
-                                    bucketDirty = false
-                                    prefixDirty = false
-                                    signedUrlDirty = false
-                                    signedUrlPathLocked = false
-                                    includeDatabaseDirty = false
-                                    includeImportsDirty = false
+                                if (bucketDirty || prefixDirty || signedUrlDirty || signedGetUrlDirty ||
+                                    includeDatabaseDirty || includeImportsDirty
+                                ) {
+                                    persistBackupSettings()
                                 }
                                 container.cloudBackupCoordinator.enqueue(BackupTrigger.Manual)
                             }
@@ -526,6 +605,86 @@ fun SettingsTab(
                             ),
                     ) {
                         Text(stringResource(R.string.backup_now))
+                    }
+                    Button(
+                        onClick = { showRestoreConfirm = true },
+                        enabled = !restoreRunning && !backupRunning && (
+                            CloudBackupPolicy.isRestoreConfigured(signedGetUrl) ||
+                                CloudBackupPolicy.isRestoreConfigured(settings.gcsSignedGetUrl)
+                            ),
+                    ) {
+                        Text(stringResource(R.string.restore_from_cloud))
+                    }
+                    if (showRestoreConfirm) {
+                        AlertDialog(
+                            onDismissRequest = { if (!restoreRunning) showRestoreConfirm = false },
+                            title = { Text(stringResource(R.string.restore_confirm_title)) },
+                            text = { Text(stringResource(R.string.restore_confirm_body)) },
+                            confirmButton = {
+                                TextButton(
+                                    enabled = !restoreRunning,
+                                    onClick = {
+                                        restoreRunning = true
+                                        restoreMessage = null
+                                        scope.launch {
+                                            try {
+                                                if (bucketDirty || prefixDirty || signedUrlDirty || signedGetUrlDirty ||
+                                                    includeDatabaseDirty || includeImportsDirty
+                                                ) {
+                                                    persistBackupSettings()
+                                                }
+                                                val result = container.cloudBackupRepository.runRestore {
+                                                    container.importManager.holdForRestore()
+                                                    context.startService(
+                                                        com.alorbach.solarmonitor.service.ImportForegroundService.stopIntent(context),
+                                                    )
+                                                    com.alorbach.solarmonitor.work.ScheduledImportWorker.cancelAll(context, emptyList())
+                                                    container.liveMonitoringRepository.stopAll()
+                                                    context.startService(
+                                                        com.alorbach.solarmonitor.service.LiveMonitorService.stopIntent(context),
+                                                    )
+                                                    var waited = 0
+                                                    fun writersBusy(): Boolean =
+                                                        container.importManager.isImportActive() ||
+                                                            com.alorbach.solarmonitor.work.ScheduledImportWorker.isInFlight() ||
+                                                            container.liveMonitoringRepository.hasInFlightWork()
+                                                    while (writersBusy() && waited < 30_000) {
+                                                        Thread.sleep(50)
+                                                        waited += 50
+                                                    }
+                                                    if (writersBusy()) {
+                                                        error(context.getString(R.string.restore_import_busy))
+                                                    }
+                                                }
+                                                restoreSuccess = result.success
+                                                restoreMessage = result.message
+                                                if (result.shouldRestart) {
+                                                    com.alorbach.solarmonitor.service.AppProcessRestarter.restart(context)
+                                                }
+                                            } catch (error: Throwable) {
+                                                container.importManager.clearRestoreHold()
+                                                restoreSuccess = false
+                                                restoreMessage = error.message
+                                                    ?: context.getString(R.string.restore_failed)
+                                            } finally {
+                                                restoreRunning = false
+                                                showRestoreConfirm = false
+                                            }
+                                        }
+                                    },
+                                ) {
+                                    Text(stringResource(R.string.restore_confirm))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    enabled = !restoreRunning,
+                                    onClick = { showRestoreConfirm = false },
+                                ) {
+                                    Text(stringResource(R.string.cancel))
+                                }
+                            },
+                        )
                     }
                 }
             }

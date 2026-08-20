@@ -78,5 +78,6 @@ class CredentialStore(context: Context) {
     companion object {
         private const val FILE_NAME = "solar_monitor_secrets"
         const val KEY_GCS_SIGNED_URL = "gcs_signed_url"
+        const val KEY_GCS_SIGNED_GET_URL = "gcs_signed_get_url"
     }
 }

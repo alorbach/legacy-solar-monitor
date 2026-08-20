@@ -40,6 +40,12 @@ data class AppSettings(
     val livePollIntervalSeconds: Long = 60,
     /** Home-screen compact/medium widgets; null = first device by name. */
     val widgetDeviceId: Long? = null,
+    /** Signed GET URL for restoring solar-monitor.db (method-specific; PUT cannot download). */
+    val gcsSignedGetUrl: String = "",
+    /** Notify on new inverter WARNING events from the last 24 hours. */
+    val inverterWarningAlertsEnabled: Boolean = true,
+    /** Per-device last notified event entryId, encoded as "id:entryId,id:entryId". */
+    val eventAlertWatermarks: String = "",
 )
 
 class AppSettingsStore(
@@ -75,6 +81,11 @@ class AppSettingsStore(
                 credentialStore.putNamed(CredentialStore.KEY_GCS_SIGNED_URL, updated.gcsSignedUrl)
             }
             prefs.remove(Keys.legacyGcsSignedUrl)
+            if (updated.gcsSignedGetUrl.isBlank()) {
+                credentialStore.deleteNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL)
+            } else {
+                credentialStore.putNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL, updated.gcsSignedGetUrl)
+            }
             prefs[Keys.backupIncludeDatabase] = updated.backupIncludeDatabase
             prefs[Keys.backupIncludeImportCopies] = updated.backupIncludeImportCopies
             if (updated.backupLastAttemptEpochSeconds == null) {
@@ -108,6 +119,8 @@ class AppSettingsStore(
             } else {
                 prefs[Keys.widgetDeviceId] = updated.widgetDeviceId
             }
+            prefs[Keys.inverterWarningAlertsEnabled] = updated.inverterWarningAlertsEnabled
+            prefs[Keys.eventAlertWatermarks] = updated.eventAlertWatermarks
         }
     }
 
@@ -144,6 +157,9 @@ class AppSettingsStore(
             hourAggregatesSchemaVersion = prefs[Keys.hourAggregatesSchemaVersion] ?: 0,
             livePollIntervalSeconds = prefs[Keys.livePollIntervalSeconds] ?: 60L,
             widgetDeviceId = prefs[Keys.widgetDeviceId],
+            gcsSignedGetUrl = credentialStore.getNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL) ?: "",
+            inverterWarningAlertsEnabled = prefs[Keys.inverterWarningAlertsEnabled] ?: true,
+            eventAlertWatermarks = prefs[Keys.eventAlertWatermarks] ?: "",
         )
 
     private object Keys {
@@ -164,5 +180,7 @@ class AppSettingsStore(
         val hourAggregatesSchemaVersion = intPreferencesKey("hour_aggregates_schema_version")
         val livePollIntervalSeconds = longPreferencesKey("live_poll_interval_seconds")
         val widgetDeviceId = longPreferencesKey("widget_device_id")
+        val inverterWarningAlertsEnabled = booleanPreferencesKey("inverter_warning_alerts_enabled")
+        val eventAlertWatermarks = stringPreferencesKey("event_alert_watermarks")
     }
 }

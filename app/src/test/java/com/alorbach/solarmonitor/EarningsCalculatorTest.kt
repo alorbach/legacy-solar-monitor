@@ -2,8 +2,10 @@ package com.alorbach.solarmonitor
 
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.MonthAggregateEntity
+import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.domain.EarningsCalculator
+import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -170,5 +172,13 @@ class StatsSeriesFillTest {
             today,
         )
         assertEquals(LocalDate.of(2026, 4, 30).toEpochDay(), last)
+    }
+
+    @Test
+    fun visibleBarsDependOnGranularity() {
+        assertEquals(16, StatsSeriesFill.visibleBars(StatsGranularity.HOUR))
+        assertEquals(12, StatsSeriesFill.visibleBars(StatsGranularity.DAY))
+        assertEquals(12, StatsSeriesFill.visibleBars(StatsGranularity.MONTH))
+        assertEquals(12, StatsSeriesFill.visibleBars(StatsGranularity.YEAR))
     }
 }

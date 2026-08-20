@@ -729,6 +729,7 @@ internal fun DeviceEditorCard(
                 dataEpoch = dataEpoch + (device.lastLiveReadAtEpochSeconds ?: 0) +
                     (device.lastArchiveSyncAtEpochSeconds ?: 0),
                 zoneId = parseZoneId(timezone),
+                deviceName = device.name,
             )
             if (!device.lastDiagnostics.isNullOrBlank()) {
                 Text(

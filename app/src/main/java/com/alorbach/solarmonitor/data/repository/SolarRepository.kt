@@ -23,6 +23,7 @@ import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.domain.DashboardMetrics
 import com.alorbach.solarmonitor.domain.EarningsCalculator
+import com.alorbach.solarmonitor.domain.EventAlertPolicy
 import com.alorbach.solarmonitor.domain.StatisticsAggregator
 import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
@@ -48,6 +49,7 @@ class SolarRepository(
     private val db: SolarMonitorDatabase,
     private val settingsStore: AppSettingsStore,
     private val credentialStore: CredentialStore? = null,
+    private val eventAlertNotifier: com.alorbach.solarmonitor.service.EventAlertNotifier? = null,
 ) {
     companion object {
         const val HOUR_AGGREGATES_SCHEMA_VERSION = 2
@@ -171,6 +173,9 @@ class SolarRepository(
             current.copy(
                 widgetDeviceId = current.widgetDeviceId?.takeUnless { it == deviceId },
                 statsSelectedDeviceId = current.statsSelectedDeviceId?.takeUnless { it == deviceId },
+                eventAlertWatermarks = EventAlertPolicy.encodeWatermarks(
+                    EventAlertPolicy.parseWatermarks(current.eventAlertWatermarks) - deviceId,
+                ),
             )
         }
     }
@@ -243,7 +248,9 @@ class SolarRepository(
     }
 
     suspend fun saveEvents(items: List<DeviceEventEntity>) {
-        if (items.isNotEmpty()) dao.upsertEvents(items)
+        if (items.isEmpty()) return
+        dao.upsertEvents(items)
+        considerEventAlerts(items)
     }
 
     suspend fun importBundle(
@@ -273,6 +280,17 @@ class SolarRepository(
                     toEpochSeconds = samples.maxOf { it.timestampEpochSeconds },
                 )
             }
+        }
+    }
+
+    suspend fun considerEventAlerts(events: List<DeviceEventEntity>) {
+        if (events.isEmpty()) return
+        val notifier = eventAlertNotifier ?: return
+        val names = events.map { it.deviceId }.distinct().associateWith { id ->
+            dao.getDeviceById(id)?.name
+        }
+        runCatching {
+            notifier.onEventsSaved(events) { deviceId -> names[deviceId] }
         }
     }
 

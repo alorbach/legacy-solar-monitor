@@ -147,6 +147,102 @@ class GoogleCloudStorageBackupRepository(
         }
     }
 
+    suspend fun runRestore(stopLiveMonitor: () -> Unit): RestoreResult = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            val settings = settingsStore.settings.first()
+            val getUrl = settings.gcsSignedGetUrl.trim()
+            if (!CloudBackupPolicy.isRestoreConfigured(getUrl)) {
+                return@withContext RestoreResult(
+                    success = false,
+                    message = context.getString(R.string.restore_not_configured),
+                )
+            }
+            val downloadDir = File(context.cacheDir, RESTORE_DOWNLOAD_DIR).also { it.mkdirs() }
+            val download = File(downloadDir, CloudBackupPolicy.DATABASE_BACKUP_FILENAME)
+            if (download.exists()) {
+                check(download.delete()) { "Unable to clear previous restore download" }
+            }
+            runCatching { downloadFile(getUrl, download) }
+                .onFailure { error ->
+                    return@withContext RestoreResult(
+                        success = false,
+                        message = error.message ?: context.getString(R.string.restore_failed),
+                    )
+                }
+            val header = ByteArray(16)
+            download.inputStream().use { stream ->
+                var offset = 0
+                while (offset < header.size) {
+                    val read = stream.read(header, offset, header.size - offset)
+                    if (read <= 0) break
+                    offset += read
+                }
+            }
+            if (!CloudBackupPolicy.isSqliteDatabaseHeader(header)) {
+                download.delete()
+                return@withContext RestoreResult(
+                    success = false,
+                    message = context.getString(R.string.restore_invalid_file),
+                )
+            }
+
+            stopLiveMonitor()
+            val dbFile = context.getDatabasePath(DATABASE_NAME)
+            val previousDir = File(context.cacheDir, RESTORE_PREVIOUS_DIR).also { it.mkdirs() }
+            val previous = File(previousDir, "${clock()}-$DATABASE_NAME")
+            runCatching { database.close() }
+            try {
+                if (dbFile.exists()) {
+                    dbFile.copyTo(previous, overwrite = true)
+                }
+                previousDir.listFiles()?.forEach { file ->
+                    if (file.absolutePath != previous.absolutePath) file.delete()
+                }
+                File(dbFile.path + "-wal").delete()
+                File(dbFile.path + "-shm").delete()
+                download.copyTo(dbFile, overwrite = true)
+                File(dbFile.path + "-wal").delete()
+                File(dbFile.path + "-shm").delete()
+            } catch (error: Throwable) {
+                if (previous.exists()) {
+                    runCatching { previous.copyTo(dbFile, overwrite = true) }
+                }
+                return@withContext RestoreResult(
+                    success = false,
+                    message = error.message ?: context.getString(R.string.restore_failed),
+                    shouldRestart = true,
+                )
+            }
+            val message = context.getString(R.string.restore_succeeded)
+            runCatching {
+                settingsStore.update {
+                    it.copy(
+                        backupLastAttemptEpochSeconds = clock(),
+                        backupLastSuccessEpochSeconds = clock(),
+                        backupLastMessage = message,
+                        backupLastOk = true,
+                    )
+                }
+            }
+            RestoreResult(success = true, message = message, shouldRestart = true)
+        }
+    }
+
+    private fun downloadFile(url: String, target: File) {
+        require(url.startsWith("https://", ignoreCase = true)) {
+            "Cloud restore URL must use HTTPS"
+        }
+        val request = Request.Builder().url(url).get().build()
+        client.newCall(request).execute().use { response ->
+            require(response.isSuccessful) { "GCS download failed: ${response.code}" }
+            val body = response.body ?: error(context.getString(R.string.restore_failed))
+            target.outputStream().use { output ->
+                body.byteStream().copyTo(output)
+            }
+        }
+        require(target.exists() && target.length() > 0L) { context.getString(R.string.restore_invalid_file) }
+    }
+
     /** Kept for callers that already have a concrete file; prefer [runBackup]. */
     suspend fun uploadIfConfigured(file: File): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
@@ -294,6 +390,8 @@ class GoogleCloudStorageBackupRepository(
     companion object {
         private const val DATABASE_NAME = "solar-monitor.db"
         private const val STAGING_DIR = "backup-upload"
+        private const val RESTORE_DOWNLOAD_DIR = "restore-download"
+        private const val RESTORE_PREVIOUS_DIR = "restore-previous"
         private val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }

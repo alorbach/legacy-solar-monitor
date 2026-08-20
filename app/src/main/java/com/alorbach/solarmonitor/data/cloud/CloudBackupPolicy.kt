@@ -16,6 +16,12 @@ data class BackupResult(
     val retryable: Boolean = false,
 )
 
+data class RestoreResult(
+    val success: Boolean,
+    val message: String,
+    val shouldRestart: Boolean = false,
+)
+
 enum class BackupSkipReason {
     NOT_CONFIGURED,
     NO_CONTENT,
@@ -80,6 +86,24 @@ object CloudBackupPolicy {
         val query = url.substringAfter('?', missingDelimiterValue = "")
         return query.isNotBlank()
     }
+
+    /**
+     * GET signatures are method-specific and must target the database object.
+     * A PUT signed URL is not sufficient for restore.
+     */
+    fun isRestoreConfigured(signedGetUrl: String): Boolean {
+        if (!isUploadConfigured(signedGetUrl)) return false
+        val path = signedGetUrl.substringBefore('?')
+        return path.endsWith("/$DATABASE_BACKUP_FILENAME") ||
+            path.substringAfterLast('/') == DATABASE_BACKUP_FILENAME
+    }
+
+    fun isSqliteDatabaseHeader(bytes: ByteArray): Boolean {
+        if (bytes.size < SQLITE_HEADER.size) return false
+        return bytes.sliceArray(SQLITE_HEADER.indices).contentEquals(SQLITE_HEADER)
+    }
+
+    private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
 
     /**
      * A pasted GCS signature covers one canonical object path. Filter staged filenames so we
