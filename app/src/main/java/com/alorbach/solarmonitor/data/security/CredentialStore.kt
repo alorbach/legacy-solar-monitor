@@ -7,7 +7,7 @@ import androidx.security.crypto.MasterKey
 import java.util.UUID
 
 /**
- * Stores secrets (SMA PIN, FTP/SFTP passwords, GCS signed URLs) in EncryptedSharedPreferences.
+ * Stores secrets (SMA PIN, FTP/SFTP passwords) in EncryptedSharedPreferences.
  * Room / WorkManager only keep opaque credential IDs or never store the secret at all.
  */
 class CredentialStore(context: Context) {

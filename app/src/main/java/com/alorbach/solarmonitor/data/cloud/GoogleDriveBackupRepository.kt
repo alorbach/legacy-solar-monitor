@@ -3,7 +3,6 @@ package com.alorbach.solarmonitor.data.cloud
 import android.content.Context
 import android.os.Build
 import com.alorbach.solarmonitor.R
-import com.alorbach.solarmonitor.data.importing.SharedHttpClients
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.data.settings.AppSettingsStore
@@ -13,16 +12,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.asRequestBody
 
-class GoogleCloudStorageBackupRepository(
+class GoogleDriveBackupRepository(
     private val context: Context,
     private val settingsStore: AppSettingsStore,
     private val database: SolarMonitorDatabase,
-    private val client: OkHttpClient = SharedHttpClients.okHttp,
+    private val auth: GoogleDriveAuth,
+    private val remote: DriveRemote = GoogleDriveRemote(
+        tokenProvider = {
+            val email = settingsStore.settings.first().googleAccountEmail
+            auth.accessToken(email)
+        },
+    ),
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
 ) {
     private val mutex = Mutex()
@@ -33,7 +34,7 @@ class GoogleCloudStorageBackupRepository(
             val settings = settingsStore.settings.first()
             val skip = CloudBackupPolicy.resolveSkipReason(
                 enabled = settings.cloudBackupEnabled,
-                signedUrlBlank = settings.gcsSignedUrl.isBlank(),
+                signedIn = CloudBackupPolicy.isAccountConfigured(settings.googleAccountEmail),
                 includeDatabase = settings.backupIncludeDatabase,
                 includeImportCopies = settings.backupIncludeImportCopies,
             )
@@ -77,31 +78,27 @@ class GoogleCloudStorageBackupRepository(
                 if (settings.backupIncludeImportCopies) {
                     staged += listImportCopies()
                 }
-                val stagedNames = staged.map { backupObjectName(importsRoot, it) }
-                val allowedNames = CloudBackupPolicy.selectableBackupFilenames(
-                    settings.gcsSignedUrl,
-                    stagedNames,
-                ).toSet()
-                val uploadable = staged.filter { backupObjectName(importsRoot, it) in allowedNames }
-                if (uploadable.isEmpty()) {
+                if (staged.isEmpty()) {
                     return@withContext persistResult(
                         settings = settings,
                         now = now,
                         result = BackupResult(
                             skipped = true,
                             success = true,
-                            message = context.getString(R.string.backup_no_matching_files),
+                            message = context.getString(R.string.backup_skip_no_content),
                         ),
                     )
                 }
 
+                val folderId = resolveFolderId(settings)
                 var uploaded = 0
                 val errors = mutableListOf<String>()
-                for (file in uploadable) {
+                for (file in staged) {
                     val objectName = backupObjectName(importsRoot, file)
-                    runCatching { uploadFile(settings, file, objectName) }
+                    val driveName = CloudBackupPolicy.driveFileName(objectName)
+                    runCatching { remote.upsertFile(folderId, driveName, file) }
                         .onSuccess { uploaded++ }
-                        .onFailure { errors += "$objectName: ${it.message ?: context.getString(R.string.backup_upload_failed)}" }
+                        .onFailure { errors += "$driveName: ${it.message ?: context.getString(R.string.backup_upload_failed)}" }
                 }
                 val ok = errors.isEmpty()
                 val message = if (ok) {
@@ -110,7 +107,7 @@ class GoogleCloudStorageBackupRepository(
                     context.getString(
                         R.string.backup_uploaded_partial,
                         uploaded,
-                        uploadable.size,
+                        staged.size,
                         errors.joinToString("; "),
                     )
                 }
@@ -118,12 +115,24 @@ class GoogleCloudStorageBackupRepository(
                 persistResult(
                     settings = settings,
                     now = now,
+                    folderId = folderId,
                     result = BackupResult(
                         skipped = false,
                         success = ok,
                         message = message,
                         uploadedCount = uploaded,
                         retryable = retryable,
+                    ),
+                )
+            } catch (error: GoogleDriveNeedsUserException) {
+                persistResult(
+                    settings = settings,
+                    now = now,
+                    result = BackupResult(
+                        skipped = false,
+                        success = false,
+                        message = error.message ?: context.getString(R.string.backup_needs_reauth),
+                        retryable = false,
                     ),
                 )
             } catch (t: Throwable) {
@@ -147,11 +156,10 @@ class GoogleCloudStorageBackupRepository(
         }
     }
 
-    suspend fun runRestore(stopLiveMonitor: () -> Unit): RestoreResult = mutex.withLock {
+    suspend fun runRestore(stopLiveMonitor: suspend () -> Unit): RestoreResult = mutex.withLock {
         withContext(Dispatchers.IO) {
             val settings = settingsStore.settings.first()
-            val getUrl = settings.gcsSignedGetUrl.trim()
-            if (!CloudBackupPolicy.isRestoreConfigured(getUrl)) {
+            if (!CloudBackupPolicy.isAccountConfigured(settings.googleAccountEmail)) {
                 return@withContext RestoreResult(
                     success = false,
                     message = context.getString(R.string.restore_not_configured),
@@ -162,13 +170,25 @@ class GoogleCloudStorageBackupRepository(
             if (download.exists()) {
                 check(download.delete()) { "Unable to clear previous restore download" }
             }
-            runCatching { downloadFile(getUrl, download) }
-                .onFailure { error ->
+            val folderId = runCatching { resolveFolderId(settings) }
+                .getOrElse { error ->
                     return@withContext RestoreResult(
                         success = false,
                         message = error.message ?: context.getString(R.string.restore_failed),
                     )
                 }
+            runCatching {
+                remote.downloadFile(folderId, CloudBackupPolicy.DATABASE_BACKUP_FILENAME, download)
+            }.onFailure { error ->
+                val message = when {
+                    error is GoogleDriveNeedsUserException ->
+                        error.message ?: context.getString(R.string.backup_needs_reauth)
+                    error.message.orEmpty().contains("not found", ignoreCase = true) ->
+                        context.getString(R.string.restore_file_missing)
+                    else -> error.message ?: context.getString(R.string.restore_failed)
+                }
+                return@withContext RestoreResult(success = false, message = message)
+            }
             val header = ByteArray(16)
             download.inputStream().use { stream ->
                 var offset = 0
@@ -217,6 +237,7 @@ class GoogleCloudStorageBackupRepository(
             runCatching {
                 settingsStore.update {
                     it.copy(
+                        driveFolderId = folderId,
                         backupLastAttemptEpochSeconds = clock(),
                         backupLastSuccessEpochSeconds = clock(),
                         backupLastMessage = message,
@@ -228,55 +249,15 @@ class GoogleCloudStorageBackupRepository(
         }
     }
 
-    private fun downloadFile(url: String, target: File) {
-        require(url.startsWith("https://", ignoreCase = true)) {
-            "Cloud restore URL must use HTTPS"
-        }
-        val request = Request.Builder().url(url).get().build()
-        client.newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "GCS download failed: ${response.code}" }
-            val body = response.body ?: error(context.getString(R.string.restore_failed))
-            target.outputStream().use { output ->
-                body.byteStream().copyTo(output)
-            }
-        }
-        require(target.exists() && target.length() > 0L) { context.getString(R.string.restore_invalid_file) }
-    }
-
-    /** Kept for callers that already have a concrete file; prefer [runBackup]. */
-    suspend fun uploadIfConfigured(file: File): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val settings = settingsStore.settings.first()
-            if (!settings.cloudBackupEnabled || settings.gcsSignedUrl.isBlank()) return@runCatching
-            val allowed = CloudBackupPolicy.selectableBackupFilenames(
-                settings.gcsSignedUrl,
-                listOf(file.name),
-            )
-            require(allowed.isNotEmpty()) {
-                "Signed URL does not cover ${file.name}"
-            }
-            uploadFile(settings, file, file.name)
-        }
-    }
-
-    private fun uploadFile(settings: AppSettings, file: File, objectName: String) {
-        val url = CloudBackupPolicy.buildUploadUrl(
-            template = settings.gcsSignedUrl,
-            bucket = settings.gcsBucket,
-            prefix = settings.gcsPrefix,
-            filename = objectName,
+    private suspend fun resolveFolderId(settings: AppSettings): String {
+        val folderId = remote.findOrCreateFolder(
+            CloudBackupPolicy.DRIVE_FOLDER_NAME,
+            settings.driveFolderId,
         )
-        require(url.startsWith("https://", ignoreCase = true)) {
-            "Cloud backup URL must use HTTPS"
+        if (folderId != settings.driveFolderId) {
+            settingsStore.update { it.copy(driveFolderId = folderId) }
         }
-        val body = file.asRequestBody(OCTET_STREAM)
-        val request = Request.Builder()
-            .url(url)
-            .put(body)
-            .build()
-        client.newCall(request).execute().use { response ->
-            require(response.isSuccessful) { "GCS upload failed: ${response.code}" }
-        }
+        return folderId
     }
 
     private fun createDatabaseSnapshot(): File {
@@ -348,7 +329,6 @@ class GoogleCloudStorageBackupRepository(
             .toList()
     }
 
-    /** Prefer device-relative paths so same basenames from different devices stay unique in GCS. */
     private fun backupObjectName(importsRoot: File, file: File): String {
         if (file.name.equals(CloudBackupPolicy.DATABASE_BACKUP_FILENAME, ignoreCase = true)) {
             return file.name
@@ -362,11 +342,12 @@ class GoogleCloudStorageBackupRepository(
         now: Long,
         result: BackupResult,
         updateAttempt: Boolean = true,
+        folderId: String? = null,
     ): BackupResult {
-        // Partial uploads still advance the success timestamp so Auto throttle prevents spam.
-        val refreshSuccess = !result.skipped && (result.success || result.uploadedCount > 0)
+        val refreshSuccess = CloudBackupPolicy.shouldRefreshBackupSuccess(result.skipped, result.success)
         settingsStore.update {
             it.copy(
+                driveFolderId = folderId ?: settings.driveFolderId,
                 backupLastAttemptEpochSeconds = if (updateAttempt) {
                     now
                 } else {
@@ -392,6 +373,5 @@ class GoogleCloudStorageBackupRepository(
         private const val STAGING_DIR = "backup-upload"
         private const val RESTORE_DOWNLOAD_DIR = "restore-download"
         private const val RESTORE_PREVIOUS_DIR = "restore-previous"
-        private val OCTET_STREAM = "application/octet-stream".toMediaType()
     }
 }

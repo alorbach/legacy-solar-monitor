@@ -2,6 +2,7 @@ package com.alorbach.solarmonitor
 
 import com.alorbach.solarmonitor.data.cloud.BackupSkipReason
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
+import com.alorbach.solarmonitor.data.cloud.DriveJson
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -10,35 +11,12 @@ import org.junit.Test
 
 class CloudBackupPolicyTest {
     @Test
-    fun buildUploadUrl_substitutesBucketPrefixAndFilename() {
-        val url = CloudBackupPolicy.buildUploadUrl(
-            template = "https://storage.example/{bucket}/{prefix}/{filename}?sig=abc",
-            bucket = "my-bucket",
-            prefix = "/solar-monitor/",
-            filename = "solar-monitor.db",
-        )
-        assertEquals(
-            "https://storage.example/my-bucket/solar-monitor/solar-monitor.db?sig=abc",
-            url,
-        )
-    }
-
-    @Test
-    fun buildUploadUrl_keepsDistinctFilenames() {
-        val template = "https://storage.example/{bucket}/{prefix}/{filename}"
-        val db = CloudBackupPolicy.buildUploadUrl(template, "b", "p", "solar-monitor.db")
-        val csv = CloudBackupPolicy.buildUploadUrl(template, "b", "p", "daydata.csv")
-        assertEquals("https://storage.example/b/p/solar-monitor.db", db)
-        assertEquals("https://storage.example/b/p/daydata.csv", csv)
-    }
-
-    @Test
-    fun resolveSkipReason_whenDisabledOrBlankUrl() {
+    fun resolveSkipReason_whenDisabledOrSignedOut() {
         assertEquals(
             BackupSkipReason.NOT_CONFIGURED,
             CloudBackupPolicy.resolveSkipReason(
                 enabled = false,
-                signedUrlBlank = true,
+                signedIn = false,
                 includeDatabase = true,
                 includeImportCopies = true,
             ),
@@ -47,7 +25,16 @@ class CloudBackupPolicyTest {
             BackupSkipReason.NOT_CONFIGURED,
             CloudBackupPolicy.resolveSkipReason(
                 enabled = true,
-                signedUrlBlank = true,
+                signedIn = false,
+                includeDatabase = true,
+                includeImportCopies = true,
+            ),
+        )
+        assertEquals(
+            BackupSkipReason.NOT_CONFIGURED,
+            CloudBackupPolicy.resolveSkipReason(
+                enabled = false,
+                signedIn = true,
                 includeDatabase = true,
                 includeImportCopies = true,
             ),
@@ -60,7 +47,7 @@ class CloudBackupPolicyTest {
             BackupSkipReason.NO_CONTENT,
             CloudBackupPolicy.resolveSkipReason(
                 enabled = true,
-                signedUrlBlank = false,
+                signedIn = true,
                 includeDatabase = false,
                 includeImportCopies = false,
             ),
@@ -68,11 +55,26 @@ class CloudBackupPolicyTest {
         assertNull(
             CloudBackupPolicy.resolveSkipReason(
                 enabled = true,
-                signedUrlBlank = false,
+                signedIn = true,
                 includeDatabase = true,
                 includeImportCopies = false,
             ),
         )
+    }
+
+    @Test
+    fun isAccountConfigured_requiresNonBlankEmail() {
+        assertFalse(CloudBackupPolicy.isAccountConfigured(""))
+        assertFalse(CloudBackupPolicy.isAccountConfigured("   "))
+        assertTrue(CloudBackupPolicy.isAccountConfigured("user@gmail.com"))
+    }
+
+    @Test
+    fun driveFileName_replacesPathSeparators() {
+        assertEquals("solar-monitor.db", CloudBackupPolicy.driveFileName("solar-monitor.db"))
+        assertEquals("device-1%2Fday.csv", CloudBackupPolicy.driveFileName("device-1/day.csv"))
+        assertEquals("device-1%2Fnested%2Fday.csv", CloudBackupPolicy.driveFileName("/device-1/nested/day.csv"))
+        assertEquals("device-1%252Fday.csv", CloudBackupPolicy.driveFileName("device-1%2Fday.csv"))
     }
 
     @Test
@@ -99,167 +101,6 @@ class CloudBackupPolicyTest {
     }
 
     @Test
-    fun displaySignedUrlTemplate_usesDefaultWhenBlank() {
-        assertEquals(
-            "https://storage.googleapis.com/{bucket}/{prefix}/solar-monitor.db",
-            CloudBackupPolicy.displaySignedUrlTemplate(""),
-        )
-        assertEquals(
-            "https://storage.googleapis.com/my-bucket/solar-monitor/solar-monitor.db",
-            CloudBackupPolicy.displaySignedUrlTemplate("", "my-bucket", "solar-monitor"),
-        )
-        assertEquals(
-            "https://example/signed",
-            CloudBackupPolicy.displaySignedUrlTemplate("https://example/signed"),
-        )
-    }
-
-    @Test
-    fun buildPathTemplate_usesConfiguredValues() {
-        assertEquals(
-            "https://storage.googleapis.com/my-bucket/backups/{filename}",
-            CloudBackupPolicy.buildPathTemplate("my-bucket", "/backups/"),
-        )
-        assertEquals(
-            CloudBackupPolicy.DEFAULT_SIGNED_URL_TEMPLATE,
-            CloudBackupPolicy.buildPathTemplate("", ""),
-        )
-    }
-
-    @Test
-    fun withAutoPath_dropsSignatureQuery() {
-        val updated = CloudBackupPolicy.withAutoPath(
-            existingUrl = "https://storage.googleapis.com/{bucket}/{prefix}/{filename}?X-Goog-Signature=abc",
-            bucket = "prod",
-            prefix = "solar",
-        )
-        assertEquals(
-            "https://storage.googleapis.com/prod/solar/solar-monitor.db",
-            updated,
-        )
-    }
-
-    @Test
-    fun selectableBackupFilenames_limitsSignedPlaceholderToDatabase() {
-        val template =
-            "https://storage.googleapis.com/b/p/{filename}?X-Goog-Signature=abc"
-        assertEquals(
-            listOf("solar-monitor.db"),
-            CloudBackupPolicy.selectableBackupFilenames(
-                template,
-                listOf("solar-monitor.db", "day.csv", "archive.zip"),
-            ),
-        )
-    }
-
-    @Test
-    fun selectableBackupFilenames_matchesNestedDeviceImportPaths() {
-        val template =
-            "https://storage.googleapis.com/bucket/imports/device-1/day.csv?X-Goog-Signature=abc"
-        assertEquals(
-            listOf("device-1/day.csv"),
-            CloudBackupPolicy.selectableBackupFilenames(
-                template,
-                listOf("solar-monitor.db", "device-1/day.csv", "device-2/day.csv", "day.csv"),
-            ),
-        )
-    }
-
-    @Test
-    fun selectableBackupFilenames_fallsBackToUniqueBasenameForLegacySignedUrl() {
-        val template =
-            "https://storage.googleapis.com/bucket/imports/day.csv?X-Goog-Signature=abc"
-        assertEquals(
-            listOf("device-1/day.csv"),
-            CloudBackupPolicy.selectableBackupFilenames(
-                template,
-                listOf("solar-monitor.db", "device-1/day.csv"),
-            ),
-        )
-        assertEquals(
-            emptyList<String>(),
-            CloudBackupPolicy.selectableBackupFilenames(
-                template,
-                listOf("device-1/day.csv", "device-2/day.csv"),
-            ),
-        )
-    }
-
-    @Test
-    fun selectableBackupFilenames_prefersNestedOverLegacyFlatCopy() {
-        val template =
-            "https://storage.googleapis.com/bucket/imports/day.csv?X-Goog-Signature=abc"
-        assertEquals(
-            listOf("device-1/day.csv"),
-            CloudBackupPolicy.selectableBackupFilenames(
-                template,
-                listOf("day.csv", "device-1/day.csv"),
-            ),
-        )
-    }
-
-    @Test
-    fun selectableBackupFilenames_doesNotCrossMatchNestedDeviceUrls() {
-        val template =
-            "https://storage.googleapis.com/bucket/imports/device-1/day.csv?X-Goog-Signature=abc"
-        assertEquals(
-            emptyList<String>(),
-            CloudBackupPolicy.selectableBackupFilenames(
-                template,
-                listOf("device-2/day.csv"),
-            ),
-        )
-    }
-
-    @Test
-    fun isUploadConfigured_rejectsBlankAndPlaceholderDefault() {
-        assertFalse(CloudBackupPolicy.isUploadConfigured(""))
-        assertFalse(CloudBackupPolicy.isUploadConfigured(CloudBackupPolicy.DEFAULT_SIGNED_URL_TEMPLATE))
-        assertFalse(
-            CloudBackupPolicy.isUploadConfigured(
-                "https://storage.googleapis.com/my-bucket/solar-monitor/{filename}",
-            ),
-        )
-        assertFalse(
-            CloudBackupPolicy.isUploadConfigured(
-                "http://storage.googleapis.com/my-bucket/solar-monitor.db?X-Goog-Signature=abc",
-            ),
-        )
-        assertTrue(
-            CloudBackupPolicy.isUploadConfigured(
-                CloudBackupPolicy.buildDatabaseObjectUrl("my-bucket", "solar-monitor") +
-                    "?X-Goog-Signature=abc",
-            ),
-        )
-    }
-
-    @Test
-    fun isRestoreConfigured_requiresHttpsQueryAndDatabaseObject() {
-        assertFalse(CloudBackupPolicy.isRestoreConfigured(""))
-        assertFalse(
-            CloudBackupPolicy.isRestoreConfigured(
-                "https://storage.googleapis.com/my-bucket/solar-monitor/solar-monitor.db",
-            ),
-        )
-        assertFalse(
-            CloudBackupPolicy.isRestoreConfigured(
-                "http://storage.googleapis.com/my-bucket/solar-monitor/solar-monitor.db?X-Goog-Signature=abc",
-            ),
-        )
-        assertFalse(
-            CloudBackupPolicy.isRestoreConfigured(
-                "https://storage.googleapis.com/my-bucket/solar-monitor/day.csv?X-Goog-Signature=abc",
-            ),
-        )
-        assertTrue(
-            CloudBackupPolicy.isRestoreConfigured(
-                CloudBackupPolicy.buildDatabaseObjectUrl("my-bucket", "solar-monitor") +
-                    "?X-Goog-Signature=abc",
-            ),
-        )
-    }
-
-    @Test
     fun isSqliteDatabaseHeader_acceptsSqliteMagic() {
         val header = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
         assertTrue(CloudBackupPolicy.isSqliteDatabaseHeader(header))
@@ -269,15 +110,54 @@ class CloudBackupPolicyTest {
     }
 
     @Test
-    fun isTransientUploadFailure_coversDnsAndConnectOutages() {
+    fun isTransientUploadFailure_coversDnsConnectAndDriveStatus() {
         assertTrue(
             CloudBackupPolicy.isTransientUploadFailure(
-                "Unable to resolve host storage.googleapis.com: No address associated with hostname",
+                "Unable to resolve host www.googleapis.com: No address associated with hostname",
             ),
         )
-        assertTrue(CloudBackupPolicy.isTransientUploadFailure("Failed to connect to storage.googleapis.com"))
+        assertTrue(CloudBackupPolicy.isTransientUploadFailure("Failed to connect to www.googleapis.com"))
         assertTrue(CloudBackupPolicy.isTransientUploadFailure("Network is unreachable"))
-        assertTrue(CloudBackupPolicy.isTransientUploadFailure("gcs upload failed: 503"))
-        assertFalse(CloudBackupPolicy.isTransientUploadFailure("gcs upload failed: 403"))
+        assertTrue(CloudBackupPolicy.isTransientUploadFailure("Drive request failed: 503"))
+        assertTrue(CloudBackupPolicy.isTransientUploadFailure("Drive request failed: 429"))
+        assertFalse(CloudBackupPolicy.isTransientUploadFailure("Drive request failed: 403"))
+        assertFalse(CloudBackupPolicy.isTransientUploadFailure("Drive request failed: 401"))
+    }
+
+    @Test
+    fun driveJson_parsesFileListAndEmail() {
+        val files = DriveJson.files(
+            """{"files":[{"id":"abc","name":"solar-monitor.db"},{"id":"def","name":"device-1_day.csv"}]}""",
+        )
+        assertEquals(2, files.size)
+        assertEquals("abc", files[0].id)
+        assertEquals("solar-monitor.db", files[0].name)
+        assertEquals("def", files[1].id)
+        assertEquals("user@gmail.com", DriveJson.stringField("""{"user":{"emailAddress":"user@gmail.com"}}""", "emailAddress"))
+        assertEquals("\"SMA Solar Monitor\"", DriveJson.jsonString("SMA Solar Monitor"))
+        assertEquals("O\\'Brien", DriveJson.driveQueryLiteral("O'Brien"))
+    }
+
+    @Test
+    fun driveJson_parsesUnquotedTrashedBoolean() {
+        assertEquals(true, DriveJson.booleanField("""{"id":"abc","trashed":true}""", "trashed"))
+        assertEquals(false, DriveJson.booleanField("""{"id":"abc","trashed":false}""", "trashed"))
+    }
+
+    @Test
+    fun driveJson_files_keepsNamesContainingBrackets() {
+        val files = DriveJson.files(
+            """{"files":[{"id":"abc","name":"device]1.csv"},{"id":"def","name":"ok.csv"}]}""",
+        )
+        assertEquals(2, files.size)
+        assertEquals("device]1.csv", files[0].name)
+        assertEquals("def", files[1].id)
+    }
+
+    @Test
+    fun shouldRefreshBackupSuccess_onlyOnFullSuccess() {
+        assertFalse(CloudBackupPolicy.shouldRefreshBackupSuccess(skipped = true, success = true))
+        assertFalse(CloudBackupPolicy.shouldRefreshBackupSuccess(skipped = false, success = false))
+        assertTrue(CloudBackupPolicy.shouldRefreshBackupSuccess(skipped = false, success = true))
     }
 }

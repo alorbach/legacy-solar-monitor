@@ -388,6 +388,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                         NavigationBarItem(
                             selected = currentTab == tab,
                             onClick = { currentTab = tab },
+                            alwaysShowLabel = false,
                             icon = {
                                 when (tab) {
                                     AppTab.DASHBOARD -> Icon(Icons.Rounded.Dashboard, contentDescription = null)

@@ -35,6 +35,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Refresh
@@ -85,6 +87,7 @@ import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import com.alorbach.solarmonitor.data.importing.ImportRequest
 import com.alorbach.solarmonitor.data.importing.canReplay
+import com.alorbach.solarmonitor.data.importing.groupImportJobs
 import com.alorbach.solarmonitor.data.importing.replayConfig
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
@@ -132,6 +135,7 @@ fun ImportTab(
     var showRemoteWizard by rememberSaveable { mutableStateOf(false) }
     var showClearImportJobsConfirm by remember { mutableStateOf(false) }
     var deleteJobConfirm by remember { mutableStateOf<ImportJobEntity?>(null) }
+    var expandedGroupKeys by remember { mutableStateOf(setOf<String>()) }
     var rerunJob by remember { mutableStateOf<ImportJobEntity?>(null) }
     var rerunUsername by remember { mutableStateOf("") }
     var rerunPassword by remember { mutableStateOf("") }
@@ -211,6 +215,8 @@ fun ImportTab(
         )
     }
 
+    val jobGroups = remember(importJobs) { groupImportJobs(importJobs) }
+
     Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -267,6 +273,7 @@ fun ImportTab(
                             onValueChange = { importUrl = it },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text(stringResource(R.string.import_url)) },
+                            supportingText = { Text(stringResource(R.string.import_url_hint)) },
                             singleLine = true,
                         )
                         Button(
@@ -277,7 +284,6 @@ fun ImportTab(
                                     ImportRequest.UrlRequest(
                                         deviceId = deviceId,
                                         url = importUrl.trim(),
-                                        sourceLabel = context.getString(R.string.import_source_url),
                                     )
                                 )
                             },
@@ -346,7 +352,9 @@ fun ImportTab(
                 }
             }
         }
-        items(importJobs, key = { it.id }) { job ->
+        items(jobGroups, key = { it.key }) { group ->
+            val job = group.latest
+            val historyExpanded = group.key in expandedGroupKeys
             ElevatedCard(
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surfaceVariant),
                 shape = RoundedCornerShape(24.dp),
@@ -360,7 +368,7 @@ fun ImportTab(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            job.sourceLabel,
+                            group.sourceLabel,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.weight(1f),
                         )
@@ -436,6 +444,81 @@ fun ImportTab(
                             },
                         ) {
                             Text(stringResource(R.string.schedule_import))
+                        }
+                    }
+                    if (group.history.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                expandedGroupKeys = if (historyExpanded) {
+                                    expandedGroupKeys - group.key
+                                } else {
+                                    expandedGroupKeys + group.key
+                                }
+                            },
+                        ) {
+                            Icon(
+                                if (historyExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                                contentDescription = null,
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                if (historyExpanded) {
+                                    stringResource(R.string.import_hide_history)
+                                } else {
+                                    stringResource(R.string.import_show_history, group.history.size)
+                                },
+                            )
+                        }
+                    }
+                    if (historyExpanded) {
+                        group.history.forEach { past ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        formatEpochSeconds(
+                                            past.completedAtEpochSeconds ?: past.createdAtEpochSeconds,
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    IconButton(
+                                        enabled = !importRunning,
+                                        onClick = { deleteJobConfirm = past },
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Delete,
+                                            contentDescription = stringResource(R.string.delete_import_job),
+                                        )
+                                    }
+                                }
+                                Text(
+                                    stringResource(
+                                        R.string.import_job_status,
+                                        importSourceTypeLabel(past.sourceType),
+                                        stringResource(
+                                            when (past.status) {
+                                                ImportJobStatus.PENDING -> R.string.import_status_pending
+                                                ImportJobStatus.RUNNING -> R.string.import_status_running
+                                                ImportJobStatus.SUCCEEDED -> R.string.import_status_succeeded
+                                                ImportJobStatus.FAILED -> R.string.import_status_failed
+                                            },
+                                        ),
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                past.message?.let {
+                                    Text(it, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
                         }
                     }
                 }

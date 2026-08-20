@@ -104,6 +104,11 @@ fun TariffSection(
                 readOnly = true,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.tariff_to)) },
+                placeholder = {
+                    if (row.to.isBlank()) {
+                        Text(stringResource(R.string.tariff_open_ended))
+                    }
+                },
                 trailingIcon = {
                     IconButton(onClick = { picking = index to false }) {
                         Icon(Icons.Rounded.DateRange, contentDescription = stringResource(R.string.tariff_to))

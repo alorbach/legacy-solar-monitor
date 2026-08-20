@@ -322,6 +322,7 @@ internal fun DeviceEditorCard(
     val liveOkLabel = stringResource(R.string.live_read_ok)
     val liveFailedLabel = stringResource(R.string.live_read_failed)
     val archiveFailedLabel = stringResource(R.string.archive_sync_failed)
+    val deviceSavedLabel = stringResource(R.string.device_saved)
     val expandDeviceLabel = stringResource(R.string.expand_device)
     val collapseDeviceLabel = stringResource(R.string.collapse_device)
     val operationLabel = when {
@@ -391,6 +392,14 @@ internal fun DeviceEditorCard(
                 )
             }
             if (!expanded) {
+                if (continuousLiveActive) {
+                    Text(
+                        stringResource(R.string.live_monitor_active),
+                        color = colors.tertiary,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 Text(
                     stringResource(R.string.status_label, device.lastConnectionStatus ?: stringResource(R.string.idle)),
                     color = colors.onSurfaceVariant,
@@ -502,11 +511,19 @@ internal fun DeviceEditorCard(
             operationLabel?.let {
                 Text(text = it, color = colors.onBackground, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
+            Text(stringResource(R.string.device_connection_actions), fontWeight = FontWeight.SemiBold)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Button(enabled = !anyActionRunning, onClick = { scope.launch { persistEdits() } }) {
+                Button(enabled = !anyActionRunning, onClick = {
+                    scope.launch {
+                        if (persistEdits() != null) {
+                            testSuccess = true
+                            testMessage = deviceSavedLabel
+                        }
+                    }
+                }) {
                     Text(stringResource(R.string.save))
                 }
                 Button(
@@ -632,6 +649,12 @@ internal fun DeviceEditorCard(
                         Text(stringResource(R.string.cancel))
                     }
                 }
+            }
+            Text(stringResource(R.string.device_danger_actions), fontWeight = FontWeight.SemiBold)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Button(
                     enabled = !anyActionRunning && !liveRunning && !continuousLiveActive,
                     onClick = { showClearHistoryConfirm = true },
@@ -642,11 +665,6 @@ internal fun DeviceEditorCard(
                 ) {
                     Text(stringResource(R.string.clear_history))
                 }
-            }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
                 OutlinedButton(
                     enabled = !anyActionRunning,
                     onClick = { showDeleteConfirm = true },

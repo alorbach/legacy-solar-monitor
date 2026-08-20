@@ -169,8 +169,8 @@ class ImportManager(
                 if (request is ImportRequest.UrlRequest &&
                     ImportReplayConfig.isSensitiveImportUrl(request.url)
                 ) {
-                    // Keep kind/device/label for re-run UI; secret URL lives in CredentialStore.
-                    config.copy(url = null)
+                    // Keep kind/device/redacted label for re-run UI; secret URL lives in CredentialStore.
+                    config.copy(url = null, sourceLabel = publicUrlSourceLabel(request.url))
                 } else {
                     config
                 }
@@ -219,7 +219,10 @@ class ImportManager(
                 repository.recordImportJob(
                     ImportJobEntity(
                         deviceId = deviceId,
-                        sourceLabel = request.sourceLabel,
+                        sourceLabel = when (request) {
+                            is ImportRequest.UrlRequest -> publicUrlSourceLabel(request.url)
+                            else -> request.sourceLabel
+                        },
                         sourceType = request.sourceType,
                         status = ImportJobStatus.RUNNING,
                         createdAtEpochSeconds = System.currentTimeMillis() / 1000,

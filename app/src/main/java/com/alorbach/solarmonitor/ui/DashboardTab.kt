@@ -245,6 +245,17 @@ fun DashboardTab(
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
+                    if (devices.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(devices, key = { it.id }) { device ->
+                                DeviceChip(
+                                    label = device.name,
+                                    selected = selectedDeviceId == device.id,
+                                    onClick = { selectedDeviceId = device.id },
+                                )
+                            }
+                        }
+                    }
                     Text(
                         stringResource(R.string.production_chart_subtitle),
                         color = colors.onSurfaceVariant,
@@ -458,12 +469,21 @@ fun DashboardTab(
                         .clickable { selectedDeviceId = device.id },
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(
-                            device.name,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                device.name,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (device.id in liveActiveDeviceIds) {
+                                StatusBadge(stringResource(R.string.live_monitor_active), active = true)
+                            }
+                        }
                         Text(summary?.status ?: device.lastConnectionStatus ?: stringResource(R.string.idle), color = colors.onSurfaceVariant)
                         Text(
                             stringResource(
@@ -484,18 +504,29 @@ fun DashboardTab(
 @Composable
 private fun LiveElectricalDetails(summary: DeviceDashboardSummary?) {
     if (summary == null) return
-    val parts = buildList {
-        summary.pdc1?.let { add("DC1 ${YieldFormatting.wattsLabel(it)}") }
-        summary.pdc2?.let { add("DC2 ${YieldFormatting.wattsLabel(it)}") }
-        summary.pac1?.let { add("AC1 ${YieldFormatting.wattsLabel(it)}") }
-        summary.pac2?.let { add("AC2 ${YieldFormatting.wattsLabel(it)}") }
-        summary.pac3?.let { add("AC3 ${YieldFormatting.wattsLabel(it)}") }
-        summary.temperatureC?.let { add(String.format(Locale.getDefault(), "%.1f °C", it)) }
-        summary.frequencyHz?.let { add(String.format(Locale.getDefault(), "%.2f Hz", it)) }
-        summary.gridRelay?.let { add(it) }
-        summary.btSignalPercent?.let { add(String.format(Locale.getDefault(), "BT %.0f%%", it)) }
-        summary.serial?.let { add("SN $it") }
+    val parts = mutableListOf<String>()
+    val pdc1 = summary.pdc1
+    if (pdc1 != null) parts += stringResource(R.string.live_dc1, YieldFormatting.wattsLabel(pdc1))
+    val pdc2 = summary.pdc2
+    if (pdc2 != null) parts += stringResource(R.string.live_dc2, YieldFormatting.wattsLabel(pdc2))
+    val pac1 = summary.pac1
+    if (pac1 != null) parts += stringResource(R.string.live_ac1, YieldFormatting.wattsLabel(pac1))
+    val pac2 = summary.pac2
+    if (pac2 != null) parts += stringResource(R.string.live_ac2, YieldFormatting.wattsLabel(pac2))
+    val pac3 = summary.pac3
+    if (pac3 != null) parts += stringResource(R.string.live_ac3, YieldFormatting.wattsLabel(pac3))
+    summary.temperatureC?.let { parts += String.format(Locale.getDefault(), "%.1f °C", it) }
+    summary.frequencyHz?.let { parts += String.format(Locale.getDefault(), "%.2f Hz", it) }
+    summary.gridRelay?.let { parts += it }
+    val bt = summary.btSignalPercent
+    if (bt != null) {
+        parts += stringResource(
+            R.string.live_bt_signal,
+            String.format(Locale.getDefault(), "%.0f", bt),
+        )
     }
+    val serial = summary.serial
+    if (serial != null) parts += stringResource(R.string.live_serial, serial.toString())
     if (parts.isEmpty()) return
     Text(
         parts.joinToString(" · "),

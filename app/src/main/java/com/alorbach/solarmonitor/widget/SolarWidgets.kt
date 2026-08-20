@@ -123,11 +123,15 @@ class TopDevicesWidget : GlanceAppWidget() {
         val summaries = loadSummaries(context).sortedByDescending { it.currentPowerW ?: 0 }.take(3)
         provideContent {
             WidgetFrame(title = context.getString(R.string.widget_top_devices)) { color ->
-                summaries.forEach { summary ->
-                    Row(modifier = GlanceModifier.fillMaxWidth()) {
-                        WidgetLine(summary.deviceName, color)
+                if (summaries.isEmpty()) {
+                    WidgetLine(context.getString(R.string.widget_no_devices), color)
+                } else {
+                    summaries.forEach { summary ->
+                        Row(modifier = GlanceModifier.fillMaxWidth()) {
+                            WidgetLine(summary.deviceName, color)
+                        }
+                        WidgetLine(YieldFormatting.wattsLabel(summary.currentPowerW), color)
                     }
-                    WidgetLine(YieldFormatting.wattsLabel(summary.currentPowerW), color)
                 }
             }
         }

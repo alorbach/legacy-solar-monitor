@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.security.CredentialStore
 import kotlinx.coroutines.flow.Flow
@@ -20,9 +21,8 @@ import java.io.IOException
 
 data class AppSettings(
     val cloudBackupEnabled: Boolean = false,
-    val gcsBucket: String = "",
-    val gcsPrefix: String = "solar-monitor",
-    val gcsSignedUrl: String = "",
+    val googleAccountEmail: String = "",
+    val driveFolderId: String = "",
     val backupIncludeDatabase: Boolean = true,
     val backupIncludeImportCopies: Boolean = true,
     val backupLastAttemptEpochSeconds: Long? = null,
@@ -40,8 +40,6 @@ data class AppSettings(
     val livePollIntervalSeconds: Long = 60,
     /** Home-screen compact/medium widgets; null = first device by name. */
     val widgetDeviceId: Long? = null,
-    /** Signed GET URL for restoring solar-monitor.db (method-specific; PUT cannot download). */
-    val gcsSignedGetUrl: String = "",
     /** Notify on new inverter WARNING events from the last 24 hours. */
     val inverterWarningAlertsEnabled: Boolean = true,
     /** Per-device last notified event entryId, encoded as "id:entryId,id:entryId". */
@@ -64,28 +62,17 @@ class AppSettingsStore(
 
     suspend fun migrateLegacySecrets() {
         dataStore.edit { prefs ->
-            migrateLegacySignedUrl(prefs)
+            clearLegacyGcsSecrets(prefs)
         }
     }
 
     suspend fun update(transform: suspend (AppSettings) -> AppSettings) {
         dataStore.edit { prefs ->
-            migrateLegacySignedUrl(prefs)
             val updated = transform(toSettings(prefs))
-            prefs[Keys.cloudBackupEnabled] = updated.cloudBackupEnabled
-            prefs[Keys.gcsBucket] = updated.gcsBucket
-            prefs[Keys.gcsPrefix] = updated.gcsPrefix
-            if (updated.gcsSignedUrl.isBlank()) {
-                credentialStore.deleteNamed(CredentialStore.KEY_GCS_SIGNED_URL)
-            } else {
-                credentialStore.putNamed(CredentialStore.KEY_GCS_SIGNED_URL, updated.gcsSignedUrl)
-            }
-            prefs.remove(Keys.legacyGcsSignedUrl)
-            if (updated.gcsSignedGetUrl.isBlank()) {
-                credentialStore.deleteNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL)
-            } else {
-                credentialStore.putNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL, updated.gcsSignedGetUrl)
-            }
+            val email = updated.googleAccountEmail.trim()
+            prefs[Keys.googleAccountEmail] = email
+            prefs[Keys.driveFolderId] = updated.driveFolderId
+            prefs[Keys.cloudBackupEnabled] = CloudBackupPolicy.isAccountConfigured(email)
             prefs[Keys.backupIncludeDatabase] = updated.backupIncludeDatabase
             prefs[Keys.backupIncludeImportCopies] = updated.backupIncludeImportCopies
             if (updated.backupLastAttemptEpochSeconds == null) {
@@ -124,24 +111,20 @@ class AppSettingsStore(
         }
     }
 
-    private fun migrateLegacySignedUrl(prefs: MutablePreferences) {
-        val legacy = prefs[Keys.legacyGcsSignedUrl]
-        if (!legacy.isNullOrBlank()) {
-            if (credentialStore.getNamed(CredentialStore.KEY_GCS_SIGNED_URL).isNullOrBlank()) {
-                credentialStore.putNamed(CredentialStore.KEY_GCS_SIGNED_URL, legacy)
-            }
-            prefs.remove(Keys.legacyGcsSignedUrl)
-        }
+    private fun clearLegacyGcsSecrets(prefs: MutablePreferences) {
+        credentialStore.deleteNamed(CredentialStore.KEY_GCS_SIGNED_URL)
+        credentialStore.deleteNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL)
+        prefs.remove(Keys.legacyGcsSignedUrl)
+        prefs.remove(Keys.legacyGcsBucket)
+        prefs.remove(Keys.legacyGcsPrefix)
     }
 
-    private fun toSettings(prefs: Preferences): AppSettings =
-        AppSettings(
-            cloudBackupEnabled = prefs[Keys.cloudBackupEnabled] ?: false,
-            gcsBucket = prefs[Keys.gcsBucket] ?: "",
-            gcsPrefix = prefs[Keys.gcsPrefix] ?: "solar-monitor",
-            gcsSignedUrl = credentialStore.getNamed(CredentialStore.KEY_GCS_SIGNED_URL)
-                ?: prefs[Keys.legacyGcsSignedUrl]
-                ?: "",
+    private fun toSettings(prefs: Preferences): AppSettings {
+        val email = prefs[Keys.googleAccountEmail] ?: ""
+        return AppSettings(
+            googleAccountEmail = email,
+            driveFolderId = prefs[Keys.driveFolderId] ?: "",
+            cloudBackupEnabled = CloudBackupPolicy.isAccountConfigured(email),
             backupIncludeDatabase = prefs[Keys.backupIncludeDatabase] ?: true,
             backupIncludeImportCopies = prefs[Keys.backupIncludeImportCopies] ?: true,
             backupLastAttemptEpochSeconds = prefs[Keys.backupLastAttemptEpochSeconds],
@@ -157,15 +140,17 @@ class AppSettingsStore(
             hourAggregatesSchemaVersion = prefs[Keys.hourAggregatesSchemaVersion] ?: 0,
             livePollIntervalSeconds = prefs[Keys.livePollIntervalSeconds] ?: 60L,
             widgetDeviceId = prefs[Keys.widgetDeviceId],
-            gcsSignedGetUrl = credentialStore.getNamed(CredentialStore.KEY_GCS_SIGNED_GET_URL) ?: "",
             inverterWarningAlertsEnabled = prefs[Keys.inverterWarningAlertsEnabled] ?: true,
             eventAlertWatermarks = prefs[Keys.eventAlertWatermarks] ?: "",
         )
+    }
 
     private object Keys {
         val cloudBackupEnabled = booleanPreferencesKey("cloud_backup_enabled")
-        val gcsBucket = stringPreferencesKey("gcs_bucket")
-        val gcsPrefix = stringPreferencesKey("gcs_prefix")
+        val googleAccountEmail = stringPreferencesKey("google_account_email")
+        val driveFolderId = stringPreferencesKey("drive_folder_id")
+        val legacyGcsBucket = stringPreferencesKey("gcs_bucket")
+        val legacyGcsPrefix = stringPreferencesKey("gcs_prefix")
         val legacyGcsSignedUrl = stringPreferencesKey("gcs_signed_url")
         val backupIncludeDatabase = booleanPreferencesKey("backup_include_database")
         val backupIncludeImportCopies = booleanPreferencesKey("backup_include_import_copies")

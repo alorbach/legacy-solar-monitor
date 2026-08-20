@@ -95,6 +95,9 @@ fun StatisticsScreen(
     var eventFilter by remember { mutableStateOf(EventFilter.ALL) }
     var currency by remember { mutableStateOf("EUR") }
     var seriesLoading by remember { mutableStateOf(false) }
+    var exportMessage by remember { mutableStateOf<String?>(null) }
+    var exportSuccess by remember { mutableStateOf(false) }
+    val exportFailedLabel = stringResource(R.string.export_failed)
 
     LaunchedEffect(devices) {
         if (selectedDeviceId != null && devices.none { it.id == selectedDeviceId }) {
@@ -382,6 +385,12 @@ fun StatisticsScreen(
                                             ),
                                             "text/csv",
                                         )
+                                    }.onFailure {
+                                        exportSuccess = false
+                                        exportMessage = exportFailedLabel
+                                    }.onSuccess {
+                                        exportSuccess = true
+                                        exportMessage = null
                                     }
                                 }
                             },
@@ -406,10 +415,23 @@ fun StatisticsScreen(
                                             ),
                                             "application/pdf",
                                         )
+                                    }.onFailure {
+                                        exportSuccess = false
+                                        exportMessage = exportFailedLabel
+                                    }.onSuccess {
+                                        exportSuccess = true
+                                        exportMessage = null
                                     }
                                 }
                             },
                         ) { Text(stringResource(R.string.export_period_pdf)) }
+                    }
+                    exportMessage?.let { message ->
+                        Text(
+                            message,
+                            color = if (exportSuccess) colors.onSurfaceVariant else colors.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     }
                     if (seriesLoading) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

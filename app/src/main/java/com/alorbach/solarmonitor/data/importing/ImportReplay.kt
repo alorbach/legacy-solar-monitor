@@ -123,7 +123,7 @@ data class ImportReplayConfig(
                     kind = "URL",
                     deviceId = deviceId,
                     url = request.url,
-                    sourceLabel = request.sourceLabel,
+                    sourceLabel = publicUrlSourceLabel(request.url),
                 )
                 is ImportRequest.FileRequest -> null
             }

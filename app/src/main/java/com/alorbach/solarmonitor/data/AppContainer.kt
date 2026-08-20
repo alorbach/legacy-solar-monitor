@@ -2,7 +2,8 @@ package com.alorbach.solarmonitor.data
 
 import android.content.Context
 import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
-import com.alorbach.solarmonitor.data.cloud.GoogleCloudStorageBackupRepository
+import com.alorbach.solarmonitor.data.cloud.GoogleDriveAuth
+import com.alorbach.solarmonitor.data.cloud.GoogleDriveBackupRepository
 import com.alorbach.solarmonitor.data.importing.ImportManager
 import com.alorbach.solarmonitor.data.importing.LegacySbfspotImporters
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
@@ -22,10 +23,12 @@ class AppContainer(context: Context) {
     val database = SolarMonitorDatabase.create(appContext)
     val bluetoothGateway: SmaLegacyBluetoothGateway = SmaLegacyBluetoothGatewayImpl(appContext)
     val reportExporter = ReportExporter(appContext)
-    val cloudBackupRepository = GoogleCloudStorageBackupRepository(
+    val googleDriveAuth = GoogleDriveAuth(appContext)
+    val cloudBackupRepository = GoogleDriveBackupRepository(
         context = appContext,
         settingsStore = settingsStore,
         database = database,
+        auth = googleDriveAuth,
     )
     val cloudBackupCoordinator = CloudBackupCoordinator(appContext)
     val eventAlertNotifier = com.alorbach.solarmonitor.service.EventAlertNotifier(appContext, settingsStore)

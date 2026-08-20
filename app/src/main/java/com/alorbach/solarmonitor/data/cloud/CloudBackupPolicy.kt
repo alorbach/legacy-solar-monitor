@@ -42,112 +42,23 @@ object CloudBackupPolicy {
     const val KEY_TRIGGER = "trigger"
     const val AUTO_THROTTLE_SECONDS = 15 * 60L
     const val DATABASE_BACKUP_FILENAME = "solar-monitor.db"
+    const val DRIVE_FOLDER_NAME = "SMA Solar Monitor"
 
-    /** Shown when no signed URL is saved yet; not enough to enable uploads by itself. */
-    const val DEFAULT_SIGNED_URL_TEMPLATE =
-        "https://storage.googleapis.com/{bucket}/{prefix}/{filename}"
+    fun isAccountConfigured(email: String): Boolean = email.trim().isNotBlank()
 
-    fun buildPathTemplate(bucket: String, prefix: String): String {
-        val resolvedBucket = bucket.trim().ifBlank { "{bucket}" }
-        val resolvedPrefix = prefix.trim().trim('/').ifBlank { "{prefix}" }
-        return "https://storage.googleapis.com/$resolvedBucket/$resolvedPrefix/{filename}"
-    }
+    /** Drive has a flat folder; percent-encode path separators so nested imports stay unique. */
+    fun driveFileName(objectName: String): String =
+        objectName.trim('/').replace("%", "%25").replace("/", "%2F")
 
-    /** Object path for the database backup file using configured bucket/prefix. */
-    fun buildDatabaseObjectUrl(bucket: String, prefix: String): String =
-        buildPathTemplate(bucket, prefix).replace("{filename}", DATABASE_BACKUP_FILENAME)
-
-    fun displaySignedUrlTemplate(stored: String, bucket: String = "", prefix: String = ""): String =
-        stored.ifBlank { buildDatabaseObjectUrl(bucket, prefix) }
-
-    /**
-     * Rebuilds the unsigned object path from [bucket]/[prefix].
-     * Any previous query string is dropped — GCS signatures bind to an exact object path.
-     */
-    fun withAutoPath(existingUrl: String, bucket: String, prefix: String): String {
-        val hadQuery = existingUrl.substringAfter('?', missingDelimiterValue = "").isNotBlank()
-        // Keep a concrete DB object path so a pasted signed PUT URL can match one object.
-        return if (hadQuery || existingUrl.contains(DATABASE_BACKUP_FILENAME)) {
-            buildDatabaseObjectUrl(bucket, prefix)
-        } else {
-            buildPathTemplate(bucket, prefix)
-        }.let { pathOnly ->
-            // Never reattach an old signature to a rewritten path.
-            pathOnly
-        }
-    }
-
-    /** True only when a signature query is present — bare auto-paths are not enough. */
-    fun isUploadConfigured(signedUrl: String): Boolean {
-        val url = signedUrl.trim()
-        if (url.isBlank() || url == DEFAULT_SIGNED_URL_TEMPLATE) return false
-        if (url == buildPathTemplate("", "")) return false
-        if (!url.startsWith("https://", ignoreCase = true)) return false
-        val query = url.substringAfter('?', missingDelimiterValue = "")
-        return query.isNotBlank()
-    }
-
-    /**
-     * GET signatures are method-specific and must target the database object.
-     * A PUT signed URL is not sufficient for restore.
-     */
-    fun isRestoreConfigured(signedGetUrl: String): Boolean {
-        if (!isUploadConfigured(signedGetUrl)) return false
-        val path = signedGetUrl.substringBefore('?')
-        return path.endsWith("/$DATABASE_BACKUP_FILENAME") ||
-            path.substringAfterLast('/') == DATABASE_BACKUP_FILENAME
-    }
-
-    fun isSqliteDatabaseHeader(bytes: ByteArray): Boolean {
-        if (bytes.size < SQLITE_HEADER.size) return false
-        return bytes.sliceArray(SQLITE_HEADER.indices).contentEquals(SQLITE_HEADER)
-    }
-
-    private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
-
-    /**
-     * A pasted GCS signature covers one canonical object path. Filter staged filenames so we
-     * never rewrite `{filename}` (or bucket/prefix) underneath an existing signature query.
-     */
-    fun selectableBackupFilenames(template: String, candidates: List<String>): List<String> {
-        val hasQuery = template.substringAfter('?', missingDelimiterValue = "").isNotBlank()
-        if (!hasQuery) return candidates
-        val path = template.substringBefore('?')
-        return if (path.contains("{filename}")) {
-            // Placeholder + signature cannot be valid for multiple names; only the DB object
-            // is supported (user must sign that exact path).
-            candidates.filter { it == DATABASE_BACKUP_FILENAME }
-        } else {
-            // Signed URLs cover one object path. Prefer the longest candidate suffix so a
-            // nested key like device-1/day.csv wins over a bare day.csv basename match.
-            val exact = candidates.filter { candidate ->
-                val name = candidate.trim('/')
-                path.endsWith("/$name") || path == name
-            }
-            if (exact.isNotEmpty()) {
-                val bestLen = exact.maxOf { it.trim('/').length }
-                val chosen = exact.filter { it.trim('/').length == bestLen }
-                val basename = path.substringAfterLast('/')
-                // Prefer nested device-* copies over a legacy flat file when both exist.
-                if (basename.isNotBlank() && chosen.all { !it.contains('/') }) {
-                    val nested = candidates.filter {
-                        it.contains('/') && it.substringAfterLast('/') == basename
-                    }
-                    if (nested.size == 1) return nested
-                }
-                return chosen
-            }
-            // Upgraded installs may still have a pre-nested signature for .../day.csv while
-            // local copies are now device-N/day.csv. Only fall back for legacy flat object
-            // paths (parent segment is not device-*), never for a nested device-N/ URL that
-            // would otherwise silently upload another device's file.
-            val basename = path.substringAfterLast('/')
-            if (basename.isBlank()) return emptyList()
-            val parentSegment = path.substringBeforeLast('/').substringAfterLast('/')
-            if (parentSegment.startsWith("device-")) return emptyList()
-            val byBase = candidates.filter { it.substringAfterLast('/') == basename }
-            if (byBase.size == 1) byBase else emptyList()
-        }
+    fun resolveSkipReason(
+        enabled: Boolean,
+        signedIn: Boolean,
+        includeDatabase: Boolean,
+        includeImportCopies: Boolean,
+    ): BackupSkipReason? = when {
+        !enabled || !signedIn -> BackupSkipReason.NOT_CONFIGURED
+        !includeDatabase && !includeImportCopies -> BackupSkipReason.NO_CONTENT
+        else -> null
     }
 
     fun shouldThrottleAuto(nowEpochSeconds: Long, lastSuccessEpochSeconds: Long?): Boolean {
@@ -161,22 +72,13 @@ object CloudBackupPolicy {
         return remaining.coerceAtLeast(0L)
     }
 
-    fun buildUploadUrl(template: String, bucket: String, prefix: String, filename: String): String =
-        template
-            .replace("{bucket}", bucket)
-            .replace("{prefix}", prefix.trim('/'))
-            .replace("{filename}", filename)
-
-    fun resolveSkipReason(
-        enabled: Boolean,
-        signedUrlBlank: Boolean,
-        includeDatabase: Boolean,
-        includeImportCopies: Boolean,
-    ): BackupSkipReason? = when {
-        !enabled || signedUrlBlank -> BackupSkipReason.NOT_CONFIGURED
-        !includeDatabase && !includeImportCopies -> BackupSkipReason.NO_CONTENT
-        else -> null
+    fun isSqliteDatabaseHeader(bytes: ByteArray): Boolean {
+        if (bytes.size < SQLITE_HEADER.size) return false
+        return bytes.sliceArray(SQLITE_HEADER.indices).contentEquals(SQLITE_HEADER)
     }
+
+    fun shouldRefreshBackupSuccess(skipped: Boolean, success: Boolean): Boolean =
+        !skipped && success
 
     fun isTransientUploadFailure(message: String?): Boolean {
         val text = message.orEmpty().lowercase()
@@ -189,7 +91,11 @@ object CloudBackupPolicy {
             text.contains("unknownhost") ||
             text.contains("unavailable") ||
             text.contains("temporary") ||
+            text.contains("drive request failed: 5") ||
+            text.contains("drive request failed: 429") ||
             text.contains("gcs upload failed: 5") ||
             text.contains("gcs upload failed: 429")
     }
+
+    private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
 }

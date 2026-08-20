@@ -19,6 +19,11 @@
 -keep class com.google.crypto.tink.** { *; }
 -dontwarn com.google.crypto.tink.**
 
+# Google Sign-In / Drive authorization (release minify).
+-keep class com.google.android.gms.auth.** { *; }
+-keep class com.google.android.gms.common.api.** { *; }
+-dontwarn com.google.android.gms.**
+
 # Kotlin coroutines (Main dispatcher + exception handlers loaded by ServiceLoader).
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
