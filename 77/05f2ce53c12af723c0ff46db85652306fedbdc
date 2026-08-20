@@ -1,0 +1,56 @@
+docs/DEV-github-release.md
+  s_212b0bcb6ac48c::t_ca4ea9f5d9b0a1 47
+  s_212b0bcb6ac48c::t_26322daa121b46 1-46,48-53,56-60,62-85
+  s_212b0bcb6ac48c::t_6315d9d37a8251 61
+  s_212b0bcb6ac48c::t_71d1b29da667ca 54-55
+.github/workflows/release.yml
+  s_212b0bcb6ac48c::t_13444cc4f31f07 29,31-35,37-40,45-63,65
+  s_212b0bcb6ac48c::t_897f4cf7e7d7cb 127
+  s_212b0bcb6ac48c::t_6b589294193fc8 130-131,138-139,151-152
+  s_212b0bcb6ac48c::t_c9758a986d3b21 160
+  s_212b0bcb6ac48c::t_b25a7ec76c5250 73
+  s_212b0bcb6ac48c::t_e5eaa6c685008a 1-15,17-19,41-44,64,66-72,74-126,128-129,132-137,140-150,153-159,161-168
+  s_212b0bcb6ac48c::t_5b4d91207470ae 16,20-28,30,36
+docs/ARCHITECTURE.md
+  s_212b0bcb6ac48c::t_0e95ce49781d53 3
+.gitignore
+  s_212b0bcb6ac48c::t_1e6da510468c58 84
+AGENTS.md
+  s_212b0bcb6ac48c::t_d9e1074a729cfb 73
+app/build.gradle.kts
+  s_212b0bcb6ac48c::t_68e06d6d445f94 97-103
+  s_212b0bcb6ac48c::t_24a4954dc516c0 45-63,70,72
+  s_212b0bcb6ac48c::t_c881402e01df34 20
+docs/PLAY-LISTING.md
+  s_212b0bcb6ac48c::t_1f27f710457588 87-89
+  s_212b0bcb6ac48c::t_dddbc6264b3042 101-117
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_212b0bcb6ac48c::t_8cc765a4d7ee4f 88
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveBackupRepository.kt
+  s_212b0bcb6ac48c::t_61896338cb68bf 243,248
+  s_212b0bcb6ac48c::t_a2f25805b759ba 239-242
+docs/DEV-google-drive.md
+  s_212b0bcb6ac48c::t_e5549a245dc190 62-70
+README.md
+  s_212b0bcb6ac48c::t_ba255611899e7e 57-58
+  s_212b0bcb6ac48c::t_f011ab3f144069 50
+app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt
+  s_212b0bcb6ac48c::t_2813dc302a9c94 11
+  s_212b0bcb6ac48c::t_0799260cc46b13 39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "7705f2ce53c12af723c0ff46db85652306fedbdc",
+  "prompts": {},
+  "sessions": {
+    "s_212b0bcb6ac48c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "deeb1944-fb2c-45be-aa41-dc000792aa39",
+        "model": "grok-4.6"
+      },
+      "human_author": null
+    }
+  }
+}
