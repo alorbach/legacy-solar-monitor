@@ -4,7 +4,6 @@ import com.alorbach.solarmonitor.data.importing.SharedHttpClients
 import java.io.File
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
-import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -103,23 +102,11 @@ class GoogleDriveRemote(
             )
             return
         }
-        val boundary = "solar-monitor-${System.nanoTime()}"
         val metadata = """{"name":${DriveJson.jsonString(name)},"parents":[${DriveJson.jsonString(folderId)}]}"""
-        val multipart = MultipartBody.Builder(boundary)
-            .setType("multipart/related".toMediaType())
-            .addPart(
-                Headers.headersOf("Content-Type", "application/json; charset=UTF-8"),
-                metadata.toRequestBody(JSON),
-            )
-            .addPart(
-                Headers.headersOf("Content-Type", "application/octet-stream"),
-                file.asRequestBody(OCTET_STREAM),
-            )
-            .build()
         execute(
             Request.Builder()
                 .url("$DRIVE_UPLOAD/files?uploadType=multipart&fields=id")
-                .post(multipart)
+                .post(createFileMultipart(metadata, file))
                 .build(),
         )
     }
@@ -217,6 +204,22 @@ class GoogleDriveRemote(
         private const val FOLDER_MIME = "application/vnd.google-apps.folder"
         private val JSON = "application/json; charset=UTF-8".toMediaType()
         private val OCTET_STREAM = "application/octet-stream".toMediaType()
+        private val MULTIPART_RELATED = "multipart/related".toMediaType()
+
+        /**
+         * Drive `uploadType=multipart` body. OkHttp forbids `Content-Type` on part headers;
+         * each [okhttp3.RequestBody] already supplies it (otherwise: "Unexpected header: Content-Type").
+         */
+        internal fun createFileMultipart(
+            metadataJson: String,
+            file: File,
+            boundary: String = "solar-monitor-${System.nanoTime()}",
+        ): MultipartBody =
+            MultipartBody.Builder(boundary)
+                .setType(MULTIPART_RELATED)
+                .addPart(metadataJson.toRequestBody(JSON))
+                .addPart(file.asRequestBody(OCTET_STREAM))
+                .build()
     }
 }
 

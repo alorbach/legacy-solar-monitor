@@ -130,7 +130,7 @@ Publisher Cloud Console steps stay in [DEV-google-drive.md](DEV-google-drive.md)
 
 Auto backup is enqueued after a successful archive **Sync**, a successful import, clear history, or import-job deletes — not after one-shot **Live** or live-monitor polls.
 
-Restore replaces the local Room DB and calls [AppProcessRestarter.kt](../app/src/main/java/com/alorbach/solarmonitor/service/AppProcessRestarter.kt). `CredentialStore` (SMA PINs, FTP/SFTP passwords) is not in `solar-monitor.db` and is not restored. Scope is `drive.file` only.
+Restore replaces the local Room DB and restarts via [AppProcessRestarter.kt](../app/src/main/java/com/alorbach/solarmonitor/service/AppProcessRestarter.kt) / [RestartRelayActivity.kt](../app/src/main/java/com/alorbach/solarmonitor/service/RestartRelayActivity.kt) (second process, so the UI is not killed in place). `CredentialStore` (SMA PINs, FTP/SFTP passwords) is not in `solar-monitor.db` and is not restored. Scope is `drive.file` only.
 
 The app implements `Configuration.Provider` and disables the default WorkManager initializer in the manifest.
 

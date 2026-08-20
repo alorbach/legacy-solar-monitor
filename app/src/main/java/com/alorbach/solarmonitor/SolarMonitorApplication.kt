@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.work.Configuration
 import com.alorbach.solarmonitor.data.AppContainer
 import com.alorbach.solarmonitor.i18n.LocaleController
+import com.alorbach.solarmonitor.service.AppProcessRestarter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +22,7 @@ class SolarMonitorApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        if (isRestartRelayProcess()) return
         val processStartedAtEpochSeconds = System.currentTimeMillis() / 1000
         container = AppContainer(this)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
@@ -46,4 +48,9 @@ class SolarMonitorApplication : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
+
+    companion object {
+        fun isRestartRelayProcess(): Boolean =
+            AppProcessRestarter.isRelayProcessName(getProcessName())
+    }
 }

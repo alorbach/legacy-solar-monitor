@@ -654,7 +654,9 @@ fun SettingsTab(
                                                 }
                                                 restoreSuccess = result.success
                                                 restoreMessage = result.message
+                                                showRestoreConfirm = false
                                                 if (result.shouldRestart) {
+                                                    delay(400)
                                                     com.alorbach.solarmonitor.service.AppProcessRestarter.restart(context)
                                                 }
                                             } catch (error: Throwable) {
