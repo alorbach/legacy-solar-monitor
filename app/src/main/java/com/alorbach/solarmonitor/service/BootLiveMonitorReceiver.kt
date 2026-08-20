@@ -1,8 +1,11 @@
 package com.alorbach.solarmonitor.service
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
@@ -17,7 +20,7 @@ class BootLiveMonitorReceiver : BroadcastReceiver() {
         if (!isRestartAction(action)) return
         val appContext = context.applicationContext
         val deviceIds = LiveMonitorService.persistedDeviceIds(appContext)
-        if (!shouldRestartLiveMonitor(deviceIds)) return
+        if (!shouldRestartLiveMonitor(deviceIds, hasBluetoothConnectPermission(appContext))) return
 
         val pending = goAsync()
         val delayMs = if (action == Intent.ACTION_MY_PACKAGE_REPLACED) {
@@ -27,6 +30,7 @@ class BootLiveMonitorReceiver : BroadcastReceiver() {
         }
         Handler(Looper.getMainLooper()).postDelayed({
             try {
+                if (!hasBluetoothConnectPermission(appContext)) return@postDelayed
                 ContextCompat.startForegroundService(
                     appContext,
                     LiveMonitorService.startIntent(appContext, deviceIds),
@@ -51,6 +55,19 @@ class BootLiveMonitorReceiver : BroadcastReceiver() {
             else -> false
         }
 
-        fun shouldRestartLiveMonitor(deviceIds: LongArray): Boolean = deviceIds.isNotEmpty()
+        fun shouldRestartLiveMonitor(
+            deviceIds: LongArray,
+            bluetoothConnectGranted: Boolean,
+        ): Boolean = deviceIds.isNotEmpty() && bluetoothConnectGranted
+
+        fun hasBluetoothConnectPermission(context: Context): Boolean {
+            val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                Manifest.permission.BLUETOOTH_CONNECT
+            } else {
+                Manifest.permission.BLUETOOTH
+            }
+            return ContextCompat.checkSelfPermission(context, permission) ==
+                PackageManager.PERMISSION_GRANTED
+        }
     }
 }

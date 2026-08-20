@@ -11,6 +11,7 @@ This is an independent hobby project. It is **not affiliated with, endorsed by, 
 - Andre Lorbach
 - alorbach@adiscon.com
 - Source: [https://github.com/alorbach/legacy-solar-monitor](https://github.com/alorbach/legacy-solar-monitor)
+- Privacy: [docs/PRIVACY.md](docs/PRIVACY.md)
 
 License: [Apache License 2.0](LICENSE)
 
@@ -40,6 +41,9 @@ Package name (do not change): `com.alorbach.solarmonitor`
 ## Docs
 
 - [User guide](docs/USER-GUIDE.md) — permissions, devices, live, import, widgets, backup
+- [Privacy policy](docs/PRIVACY.md) — Play Store URL; EN + DE
+- [Play listing copy](docs/PLAY-LISTING.md) — store text, screenshots, publisher checklist
+- [Play Data Safety](docs/PLAY-DATA-SAFETY.md) — Console form answers from the code
 - [Architecture](docs/ARCHITECTURE.md) — layers, Room, Bluetooth, import, Drive, tests
 - [Add another old device](docs/DEV-add-device.md) — UI-only vs protocol tweak vs new vendor
 - [Google Drive backup setup](docs/DEV-google-drive.md) — publisher OAuth; users only sign in

@@ -18,7 +18,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -39,9 +38,15 @@ class ImportForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val container = (application as SolarMonitorApplication).container
         if (intent?.action == ACTION_STOP) {
-            haltImport(awaitCancellation = true, joinTimeoutMs = USER_STOP_JOIN_TIMEOUT_MS)
-            if (!container.importManager.progress.value.running) {
-                stopImport()
+            val running = importJob
+            importJob = null
+            running?.cancel()
+            scope.launch {
+                withTimeoutOrNull(USER_STOP_JOIN_TIMEOUT_MS) { running?.join() }
+                container.importManager.abortForegroundReservation()
+                if (!container.importManager.progress.value.running) {
+                    stopImport()
+                }
             }
             return START_NOT_STICKY
         }
@@ -98,7 +103,10 @@ class ImportForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        haltImport(awaitCancellation = true, joinTimeoutMs = SYSTEM_HALT_JOIN_TIMEOUT_MS)
+        importJob?.cancel()
+        importJob = null
+        (application as? SolarMonitorApplication)?.container?.importManager
+            ?.abortForegroundReservation()
         scope.cancel()
         super.onDestroy()
     }
@@ -106,29 +114,14 @@ class ImportForegroundService : Service() {
     @RequiresApi(Build.VERSION_CODES.VANILLA_ICE_CREAM)
     override fun onTimeout(startId: Int, fgsType: Int) {
         session.incrementAndGet()
-        haltImport(awaitCancellation = true, joinTimeoutMs = SYSTEM_HALT_JOIN_TIMEOUT_MS)
+        importJob?.cancel()
+        importJob = null
+        (application as? SolarMonitorApplication)?.container?.importManager
+            ?.abortForegroundReservation()
         stopImport()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-
-    /**
-     * Cancel the running import and wait for [ImportManager.run] to finish.
-     * Does not drop the foreground service while `progress.running` is still true;
-     * [abortForegroundReservation] only clears the lock after `run()` has left that state.
-     */
-    private fun haltImport(awaitCancellation: Boolean, joinTimeoutMs: Long) {
-        val running = importJob
-        importJob = null
-        running?.cancel()
-        if (running != null && awaitCancellation) {
-            runBlocking {
-                withTimeoutOrNull(joinTimeoutMs) { running.join() }
-            }
-        }
-        (application as? SolarMonitorApplication)?.container?.importManager
-            ?.abortForegroundReservation()
-    }
 
     private fun stopImport() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -145,7 +138,6 @@ class ImportForegroundService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.alorbach.solarmonitor.action.STOP_IMPORT"
-        private const val SYSTEM_HALT_JOIN_TIMEOUT_MS = 3_000L
         private const val USER_STOP_JOIN_TIMEOUT_MS = 30_000L
 
         fun startIntent(context: Context): Intent =

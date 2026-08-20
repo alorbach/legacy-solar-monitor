@@ -33,9 +33,24 @@ object SharedHttpClients {
 
 class UrlImportClient(
     private val context: Context? = null,
-    private val okHttpClient: OkHttpClient = SharedHttpClients.okHttp,
+    okHttpClient: OkHttpClient = SharedHttpClients.okHttp,
 ) {
+    private val okHttpClient: OkHttpClient = okHttpClient.newBuilder()
+        .addNetworkInterceptor { chain ->
+            val url = chain.request().url
+            require(UrlImportPolicy.isAllowed(url)) {
+                context?.getString(R.string.import_url_not_allowed)
+                    ?: "Only HTTPS URLs, or HTTP on a private/LAN address, are allowed."
+            }
+            chain.proceed(chain.request())
+        }
+        .build()
+
     fun download(url: String): ByteArray {
+        require(UrlImportPolicy.isAllowed(url)) {
+            context?.getString(R.string.import_url_not_allowed)
+                ?: "Only HTTPS URLs, or HTTP on a private/LAN address, are allowed."
+        }
         val request = Request.Builder().url(url).build()
         okHttpClient.newCall(request).execute().use { response ->
             require(response.isSuccessful) {
@@ -339,8 +354,12 @@ class SftpImportClient(
 object ZipImportReader {
     data class EntryBytes(val name: String, val bytes: ByteArray)
 
+    const val MAX_ENTRY_COUNT = 5_000
     private const val MAX_ENTRY_BYTES = 50L * 1024L * 1024L
     private const val MAX_TOTAL_BYTES = 200L * 1024L * 1024L
+
+    fun shouldParseFlattenedEntry(name: String): Boolean =
+        !name.endsWith(".zip", ignoreCase = true)
 
     fun flatten(bytes: ByteArray): List<EntryBytes> {
         val result = mutableListOf<EntryBytes>()
@@ -349,6 +368,7 @@ object ZipImportReader {
             generateSequence { zip.nextEntry }
                 .filterNot(ZipEntry::isDirectory)
                 .forEach { entry ->
+                    require(result.size < MAX_ENTRY_COUNT) { "ZIP archive exceeds entry count limit" }
                     val safeName = entry.name
                         .substringAfterLast('/')
                         .replace("..", "")

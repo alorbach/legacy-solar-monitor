@@ -243,6 +243,8 @@
     <string name="about_not_affiliated">Not affiliated with SMA Solar Technology AG.</string>
     <string name="about_github">Source on GitHub</string>
     <string name="about_github_url" translatable="false">https://github.com/alorbach/legacy-solar-monitor</string>
+    <string name="about_privacy">Privacy policy</string>
+    <string name="about_privacy_url" translatable="false">https://github.com/alorbach/legacy-solar-monitor/blob/main/docs/PRIVACY.md</string>
     <string name="app_version">Version %1$s Build %2$d</string>
     <string name="live_poll_interval">Live poll interval (seconds)</string>
     <string name="live_poll_interval_hint">How often the live monitor reads the inverter while running.</string>
@@ -293,6 +295,8 @@
     <string name="import_unable_open_uri">Unable to open %1$s</string>
     <string name="import_interrupted">Import interrupted (app closed or process stopped)</string>
     <string name="import_url_http_failed">URL import failed: %1$d</string>
+    <string name="import_url_not_allowed">Only HTTPS URLs, or HTTP on a private/LAN address, are allowed.</string>
+    <string name="import_sqlite_too_many_rows">SQLite table %1$s has %2$s rows (limit %3$d). Import CSV or a smaller database.</string>
     <string name="import_empty_response">Empty response body</string>
     <string name="import_source_local_file">Local file</string>
     <string name="import_source_url">URL import</string>
@@ -376,11 +380,12 @@
     <string name="widget_loading">Loading…</string>
     <string name="restore_from_cloud">Restore from cloud</string>
     <string name="restore_confirm_title">Replace local database?</string>
-    <string name="restore_confirm_body">Downloads solar-monitor.db and replaces all devices, history, and events on this phone. The app restarts afterward. A copy of the current database is kept in cache.</string>
+    <string name="restore_confirm_body">Downloads solar-monitor.db and replaces all devices, history, and events on this phone. SMA PINs and FTP/SFTP passwords stay on this phone and are not in the backup — re-enter them after restore, especially on another device. The app restarts afterward. A copy of the current database is kept in cache.</string>
     <string name="restore_confirm">Restore</string>
     <string name="restore_not_configured">Sign in with Google, then restore.</string>
     <string name="restore_file_missing">No solar-monitor.db found in Google Drive.</string>
     <string name="restore_invalid_file">Downloaded file is not a valid database.</string>
+    <string name="restore_incompatible_schema">This backup is too new or too old for this app (supported schema %1$d–%2$d). Update the app or restore a matching backup.</string>
     <string name="restore_failed">Restore failed</string>
     <string name="restore_import_busy">Stop the running import, then restore again.</string>
     <string name="restore_succeeded">Database restored. Restarting…</string>

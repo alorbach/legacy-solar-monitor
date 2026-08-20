@@ -189,7 +189,7 @@ class GoogleDriveBackupRepository(
                 }
                 return@withContext RestoreResult(success = false, message = message)
             }
-            val header = ByteArray(16)
+            val header = ByteArray(64)
             download.inputStream().use { stream ->
                 var offset = 0
                 while (offset < header.size) {
@@ -203,6 +203,17 @@ class GoogleDriveBackupRepository(
                 return@withContext RestoreResult(
                     success = false,
                     message = context.getString(R.string.restore_invalid_file),
+                )
+            }
+            if (!CloudBackupPolicy.isCompatibleRoomBackup(header)) {
+                download.delete()
+                return@withContext RestoreResult(
+                    success = false,
+                    message = context.getString(
+                        R.string.restore_incompatible_schema,
+                        CloudBackupPolicy.MIN_MIGRATABLE_ROOM_VERSION,
+                        CloudBackupPolicy.ROOM_USER_VERSION,
+                    ),
                 )
             }
 

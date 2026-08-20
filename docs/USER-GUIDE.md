@@ -101,7 +101,7 @@ Add a device first, then select it as the import target.
 | Source | Notes |
 |---|---|
 | **Import file** | CSV, ZIP, or SQLite via the system picker |
-| **Import from URL** | `http` / `https`. Prefer https except on a local NAS |
+| **Import from URL** | HTTPS anywhere; HTTP only on a private/LAN address |
 | **Import via FTP/SFTP** | Wizard: protocol → device → connect → file or folder → confirm |
 
 CSV day files have a datetime header; month files a date-only header. Event CSVs use the SBFspot `DeviceType;DeviceLocation;SusyId;SerNo…` header. ZIP archives are flattened and each entry parsed. SQLite expects tables `SpotData`, `DayData`, `MonthData`, `EventData`.
@@ -144,7 +144,7 @@ Android system backup is off (`allowBackup=false`). Drive is the supported backu
 
 **Settings → Language**: System, Deutsch, or English. On older Android versions, restart the app after changing language.
 
-**About**: free-app line, not-affiliated disclaimer, author, email, GitHub, version.
+**About**: free-app line, not-affiliated disclaimer, author, email, privacy policy, GitHub, version.
 
 **Inverter warnings**: notify on new WARNING events from the last 24 hours (needs notifications). The first batch after enabling only sets a watermark so you are not spammed with old events.
 

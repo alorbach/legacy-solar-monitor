@@ -46,7 +46,8 @@ object RemoteBrowseHelpers {
         if (cleanChild.isEmpty() || cleanChild == ".") return normalizeDirectory(parent)
         if (cleanChild == "..") return parentPath(parent) ?: "/"
         val base = normalizeDirectory(parent).trimEnd('/')
-        return if (base.isEmpty() || base == "/") "/$cleanChild" else "$base/$cleanChild"
+        val joined = if (base.isEmpty() || base == "/") "/$cleanChild" else "$base/$cleanChild"
+        return normalizeDirectory(joined)
     }
 
     fun parentPath(path: String): String? {
@@ -60,7 +61,15 @@ object RemoteBrowseHelpers {
     fun normalizeDirectory(path: String): String {
         val trimmed = path.replace('\\', '/').trim()
         if (trimmed.isEmpty() || trimmed == "/") return "/"
-        return "/" + trimmed.trim('/').split('/').filter { it.isNotEmpty() && it != "." }.joinToString("/")
+        val parts = mutableListOf<String>()
+        for (segment in trimmed.trim('/').split('/')) {
+            when {
+                segment.isEmpty() || segment == "." -> Unit
+                segment == ".." -> if (parts.isNotEmpty()) parts.removeAt(parts.lastIndex)
+                else -> parts += segment
+            }
+        }
+        return if (parts.isEmpty()) "/" else "/" + parts.joinToString("/")
     }
 
     fun fileName(path: String): String =

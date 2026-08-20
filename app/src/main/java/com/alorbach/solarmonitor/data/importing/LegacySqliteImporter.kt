@@ -13,10 +13,15 @@ import java.time.YearMonth
 
 class LegacySqliteImporter(
     private val zoneId: ZoneId = ZoneId.systemDefault(),
+    private val rowLimitExceeded: (table: String, count: Long) -> String = { table, count ->
+        "SQLite import of $table has $count rows; limit is $MAX_ROWS"
+    },
 ) {
     fun parse(deviceId: Long, dbFile: File): ParsedImportBundle {
         val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         db.use {
+            it.rawQuery("PRAGMA query_only = ON", null).close()
+            it.requireRowCountAtMost("SpotData")
             val spotSamples = buildList {
                 val cursor = it.rawQuery(
                     "SELECT TimeStamp,Pdc1,Pdc2,Pac1,Pac2,Pac3,EToday,ETotal,Frequency,Temperature,Status,GridRelay,BT_Signal FROM SpotData",
@@ -49,6 +54,7 @@ class LegacySqliteImporter(
             }
 
             val dayAggregates = buildList {
+                it.requireRowCountAtMost("DayData")
                 val cursor = it.rawQuery("SELECT TimeStamp,TotalYield,Power FROM DayData", null)
                 cursor.use { c ->
                     while (c.moveToNext()) {
@@ -70,6 +76,7 @@ class LegacySqliteImporter(
             }
 
             val monthAggregates = buildList {
+                it.requireRowCountAtMost("MonthData")
                 val cursor = it.rawQuery("SELECT TimeStamp,TotalYield,DayYield FROM MonthData", null)
                 cursor.use { c ->
                     while (c.moveToNext()) {
@@ -92,6 +99,7 @@ class LegacySqliteImporter(
             }
 
             val events = buildList {
+                it.requireRowCountAtMost("EventData")
                 val cursor = it.rawQuery(
                     "SELECT EntryID,TimeStamp,EventCode,EventType,Category,EventGroup,Tag,OldValue,NewValue,UserGroup FROM EventData",
                     null,
@@ -126,6 +134,17 @@ class LegacySqliteImporter(
                 sourceType = ImportSourceType.SQLITE_DB,
             )
         }
+    }
+
+    private fun SQLiteDatabase.requireRowCountAtMost(table: String) {
+        rawQuery("SELECT COUNT(*) FROM $table", null).use { cursor ->
+            val count = if (cursor.moveToFirst()) cursor.getLong(0) else 0L
+            require(count <= MAX_ROWS) { rowLimitExceeded(table, count) }
+        }
+    }
+
+    companion object {
+        const val MAX_ROWS = 250_000
     }
 
     private fun android.database.Cursor.getIntOrNull(index: Int): Int? =

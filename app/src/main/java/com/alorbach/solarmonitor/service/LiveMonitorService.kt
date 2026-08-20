@@ -25,7 +25,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -125,11 +124,11 @@ class LiveMonitorService : Service() {
     }
 
     override fun onDestroy() {
-        runBlocking {
-            withTimeoutOrNull(SYSTEM_HALT_JOIN_TIMEOUT_MS) {
-                teardownSessions(SYSTEM_HALT_JOIN_TIMEOUT_MS, expectedGeneration = null)
-            }
-        }
+        coordinatorJob?.cancel()
+        stopJob?.cancel()
+        pollJobs.values.forEach { it.cancel() }
+        pollJobs.clear()
+        (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
         scope.cancel()
         super.onDestroy()
     }
@@ -144,9 +143,9 @@ class LiveMonitorService : Service() {
     }
 
     /**
-     * Abort RFCOMM and join poll jobs. Caller must not block the main thread for the user-stop
-     * timeout; [onStartCommand] launches this on [scope] (IO) and [onDestroy] uses the short
-     * system halt timeout.
+     * Abort RFCOMM and join poll jobs. Caller must not block the main thread;
+     * [onStartCommand] launches this on [scope] (IO). [onDestroy] cancels jobs and aborts
+     * sockets without joining.
      */
     private suspend fun teardownSessions(joinTimeoutMs: Long, expectedGeneration: Int?) {
         withContext(Dispatchers.IO) {
@@ -234,7 +233,6 @@ class LiveMonitorService : Service() {
         private const val CHANNEL_ID = "live_monitor"
         private const val NOTIFICATION_ID = 4001
         private const val POLL_INTERVAL_MS = 60_000L
-        private const val SYSTEM_HALT_JOIN_TIMEOUT_MS = 3_000L
         private const val USER_STOP_JOIN_TIMEOUT_MS = 30_000L
         private const val PREFS = "live_monitor"
         private const val KEY_DEVICE_IDS = "device_ids"

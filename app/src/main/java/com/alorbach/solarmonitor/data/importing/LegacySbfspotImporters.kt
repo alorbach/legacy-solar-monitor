@@ -28,12 +28,20 @@ class LegacySbfspotImporters(
                 dateFormat = device?.dateFormat,
             )
         )
-        val sqliteImporter = LegacySqliteImporter(zoneId)
+        val sqliteImporter = LegacySqliteImporter(zoneId) { table, count ->
+            context.getString(
+                R.string.import_sqlite_too_many_rows,
+                table,
+                count.toString(),
+                LegacySqliteImporter.MAX_ROWS,
+            )
+        }
 
         return when {
             name.endsWith(".zip", ignoreCase = true) -> {
                 var combined = ParsedImportBundle(preservedName = name, sourceType = ImportSourceType.ZIP)
                 for (entry in ZipImportReader.flatten(bytes)) {
+                    if (!ZipImportReader.shouldParseFlattenedEntry(entry.name)) continue
                     combined += parseFile(deviceId, entry.name, entry.bytes)
                 }
                 combined.copy(preservedName = name, sourceType = ImportSourceType.ZIP)

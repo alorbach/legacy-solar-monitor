@@ -8,9 +8,10 @@ import org.junit.Test
 
 class BootLiveMonitorReceiverTest {
     @Test
-    fun shouldRestartOnlyWhenDeviceIdsPersisted() {
-        assertFalse(BootLiveMonitorReceiver.shouldRestartLiveMonitor(longArrayOf()))
-        assertTrue(BootLiveMonitorReceiver.shouldRestartLiveMonitor(longArrayOf(1L)))
+    fun shouldRestartOnlyWhenDeviceIdsPersistedAndBluetoothGranted() {
+        assertFalse(BootLiveMonitorReceiver.shouldRestartLiveMonitor(longArrayOf(), bluetoothConnectGranted = true))
+        assertFalse(BootLiveMonitorReceiver.shouldRestartLiveMonitor(longArrayOf(1L), bluetoothConnectGranted = false))
+        assertTrue(BootLiveMonitorReceiver.shouldRestartLiveMonitor(longArrayOf(1L), bluetoothConnectGranted = true))
     }
 
     @Test

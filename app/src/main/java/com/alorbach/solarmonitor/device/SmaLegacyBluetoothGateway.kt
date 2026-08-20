@@ -16,6 +16,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
+import com.alorbach.solarmonitor.BuildConfig
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DayArchiveResult
@@ -84,7 +85,9 @@ private class SessionTrace(
             append(message)
         }
         entries += line
-        Log.d("SmaLegacyBt", line)
+        if (BuildConfig.DEBUG) {
+            Log.d("SmaLegacyBt", line)
+        }
     }
 
     fun render(): String = entries.joinToString("\n")
@@ -148,7 +151,9 @@ class SmaLegacyBluetoothGatewayImpl(
                         bonded = runCatching { device.bondState == BluetoothDevice.BOND_BONDED }.getOrDefault(false),
                         rssi = rssi.takeUnless { it == Short.MIN_VALUE },
                     )
-                    Log.d("SmaLegacyBt", "discovery found ${descriptor.address} name=${descriptor.name} bonded=${descriptor.bonded}")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("SmaLegacyBt", "discovery found ${descriptor.address} name=${descriptor.name} bonded=${descriptor.bonded}")
+                    }
                     _discoveredDevices.value = mergeDescriptors(_discoveredDevices.value + descriptor)
                 }
 
@@ -351,7 +356,9 @@ class SmaLegacyBluetoothGatewayImpl(
                 var socket: BluetoothSocket? = null
                 var linkEstablished = false
                 try {
-                    Log.d("SmaLegacyBt", "Trying socket strategy: ${strategy.label} for ${device.btMac}")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("SmaLegacyBt", "Trying socket strategy: ${strategy.label} for ${device.btMac}")
+                    }
                     trace.record("socket:${strategy.label} open")
                     socket = strategy.open(btDevice)
                     activeSockets[macKey] = socket
@@ -415,7 +422,9 @@ class SmaLegacyBluetoothGatewayImpl(
     }
 
     private fun traceBondHint(mac: String?) {
-        Log.i("SmaLegacyBt", "Device $mac is not bonded; pairing may be required for secure RFCOMM")
+        if (BuildConfig.DEBUG) {
+            Log.i("SmaLegacyBt", "Device $mac is not bonded; pairing may be required for secure RFCOMM")
+        }
     }
 
     private fun hasBluetoothConnectPermission(): Boolean {

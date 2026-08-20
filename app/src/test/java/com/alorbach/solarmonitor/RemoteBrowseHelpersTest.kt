@@ -24,11 +24,15 @@ class RemoteBrowseHelpersTest {
         assertEquals("/", RemoteBrowseHelpers.normalizeDirectory("/"))
         assertEquals("/smadata", RemoteBrowseHelpers.normalizeDirectory("smadata/"))
         assertEquals("/a/b", RemoteBrowseHelpers.normalizeDirectory("\\a\\b\\"))
+        assertEquals("/a/c", RemoteBrowseHelpers.normalizeDirectory("/a/b/../c"))
+        assertEquals("/x", RemoteBrowseHelpers.normalizeDirectory("/../../x"))
+        assertEquals("/", RemoteBrowseHelpers.normalizeDirectory("/a/.."))
 
         assertEquals("/smadata/day.csv", RemoteBrowseHelpers.joinPath("/smadata", "day.csv"))
         assertEquals("/day.csv", RemoteBrowseHelpers.joinPath("/", "day.csv"))
         assertEquals("/", RemoteBrowseHelpers.joinPath("/smadata", ".."))
         assertEquals("/smadata", RemoteBrowseHelpers.joinPath("/smadata/events", ".."))
+        assertEquals("/smadata/day.csv", RemoteBrowseHelpers.joinPath("/smadata", "foo/../day.csv"))
     }
 
     @Test

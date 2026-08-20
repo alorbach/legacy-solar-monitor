@@ -241,6 +241,7 @@
     <string name="about_free">Kostenlose App für alte Bluetooth-Wechselrichter.</string>
     <string name="about_not_affiliated">Nicht verbunden mit SMA Solar Technology AG.</string>
     <string name="about_github">Quellcode auf GitHub</string>
+    <string name="about_privacy">Datenschutzerklärung</string>
     <string name="app_version">Version %1$s Build %2$d</string>
     <string name="live_poll_interval">Live-Abfrageintervall (Sekunden)</string>
     <string name="live_poll_interval_hint">Wie oft der Live-Monitor den Wechselrichter während des Betriebs abfragt.</string>
@@ -291,6 +292,8 @@
     <string name="import_unable_open_uri">Datei konnte nicht geöffnet werden: %1$s</string>
     <string name="import_interrupted">Import unterbrochen (App geschlossen oder Prozess beendet)</string>
     <string name="import_url_http_failed">URL-Import fehlgeschlagen: %1$d</string>
+    <string name="import_url_not_allowed">Nur HTTPS-URLs oder HTTP auf einer privaten/LAN-Adresse sind erlaubt.</string>
+    <string name="import_sqlite_too_many_rows">SQLite-Tabelle %1$s hat %2$s Zeilen (Limit %3$d). CSV oder eine kleinere Datenbank importieren.</string>
     <string name="import_empty_response">Leerer Antwortkörper</string>
     <string name="import_source_local_file">Lokale Datei</string>
     <string name="import_source_url">URL-Import</string>
@@ -374,11 +377,12 @@
     <string name="widget_loading">Laden…</string>
     <string name="restore_from_cloud">Aus der Cloud wiederherstellen</string>
     <string name="restore_confirm_title">Lokale Datenbank ersetzen?</string>
-    <string name="restore_confirm_body">Lädt solar-monitor.db herunter und ersetzt alle Geräte, Historie und Ereignisse auf diesem Telefon. Die App startet danach neu. Eine Kopie der aktuellen Datenbank bleibt im Cache.</string>
+    <string name="restore_confirm_body">Lädt solar-monitor.db herunter und ersetzt alle Geräte, Historie und Ereignisse auf diesem Telefon. SMA-PINs und FTP/SFTP-Passwörter bleiben auf diesem Telefon und stecken nicht im Backup — nach dem Wiederherstellen erneut eingeben, besonders auf einem anderen Gerät. Die App startet danach neu. Eine Kopie der aktuellen Datenbank bleibt im Cache.</string>
     <string name="restore_confirm">Wiederherstellen</string>
     <string name="restore_not_configured">Mit Google anmelden, dann wiederherstellen.</string>
     <string name="restore_file_missing">Keine solar-monitor.db in Google Drive gefunden.</string>
     <string name="restore_invalid_file">Die heruntergeladene Datei ist keine gültige Datenbank.</string>
+    <string name="restore_incompatible_schema">Dieses Backup ist zu neu oder zu alt für diese App (unterstütztes Schema %1$d–%2$d). App aktualisieren oder passendes Backup verwenden.</string>
     <string name="restore_failed">Wiederherstellen fehlgeschlagen</string>
     <string name="restore_import_busy">Import zuerst beenden, dann erneut wiederherstellen.</string>
     <string name="restore_succeeded">Datenbank wiederhergestellt. Neustart…</string>

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- User-entered LAN NAS URLs (http://192.168.x.x) for SBFspot CSV import. -->
+    <!-- User-entered LAN NAS URLs (http://192.168.x.x) for SBFspot CSV import.
+     Public HTTP is rejected in UrlImportPolicy; FTP remains a user-warned cleartext protocol. -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />

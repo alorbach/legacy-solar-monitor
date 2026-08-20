@@ -110,6 +110,34 @@ class CloudBackupPolicyTest {
     }
 
     @Test
+    fun sqliteUserVersion_readsBigEndianCookie() {
+        assertEquals(5, CloudBackupPolicy.sqliteUserVersion(sqliteHeader(userVersion = 5)))
+        assertEquals(4, CloudBackupPolicy.sqliteUserVersion(sqliteHeader(userVersion = 4)))
+        assertNull(CloudBackupPolicy.sqliteUserVersion("not-sqlite".toByteArray()))
+        assertNull(CloudBackupPolicy.sqliteUserVersion("SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)))
+    }
+
+    @Test
+    fun isCompatibleRoomBackup_acceptsCurrentAndMigratableOlderSchemas() {
+        assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 5)))
+        assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 4)))
+        assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 3)))
+        assertFalse(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 2)))
+        assertFalse(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 6)))
+    }
+
+    private fun sqliteHeader(userVersion: Int): ByteArray {
+        val bytes = ByteArray(64)
+        val magic = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
+        magic.copyInto(bytes)
+        bytes[60] = ((userVersion ushr 24) and 0xFF).toByte()
+        bytes[61] = ((userVersion ushr 16) and 0xFF).toByte()
+        bytes[62] = ((userVersion ushr 8) and 0xFF).toByte()
+        bytes[63] = (userVersion and 0xFF).toByte()
+        return bytes
+    }
+
+    @Test
     fun isTransientUploadFailure_coversDnsConnectAndDriveStatus() {
         assertTrue(
             CloudBackupPolicy.isTransientUploadFailure(

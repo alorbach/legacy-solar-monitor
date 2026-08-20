@@ -43,6 +43,11 @@ object CloudBackupPolicy {
     const val AUTO_THROTTLE_SECONDS = 15 * 60L
     const val DATABASE_BACKUP_FILENAME = "solar-monitor.db"
     const val DRIVE_FOLDER_NAME = "Legacy Solar Monitor"
+    /** Must match Room `@Database(version)` in SolarMonitorDatabase. */
+    const val ROOM_USER_VERSION = 5
+    /** Oldest schema Room can migrate without a destructive wipe (`fallbackToDestructiveMigrationFrom(1, 2)`). */
+    const val MIN_MIGRATABLE_ROOM_VERSION = 3
+    private const val SQLITE_USER_VERSION_OFFSET = 60
     /** Pre-rebrand folder name; still resolved so existing Drive backups are not orphaned. */
     const val DRIVE_FOLDER_NAME_PREVIOUS = "SMA Solar Monitor"
 
@@ -110,6 +115,26 @@ object CloudBackupPolicy {
     fun isSqliteDatabaseHeader(bytes: ByteArray): Boolean {
         if (bytes.size < SQLITE_HEADER.size) return false
         return bytes.sliceArray(SQLITE_HEADER.indices).contentEquals(SQLITE_HEADER)
+    }
+
+    /** SQLite `PRAGMA user_version` at header offset 60 (big-endian). Room stores schema version there. */
+    fun sqliteUserVersion(header: ByteArray): Int? {
+        if (!isSqliteDatabaseHeader(header)) return null
+        if (header.size < SQLITE_USER_VERSION_OFFSET + 4) return null
+        var version = 0
+        for (index in 0 until 4) {
+            version = (version shl 8) or (header[SQLITE_USER_VERSION_OFFSET + index].toInt() and 0xFF)
+        }
+        return version
+    }
+
+    fun isCompatibleRoomBackup(
+        header: ByteArray,
+        expectedVersion: Int = ROOM_USER_VERSION,
+        minMigratableVersion: Int = MIN_MIGRATABLE_ROOM_VERSION,
+    ): Boolean {
+        val version = sqliteUserVersion(header) ?: return false
+        return version in minMigratableVersion..expectedVersion
     }
 
     fun shouldRefreshBackupSuccess(skipped: Boolean, success: Boolean): Boolean =

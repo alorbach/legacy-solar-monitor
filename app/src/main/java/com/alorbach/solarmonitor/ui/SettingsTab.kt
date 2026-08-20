@@ -288,6 +288,23 @@ fun SettingsTab(
                         },
                     )
                     Text(
+                        text = stringResource(R.string.about_privacy),
+                        color = colors.primary,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                        ),
+                        modifier = Modifier.clickable {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(context.getString(R.string.about_privacy_url)),
+                                    ),
+                                )
+                            }
+                        },
+                    )
+                    Text(
                         text = stringResource(R.string.about_github),
                         color = colors.primary,
                         style = MaterialTheme.typography.bodyMedium.copy(
