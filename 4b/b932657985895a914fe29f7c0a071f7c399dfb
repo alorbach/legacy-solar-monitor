@@ -1,0 +1,49 @@
+app/src/main/java/com/alorbach/solarmonitor/service/AppProcessRestarter.kt
+  s_ba0be3104393b0::t_a891404ec1ff99 5,7,11,13-15,17-18,24-28
+  s_ba0be3104393b0::t_c13153bfda29d6 8-10
+  s_ba0be3104393b0::t_fefb9f9ca9daa8 21-23
+app/src/main/AndroidManifest.xml
+  s_ba0be3104393b0::t_81e4a11b5356db 41-48
+app/src/main/java/com/alorbach/solarmonitor/SolarMonitorApplication.kt
+  s_ba0be3104393b0::t_8ee405105edb6a 8
+  s_ba0be3104393b0::t_212baa3847c8e0 51-53,55
+  s_ba0be3104393b0::t_f16b828fafa943 25
+  s_ba0be3104393b0::t_33bdfe43732749 54
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveRemote.kt
+  s_ba0be3104393b0::t_3fc92baafbda18 207-222
+  s_ba0be3104393b0::t_1ad31eee66ecf7 109
+app/src/test/java/com/alorbach/solarmonitor/AppProcessRestarterTest.kt
+  s_ba0be3104393b0::t_9d417e1b098805 1-15
+app/src/test/java/com/alorbach/solarmonitor/GoogleDriveRemoteTest.kt
+  s_ba0be3104393b0::t_ca84cec3aa39a6 1-35
+app/src/main/java/com/alorbach/solarmonitor/service/RestartRelayActivity.kt
+  s_ba0be3104393b0::t_75bba9f9c88022 1-28
+docs/ARCHITECTURE.md
+  s_ba0be3104393b0::t_80eef7e17a0f58 133
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_3e53788aa56bf1::t_a490b6ceba1072 657,659
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4bb932657985895a914fe29f7c0a071f7c399dfb",
+  "prompts": {},
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_ba0be3104393b0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "58123557-8d01-4630-965f-1c7cf850f11b",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
