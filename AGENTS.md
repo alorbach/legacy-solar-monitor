@@ -70,3 +70,4 @@ Glance widgets in `widget/SolarWidgets.kt`: compact, medium, top-devices.
 - [docs/USER-GUIDE.md](docs/USER-GUIDE.md)
 - [docs/DEV-add-device.md](docs/DEV-add-device.md)
 - [docs/DEV-google-drive.md](docs/DEV-google-drive.md)
+- [docs/DEV-github-release.md](docs/DEV-github-release.md)

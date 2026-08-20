@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.core.content.ContextCompat
 
 /**
@@ -35,6 +36,9 @@ class BootLiveMonitorReceiver : BroadcastReceiver() {
                     appContext,
                     LiveMonitorService.startIntent(appContext, deviceIds),
                 )
+            } catch (error: RuntimeException) {
+                // ForegroundServiceStartNotAllowedException (IllegalStateException) or SecurityException.
+                Log.w("BootLiveMonitor", "Delayed live monitor start failed", error)
             } finally {
                 pending.finish()
             }

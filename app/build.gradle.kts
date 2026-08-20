@@ -17,7 +17,7 @@ android {
         targetSdk = 35
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1012
+        versionCode = 1013
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -42,14 +42,42 @@ android {
         }
     }
 
+    signingConfigs {
+        val storePath = System.getenv("RELEASE_STORE_FILE")?.trim().orEmpty()
+        val storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+        val keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+        val keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+        val present = listOf(
+            storePath.isNotEmpty(),
+            !storePassword.isNullOrEmpty(),
+            !keyAlias.isNullOrEmpty(),
+            !keyPassword.isNullOrEmpty(),
+        )
+        if (present.any { it } && !present.all { it }) {
+            error(
+                "Incomplete release signing env. Set RELEASE_STORE_FILE, " +
+                    "RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD together.",
+            )
+        }
+        if (present.all { it }) {
+            create("release") {
+                storeFile = file(storePath)
+                this.storePassword = storePassword
+                this.keyAlias = keyAlias
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
@@ -71,6 +99,13 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+tasks.register("printReleaseVersion") {
+    doLast {
+        println("VERSION_CODE=${android.defaultConfig.versionCode}")
+        println("VERSION_NAME=${android.defaultConfig.versionName}")
     }
 }
 

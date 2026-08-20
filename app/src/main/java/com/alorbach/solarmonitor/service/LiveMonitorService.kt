@@ -71,7 +71,6 @@ class LiveMonitorService : Service() {
         val incoming = resolveDeviceIds(intent)
         val deviceIds = (loadPersistedDeviceIds().toList() + incoming.toList()).distinct().toLongArray()
         if (deviceIds.isEmpty()) return START_NOT_STICKY
-        persistDeviceIds(deviceIds)
         val startGen = runGeneration.incrementAndGet()
         stopJob?.cancel()
         stopJob = null
@@ -86,6 +85,7 @@ class LiveMonitorService : Service() {
                 0
             },
         )
+        persistDeviceIds(deviceIds)
 
         val container = (application as SolarMonitorApplication).container
         coordinatorJob?.cancel()

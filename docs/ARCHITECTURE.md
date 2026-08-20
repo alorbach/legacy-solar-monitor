@@ -1,6 +1,6 @@
 # Architecture
 
-Developer map of Legacy Solar Monitor. User-facing steps are in [USER-GUIDE.md](USER-GUIDE.md). Privacy policy: [PRIVACY.md](PRIVACY.md). Adding another inverter is [DEV-add-device.md](DEV-add-device.md). Publisher Drive OAuth is [DEV-google-drive.md](DEV-google-drive.md).
+Developer map of Legacy Solar Monitor. User-facing steps are in [USER-GUIDE.md](USER-GUIDE.md). Privacy policy: [PRIVACY.md](PRIVACY.md). Adding another inverter is [DEV-add-device.md](DEV-add-device.md). Publisher Drive OAuth is [DEV-google-drive.md](DEV-google-drive.md). Signed GitHub APK/AAB: [DEV-github-release.md](DEV-github-release.md).
 
 ## Layout
 

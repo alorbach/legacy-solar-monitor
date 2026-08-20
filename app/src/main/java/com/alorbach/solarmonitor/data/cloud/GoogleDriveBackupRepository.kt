@@ -236,11 +236,16 @@ class GoogleDriveBackupRepository(
                 File(dbFile.path + "-shm").delete()
             } catch (error: Throwable) {
                 if (previous.exists()) {
-                    runCatching { previous.copyTo(dbFile, overwrite = true) }
+                    runCatching {
+                        previous.copyTo(dbFile, overwrite = true)
+                        File(dbFile.path + "-wal").delete()
+                        File(dbFile.path + "-shm").delete()
+                    }
                 }
                 return@withContext RestoreResult(
                     success = false,
                     message = error.message ?: context.getString(R.string.restore_failed),
+                    // Room was already closed; the process cannot keep using this singleton.
                     shouldRestart = true,
                 )
             }

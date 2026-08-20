@@ -84,9 +84,9 @@ Erste Play-Store-Veröffentlichung: Live-Bluetooth-Monitor, Archiv-Sync, SBFspot
 
 Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth client IDs.
 
-1. Create an upload key; enable Play App Signing.
-2. Register a second **Android** OAuth client with package `com.alorbach.solarmonitor` and the **Play App Signing SHA-1** (App integrity). Keep the debug SHA-1 client for local builds. See [DEV-google-drive.md](DEV-google-drive.md).
-3. Build the release AAB with `google.web.client.id` / `GOOGLE_WEB_CLIENT_ID` set so Drive sign-in works.
+1. Create an upload key; enable Play App Signing. Store the keystore as GitHub Actions secrets — [DEV-github-release.md](DEV-github-release.md).
+2. Register Android OAuth clients with package `com.alorbach.solarmonitor`: debug SHA-1, **upload-key SHA-1**, and later the **Play App Signing SHA-1** (App integrity). See [DEV-google-drive.md](DEV-google-drive.md).
+3. Set secret `GOOGLE_WEB_CLIENT_ID` so the tagged AAB has Drive sign-in. Cut a release with `git tag v1.0.0 && git push origin v1.0.0`.
 4. Publish the OAuth consent screen to **Production** (or start sensitive-scope verification for `drive.file`). Until then only listed test users can sign in.
 5. Console declarations:
    - Data Safety — copy [PLAY-DATA-SAFETY.md](PLAY-DATA-SAFETY.md)
@@ -98,3 +98,20 @@ Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth c
    - Feature graphic + at least two phone screenshots
 6. Leave `android:allowBackup="false"` in the manifest. Do not turn on Auto Backup.
 7. Drive backup needs Google Play services on the device; Bluetooth monitoring does not.
+
+### Console field map (copy from this repo)
+
+| Play Console place | What to paste / upload |
+|---|---|
+| Store listing → App name | `Legacy Solar Monitor` (never put SMA in the title) |
+| Short / full description, What’s new | English and German sections above |
+| Graphic assets | Icon, `docs/play/feature-graphic.png`, `docs/screenshots/` |
+| App content → Privacy policy | `https://github.com/alorbach/legacy-solar-monitor/blob/main/docs/PRIVACY.md` |
+| App content → Data safety | [PLAY-DATA-SAFETY.md](PLAY-DATA-SAFETY.md) |
+| App content → Location | Foreground only; unpaired classic Bluetooth discovery; not maps or tracking |
+| App content → Foreground services | `connectedDevice` (live monitor), `dataSync` (import / WorkManager) |
+| App content → Battery | Unrestricted: live Bluetooth polling and scheduled FTP/SFTP imports |
+| App content → Target audience | Not designed for children; no Families program |
+| App content → News / COVID / Health | None of these |
+| IARC questionnaire | Utility / tools; no user-generated public content; no violence, gambling, or ads |
+| Production / testing | Upload the **AAB** from the GitHub Release, not the APK |

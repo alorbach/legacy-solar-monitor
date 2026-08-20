@@ -59,7 +59,15 @@ Current debug SHA-1 on this machine (regenerate if you delete the debug keystore
 FF:DC:EC:61:44:7F:51:60:B3:5D:05:3C:71:B1:38:9D:92:2B:36:06
 ```
 
-Later, add a **second** Android client with the release SHA-1 for Play Store builds (upload key or Play App Signing — whichever Play Console shows under App integrity).
+Add **one Android client per signing certificate** (same package `com.alorbach.solarmonitor`):
+
+| Client name | SHA-1 source |
+|---|---|
+| `Legacy Solar Monitor Android Debug` | Debug keystore (above) |
+| `Legacy Solar Monitor Android Upload` | Upload key (`keytool -list -v -keystore upload.jks`) — GitHub Release APK/AAB |
+| `Legacy Solar Monitor Android Play` | Play Console → **App integrity** → App signing key certificate (after first AAB upload) |
+
+CI injects the Web client ID via GitHub secret `GOOGLE_WEB_CLIENT_ID`. Keystore secrets and tag-push steps: [DEV-github-release.md](DEV-github-release.md).
 
 ### 4b. Web client
 

@@ -47,9 +47,12 @@ Package name (do not change): `com.alorbach.solarmonitor`
 - [Architecture](docs/ARCHITECTURE.md) — layers, Room, Bluetooth, import, Drive, tests
 - [Add another old device](docs/DEV-add-device.md) — UI-only vs protocol tweak vs new vendor
 - [Google Drive backup setup](docs/DEV-google-drive.md) — publisher OAuth; users only sign in
+- [GitHub Release APK/AAB](docs/DEV-github-release.md) — tag `v*`, signed artifacts
 
 ## Build
 
 Android Studio / Gradle **9.7**, JDK **21**. `minSdk` 28, `compileSdk`/`targetSdk` 35. Kotlin bytecode is Java 17.
 
 Optional Drive sign-in: set `google.web.client.id` in `local.properties` as described in the Drive doc. The file is not in Git.
+
+GitHub Release: push a `v*` tag after setting Actions secrets — [docs/DEV-github-release.md](docs/DEV-github-release.md).

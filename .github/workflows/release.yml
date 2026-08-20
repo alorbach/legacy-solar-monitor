@@ -1,0 +1,168 @@
+name: Release Android APK and AAB
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Require tag commit on main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Refusing to release: $GITHUB_SHA is not on origin/main"
+            exit 1
+          fi
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Compute version
+        id: vars
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          version_code=""
+          version_name=""
+          while IFS= read -r line; do
+            case "$line" in
+              VERSION_CODE=*) version_code="${line#VERSION_CODE=}" ;;
+              VERSION_NAME=*) version_name="${line#VERSION_NAME=}" ;;
+            esac
+          done < <(./gradlew -q :app:printReleaseVersion)
+          if [ -z "$version_code" ] || [ -z "$version_name" ]; then
+            echo "Gradle did not print VERSION_CODE/VERSION_NAME"
+            exit 1
+          fi
+          if [ "$tag_version" != "$version_name" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match versionName ${version_name}"
+            exit 1
+          fi
+          apk_name="legacy-solar-monitor-${version_name}-vc${version_code}.apk"
+          aab_name="legacy-solar-monitor-${version_name}-vc${version_code}.aab"
+          {
+            echo "version=${version_name}"
+            echo "version_code=${version_code}"
+            echo "version_name=${version_name}"
+            echo "apk_name=${apk_name}"
+            echo "aab_name=${aab_name}"
+            echo "apk_path=dist/${apk_name}"
+            echo "aab_path=dist/${aab_name}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest
+
+      - name: Check signing secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD GOOGLE_WEB_CLIENT_ID; do
+            if [ -z "${!name}" ]; then
+              echo "Missing secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Set the GitHub Actions secrets listed in docs/DEV-github-release.md"
+            exit 1
+          fi
+
+      - name: Decode upload keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          test -s "$RUNNER_TEMP/upload.jks"
+
+      - name: Assemble signed release APK and AAB
+        env:
+          RELEASE_STORE_FILE: ${{ runner.temp }}/upload.jks
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: ./gradlew :app:assembleRelease :app:bundleRelease
+
+      - name: Collect artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          apk_src="app/build/outputs/apk/release/app-release.apk"
+          aab_src="app/build/outputs/bundle/release/app-release.aab"
+          test -f "$apk_src"
+          test -f "$aab_src"
+          cp "$apk_src" "${{ steps.vars.outputs.apk_path }}"
+          cp "$aab_src" "${{ steps.vars.outputs.aab_path }}"
+
+      - name: Generate GitHub changelog
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          RELEASE_OUT_DIR: .release
+          APK_NAME: ${{ steps.vars.outputs.apk_name }}
+          AAB_NAME: ${{ steps.vars.outputs.aab_name }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const outDir = process.env.RELEASE_OUT_DIR || '.release';
+            const tagName = context.ref.replace('refs/tags/', '');
+            const apkName = process.env.APK_NAME;
+            const aabName = process.env.AAB_NAME;
+            const notes = await github.rest.repos.generateReleaseNotes({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tagName,
+              target_commitish: context.sha,
+            });
+            const changelog = String(notes.data.body || '').trim()
+              || 'No generated changelog entries were returned for this tag.';
+            const body = [
+              `Signed APK and Play App Bundle for ${tagName}.`,
+              '',
+              `- APK: \`${apkName}\``,
+              `- AAB: \`${aabName}\``,
+              '',
+              changelog,
+            ].join('\n');
+            fs.mkdirSync(outDir, { recursive: true });
+            fs.writeFileSync(path.join(outDir, 'release-notes.md'), body);
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body_path: .release/release-notes.md
+          fail_on_unmatched_files: true
+          files: |
+            ${{ steps.vars.outputs.apk_path }}
+            ${{ steps.vars.outputs.aab_path }}
