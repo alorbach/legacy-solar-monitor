@@ -4,7 +4,11 @@ This app is a **free** monitor for old Bluetooth inverters. There is **no protoc
 
 SMA / Sunny Boy names below describe hardware and protocol only. Do not put them in the app title. See the [README](../README.md) trademark note.
 
-Related: [DEV-google-drive.md](DEV-google-drive.md) is publisher OAuth for Drive backup, not device onboarding.
+Related:
+
+- [USER-GUIDE.md](USER-GUIDE.md) — scan, PIN, Test, Live, Sync
+- [ARCHITECTURE.md](ARCHITECTURE.md) — `AppContainer`, Room, live service
+- [DEV-google-drive.md](DEV-google-drive.md) — publisher OAuth for Drive backup, not device onboarding
 
 ## What “like mine” means
 
@@ -62,7 +66,7 @@ Per device:
    - name = Bluetooth name, or `SMA Device N`
    - model = `Legacy SMA`
    - transport = `BLUETOOTH_LEGACY`
-   - PIN seed = `0000` (user PIN; try installer PIN if login fails)
+   - PIN seed = `0000` (user-level login only; installer PIN / group `0x0A` is not implemented)
    - seeds a default EUR tariff on a **new** profile
 4. Edit PIN / MAC / serial / model. **Test connection**, then **Live** and **Sync** archive.
 5. Optional: import SBFspot CSV, ZIP, or SQLite onto that device.

@@ -1,118 +1,121 @@
-# DEV: Google-Drive-Backup einrichten
+# DEV: Set up Google Drive backup
 
-Einmaliges Publisher-Setup. Danach brauchen Nutzer (und du auf dem Handy) nur **Mit Google anmelden**.  
-OAuth-Clients kann die App nicht selbst anlegen — das macht JuiceSSH intern genauso, nur unsichtbar.
+One-time **publisher** setup. After this, users (and you on the phone) only tap **Sign in with Google**.
 
-Paketname: `com.alorbach.solarmonitor`  
-Drive-Ordner: `Legacy Solar Monitor` (ältere Backups lagen unter `SMA Solar Monitor`; die App findet und benennt den Ordner um)  
-Scope: `https://www.googleapis.com/auth/drive.file` (nur Dateien, die die App selbst anlegt)
+The app cannot create OAuth clients by itself.
 
-## 1. Google-Cloud-Projekt
+In-app backup, auto backup, and restore: [USER-GUIDE.md](USER-GUIDE.md). Runtime classes: [ARCHITECTURE.md](ARCHITECTURE.md).
 
-1. [Google Cloud Console](https://console.cloud.google.com/) öffnen und mit dem Konto anmelden, das die App besitzen soll.
-2. **Neues Projekt**, z. B. `legacy-solar-monitor`.
-3. Oben das neue Projekt auswählen.
+Package name: `com.alorbach.solarmonitor`  
+Drive folder: `Legacy Solar Monitor` (older backups lived under `SMA Solar Monitor`; the app finds that folder and renames it when possible)  
+Scope: `https://www.googleapis.com/auth/drive.file` (only files this app creates)
+
+## 1. Google Cloud project
+
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) with the account that should own the app.
+2. **New project**, for example `legacy-solar-monitor`.
+3. Select the new project at the top.
 
 ## 2. Drive API
 
 1. **APIs & Services → Library**.
-2. **Google Drive API** suchen und **Enable**.
+2. Search **Google Drive API** and **Enable**.
 
-## 3. OAuth-Zustimmungsbildschirm
+## 3. OAuth consent screen
 
 1. **APIs & Services → OAuth consent screen**.
-2. User type **External** (für ein privates Google-Konto).
-3. App-Name z. B. `Legacy Solar Monitor`, deine E-Mail als Support.
-4. Scopes: **Add or remove scopes** → `https://www.googleapis.com/auth/drive.file` hinzufügen.
-5. **Test users**: dein Google-Konto eintragen, mit dem du dich in der App anmelden willst.  
-   Ohne Testuser schlägt Login fehl, solange die App im Status **Testing** ist.
-6. Speichern. Veröffentlichung ist erst nötig, wenn fremde Konten ohne Testuser-Liste zugreifen sollen.
+2. User type **External** (for a private Google account).
+3. App name e.g. `Legacy Solar Monitor`, your email as support.
+4. Scopes: **Add or remove scopes** → add `https://www.googleapis.com/auth/drive.file`.
+5. **Test users**: add the Google account you will use in the app.  
+   Without a test user, login fails while the app status is **Testing**.
+6. Save. Publishing is only needed when strangers must sign in without the test-user list.
 
-## 4. Zwei OAuth-Clients
+## 4. Two OAuth clients
 
-Unter **APIs & Services → Credentials → Create credentials → OAuth client ID**.
+**APIs & Services → Credentials → Create credentials → OAuth client ID**.
 
-### 4a. Android-Client
+### 4a. Android client
 
-Typ: **Android**
+Type: **Android**
 
-| Feld | Wert |
+| Field | Value |
 |---|---|
 | Name | `Legacy Solar Monitor Android Debug` |
 | Package name | `com.alorbach.solarmonitor` |
-| SHA-1 | Debug-SHA-1 (siehe unten) |
+| SHA-1 | Debug SHA-1 (see below) |
 
-Ohne passenden SHA-1 kommt nach dem Login oft `10:` / `DEVELOPER_ERROR`.
+A wrong SHA-1 often yields error `10:` / `DEVELOPER_ERROR` after the login dialog.
 
-**Debug-SHA-1 (Windows):**
+**Debug SHA-1 (Windows):**
 
 ```powershell
 keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android
 ```
 
-Aktueller Debug-SHA-1 auf diesem Rechner (neu erzeugen, wenn du die Debug-Keystore löschst):
+Current debug SHA-1 on this machine (regenerate if you delete the debug keystore):
 
 ```text
 FF:DC:EC:61:44:7F:51:60:B3:5D:05:3C:71:B1:38:9D:92:2B:36:06
 ```
 
-Später für Play-Store-Builds einen **zweiten** Android-Client mit dem Release-SHA-1 anlegen (Upload-Key oder Play App Signing, je nachdem was Play Console unter App-Integrität zeigt).
+Later, add a **second** Android client with the release SHA-1 for Play Store builds (upload key or Play App Signing — whichever Play Console shows under App integrity).
 
-### 4b. Web-Client
+### 4b. Web client
 
-Typ: **Web application**
+Type: **Web application**
 
-| Feld | Wert |
+| Field | Value |
 |---|---|
 | Name | `Legacy Solar Monitor Web` |
-| Authorized redirect URIs | leer lassen |
+| Authorized redirect URIs | leave empty |
 
-Die **Client-ID** kopieren, Form:
+Copy the **Client ID**, form:
 
 ```text
 123456789-abc....apps.googleusercontent.com
 ```
 
-Das ist **kein** Secret. Client-Secret des Web-Clients wird in dieser App **nicht** verwendet.  
-Play Services braucht die Web-Client-ID für `requestOfflineAccess` (stilles Token für WorkManager-Auto-Backup).
+This is **not** a secret. The Web client secret is **not** used in this app.  
+Play Services needs the Web client ID for `requestOfflineAccess` (silent token for WorkManager auto-backup).
 
-## 5. ID in den Build legen
+## 5. Put the ID in the build
 
-In `local.properties` (liegt nicht in Git):
+In `local.properties` (not in Git):
 
 ```properties
 sdk.dir=C\:\\Users\\al\\AppData\\Local\\Android\\Sdk
-google.web.client.id=HIER_DIE_WEB_CLIENT_ID.apps.googleusercontent.com
+google.web.client.id=PASTE_THE_WEB_CLIENT_ID.apps.googleusercontent.com
 ```
 
-Alternativ Umgebungsvariable `GOOGLE_WEB_CLIENT_ID`.
+Or environment variable `GOOGLE_WEB_CLIENT_ID`.
 
-Danach **Rebuild** der App. Die ID landet zur Compile-Zeit in `BuildConfig.GOOGLE_WEB_CLIENT_ID`. Nur Install der alten APK reicht nicht.
+Then **Rebuild** the app. The ID is compiled into `BuildConfig.GOOGLE_WEB_CLIENT_ID`. Reinstalling an old APK is not enough.
 
-Wenn die rote Meldung *google.web.client.id in local.properties setzen* bleibt, ist der laufende Build noch ohne ID.
+If the red message *Set google.web.client.id in local.properties* remains, the running build still has no ID.
 
-Gradle-JDK: **21** (`C:\Program Files\Android\openjdk\jdk-21.0.8`), nicht Android-Studio-JBR 25.
+Gradle JDK: **21** (`C:\Program Files\Android\openjdk\jdk-21.0.8`), not Android Studio JBR 25.
 
-## 6. Am Gerät prüfen
+## 6. Check on the device
 
-1. App neu installieren/starten.
-2. **Einstellungen → Cloud-Backup**: Button **Mit Google anmelden** ist aktiv, keine rote Config-Meldung.
-3. Google-Konto wählen, Drive-Zugriff erlauben.
-4. Backup auslösen.
-5. In [drive.google.com](https://drive.google.com) Ordner **Legacy Solar Monitor** mit `solar-monitor.db` (und optional Import-Kopien) prüfen.
+1. Reinstall / start the app.
+2. **Settings → Cloud backup**: **Sign in with Google** is enabled, no red config message.
+3. Pick a Google account and allow Drive access.
+4. Run a backup.
+5. On [drive.google.com](https://drive.google.com) confirm folder **Legacy Solar Monitor** with `solar-monitor.db` (and optional import copies).
 
-Fehlerbilder:
+Failure modes:
 
-| Symptom | Typische Ursache |
+| Symptom | Typical cause |
 |---|---|
-| Grauer Button, rote Config-Meldung | `google.web.client.id` fehlt oder kein Rebuild |
-| Login-Dialog, dann Fehler 10 / DEVELOPER_ERROR | Android-Client: Paket oder SHA-1 falsch |
-| Access blocked / App not verified | Konto nicht unter Test users |
-| Play Services fehlen | Gerät/Image ohne Google Play |
+| Grey button, red config message | `google.web.client.id` missing or no rebuild |
+| Login dialog, then error 10 / `DEVELOPER_ERROR` | Android client: package or SHA-1 wrong |
+| Access blocked / App not verified | Account not in Test users |
+| Play Services missing | Device/image without Google Play |
 
-## 7. Was du nicht brauchst
+## 7. What you do not need
 
-- Kein Service Account, kein JSON-Key in der App.
-- Kein Signed-URL-/GCS-Bucket.
-- Kein `google-services.json` (Firebase ist nicht nötig).
-- Nutzer legen **kein** eigenes Cloud-Projekt an.
+- No service account, no JSON key in the app.
+- No signed-URL / GCS bucket.
+- No `google-services.json` (Firebase is not required).
+- Users do **not** create their own Cloud project.
