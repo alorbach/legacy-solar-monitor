@@ -1,0 +1,130 @@
+app/src/main/res/drawable/ic_launcher_foreground.xml
+  s_654f5aa0b1e89c::t_23b895bbc056d5 1,7-8,10-12,14-84,86-101
+app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+  s_654f5aa0b1e89c::t_3aa9f7f4ef74a9 3,5
+LICENSE
+  s_654f5aa0b1e89c::t_366e07025c5cbd 143
+  s_654f5aa0b1e89c::t_d62fd6a23a45cd 1-142,144-201
+docs/DEV-google-drive.md
+  s_654f5aa0b1e89c::t_8ef485f569dfda 13
+  s_654f5aa0b1e89c::t_5f698c2b819cd3 67
+  s_654f5aa0b1e89c::t_5af36855c32453 41
+  s_654f5aa0b1e89c::t_c84d9d909a30fb 102
+  s_7781dfd86e3258::t_a9d721ae00a6b1 1-6,8-12,14-24,26-40,42-66,68-101,103-118
+  s_654f5aa0b1e89c::t_f64b0b415a58e8 7
+  s_654f5aa0b1e89c::t_949f005a938e24 25
+app/src/main/res/values-de/strings.xml
+  s_654f5aa0b1e89c::t_1966559ab1cb03 12
+  s_654f5aa0b1e89c::t_30142e115d4291 237-241
+  s_654f5aa0b1e89c::t_9f02561ad0bde3 161
+  s_654f5aa0b1e89c::t_e6cd5d3be2b2e4 3
+  s_654f5aa0b1e89c::t_5532c273e5cf9a 250
+app/src/main/res/drawable/ic_launcher_monochrome.xml
+  s_654f5aa0b1e89c::t_d3dc19f681fb64 1-81
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveBackupRepository.kt
+  s_654f5aa0b1e89c::t_9b277cc5c9a312 256
+app/src/test/java/com/alorbach/solarmonitor/CloudBackupPolicyTest.kt
+  s_654f5aa0b1e89c::t_43847e1756dc0b 149-194
+  s_654f5aa0b1e89c::t_f91edb68a00958 137,141-145
+  s_8c301e5526e560::t_708114c3f07ea0 148
+  s_327a3b3d30a51a::t_bbc61f56412f20 146-147
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_3e53788aa56bf1::t_18672b6e0ce2f0 11,28,75-76
+  s_3e53788aa56bf1::t_73d6f4b0bbb744 225-256,261-306
+app/src/main/res/drawable/ic_launcher_background.xml
+  s_654f5aa0b1e89c::t_065f53711058a4 1-13
+settings.gradle.kts
+  s_654f5aa0b1e89c::t_76edfbea834d92 17
+app/build.gradle.kts
+  s_7781dfd86e3258::t_35861312c52ec4 112
+  s_7781dfd86e3258::t_275eff74831336 117
+  s_7781dfd86e3258::t_0b1debc262b9e9 86-89
+docs/DEV-add-device.md
+  s_654f5aa0b1e89c::t_9a8eeb66911cb4 1-120
+app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+  s_654f5aa0b1e89c::t_05900d36eccbec 3,5
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveRemote.kt
+  s_327a3b3d30a51a::t_c8855bad3663cf 192-193
+  s_654f5aa0b1e89c::t_e95a0380cab020 57-60,66-77,79
+  s_654f5aa0b1e89c::t_569cba4803fe5e 140-145
+  s_654f5aa0b1e89c::t_3f5465496210b9 17-21
+  s_654f5aa0b1e89c::t_5b1c164558db70 163,167,172,175-180,184-191
+  s_654f5aa0b1e89c::t_753e312989a5ba 47-51,53-56,61-65,78,80
+  s_654f5aa0b1e89c::t_8b69b05242d434 218-223
+gradle/wrapper/gradle-wrapper.properties
+  h_8e93f0703d8239 1,4
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt
+  s_654f5aa0b1e89c::t_c80d4a23b325b9 51-80
+  s_654f5aa0b1e89c::t_30de1850f6c35e 45-49
+  s_1e4618dd4fcc6c::t_105c89212cbdda 50
+app/src/main/res/values/strings.xml
+  s_654f5aa0b1e89c::t_00ce6a32a7c7c4 237-243
+  s_654f5aa0b1e89c::t_62b1b307c3fe0a 252
+  s_654f5aa0b1e89c::t_6bbefb8a80ca91 3
+  s_654f5aa0b1e89c::t_2bf03088f81258 12
+  s_654f5aa0b1e89c::t_6eba4966e458fa 162
+README.md
+  s_654f5aa0b1e89c::t_d7c79231fbb565 3-4
+  s_654f5aa0b1e89c::t_08526bd9dc54e8 1-2,5-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "381ebde4228082f0ec7a873b852220572c2a9bfc",
+  "prompts": {},
+  "humans": {
+    "h_8e93f0703d8239": {
+      "author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  },
+  "sessions": {
+    "s_1e4618dd4fcc6c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1d5bb93a-5fc9-4faa-98aa-8c233d9dbe70",
+        "model": "grok-4.5"
+      },
+      "human_author": null
+    },
+    "s_327a3b3d30a51a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "09e1ae93-1155-4faa-a375-82ac7656a843",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": null
+    },
+    "s_654f5aa0b1e89c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "75801fc8-04c0-491d-b988-f71f06eab2b3",
+        "model": "grok-4.6"
+      },
+      "human_author": null
+    },
+    "s_7781dfd86e3258": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fb2ec639-2d2a-4553-b18b-cd347b96ee41",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_8c301e5526e560": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "07c5f528-6db7-402b-9f77-3a7fdd964794",
+        "model": "grok-4.5"
+      },
+      "human_author": null
+    }
+  }
+}
