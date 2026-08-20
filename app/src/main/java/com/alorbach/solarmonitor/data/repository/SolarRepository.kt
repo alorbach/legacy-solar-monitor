@@ -600,6 +600,30 @@ class SolarRepository(
         }
     }
 
+    suspend fun getHourlySeriesToday(deviceIds: List<Long>): List<StatsPoint> {
+        if (deviceIds.isEmpty()) return emptyList()
+        val merged = LinkedHashMap<Int, StatsPoint>()
+        for (id in deviceIds) {
+            val zone = deviceZone(id)
+            for (point in getHourlySeries(listOf(id), LocalDate.now(zone))) {
+                val hour = point.bucketKey.toIntOrNull() ?: continue
+                val existing = merged[hour]
+                merged[hour] = if (existing == null) {
+                    point
+                } else {
+                    existing.copy(
+                        yieldWh = existing.yieldWh + point.yieldWh,
+                        peakPowerW = listOfNotNull(existing.peakPowerW, point.peakPowerW).maxOrNull(),
+                        earnings = existing.earnings + point.earnings,
+                        eventCount = existing.eventCount + point.eventCount,
+                    )
+                }
+            }
+        }
+        if (merged.isEmpty()) return emptyList()
+        return merged.keys.sorted().map { merged.getValue(it) }
+    }
+
     suspend fun getDailySeries(deviceIds: List<Long>, yearMonth: YearMonth): List<StatsPoint> {
         if (deviceIds.isEmpty()) return emptyList()
         val zoneId = primaryZone(deviceIds)

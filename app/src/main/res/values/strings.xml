@@ -96,6 +96,8 @@
     <string name="no_devices_body">Add a Bluetooth SMA inverter on the Devices tab to start monitoring.</string>
     <string name="production_chart">Production chart</string>
     <string name="production_chart_subtitle">Daily yield over the last ~30 days (kWh)</string>
+    <string name="hourly_today_subtitle">Today by hour (%1$s)</string>
+    <string name="hourly_selected">%1$s · %2$s · %3$s</string>
     <string name="bluetooth_discovery">Bluetooth discovery</string>
     <string name="bluetooth_discovery_body">Scan nearby devices, then tap a result to create a device profile with that name and MAC.</string>
     <string name="bluetooth_nearby_paired">Nearby (unpaired): %1$d · Paired: %2$d</string>
@@ -258,6 +260,7 @@
     <string name="report_earnings">Earnings: %1$s</string>
     <string name="report_status">Status: %1$s</string>
     <string name="stats_chart_unit">Bars in kWh. Up to 16 hours or 12 days/months/years at once; swipe for more.</string>
+    <string name="stats_chart_hint">Bars in kWh. Double-tap to drill; swipe for more.</string>
     <string name="stats_events">Events in this period</string>
     <string name="stats_events_empty">No inverter events for this period. Import the Events folder from SBFspot to fill this list.</string>
     <string name="import_channel">Data import</string>

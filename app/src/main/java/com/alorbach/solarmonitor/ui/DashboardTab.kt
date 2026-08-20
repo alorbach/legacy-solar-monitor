@@ -12,8 +12,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
@@ -93,6 +92,7 @@ import com.alorbach.solarmonitor.data.model.DeviceTransport
 import com.alorbach.solarmonitor.data.model.ImportJobEntity
 import com.alorbach.solarmonitor.data.model.ImportJobStatus
 import com.alorbach.solarmonitor.data.model.PortfolioSummary
+import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
@@ -101,7 +101,6 @@ import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
@@ -110,7 +109,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
-@OptIn(ExperimentalLayoutApi::class)
+private data class DashboardChartLoad(
+    val deviceId: Long? = null,
+    val timezone: String? = null,
+    val daily: List<DailyPoint>? = null,
+    val hourly: List<StatsPoint>? = null,
+)
+
 @Composable
 fun DashboardTab(
     modifier: Modifier,
@@ -131,21 +136,39 @@ fun DashboardTab(
         }
     }
     var selectedChartDay by remember { mutableStateOf<DailyPoint?>(null) }
-    var chartData by remember { mutableStateOf<List<DailyPoint>?>(null) }
+    var selectedHourKey by remember { mutableStateOf<String?>(null) }
+    var chartLoad by remember { mutableStateOf(DashboardChartLoad()) }
     val selectedDevice = devices.firstOrNull { it.id == selectedDeviceId }
     var exportMessage by remember { mutableStateOf<String?>(null) }
     var exportSuccess by remember { mutableStateOf(false) }
     val exportFailedLabel = stringResource(R.string.export_failed)
     LaunchedEffect(
         selectedDeviceId,
+        selectedDevice?.timezone,
         dataEpoch,
         selectedDevice?.lastLiveReadAtEpochSeconds,
         selectedDevice?.lastArchiveSyncAtEpochSeconds,
     ) {
-        chartData = null
-        selectedChartDay = null
-        chartData = selectedDeviceId?.let { container.repository.getDailyChart(it) } ?: emptyList()
+        val deviceId = selectedDeviceId
+        val timezone = selectedDevice?.timezone
+        if (deviceId != chartLoad.deviceId || timezone != chartLoad.timezone) {
+            chartLoad = DashboardChartLoad(deviceId = deviceId, timezone = timezone)
+            selectedChartDay = null
+            selectedHourKey = null
+        }
+        chartLoad = if (deviceId == null) {
+            DashboardChartLoad(deviceId = null, timezone = timezone, daily = emptyList(), hourly = emptyList())
+        } else {
+            DashboardChartLoad(
+                deviceId = deviceId,
+                timezone = timezone,
+                daily = container.repository.getDailyChart(deviceId),
+                hourly = container.repository.getHourlySeriesToday(listOf(deviceId)),
+            )
+        }
     }
+    val chartData = chartLoad.daily
+    val hourlyToday = chartLoad.hourly
     val colors = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -187,11 +210,12 @@ fun DashboardTab(
                         color = colors.onSurfaceVariant,
                     )
                     StatusBadge(liveMessage, active = liveActive)
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(CompactButtonHeight),
+                            contentPadding = CompactButtonContentPadding,
                             enabled = selectedDeviceId != null &&
                                 selectedDeviceId !in liveActiveDeviceIds,
                             onClick = {
@@ -204,21 +228,45 @@ fun DashboardTab(
                                 stringResource(
                                     if (liveActive) R.string.start_live_add_selected else R.string.start_live_selected,
                                 ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         Button(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(CompactButtonHeight),
+                            contentPadding = CompactButtonContentPadding,
                             enabled = devices.isNotEmpty() &&
                                 devices.any { it.id !in liveActiveDeviceIds },
                             onClick = { onStartLive(devices.map { it.id }) },
                         ) {
-                            Text(stringResource(R.string.start_all_live_monitors))
+                            Text(
+                                stringResource(R.string.start_all_live_monitors),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
-                        if (liveActive) {
-                            Button(onClick = onStopLive) {
-                                Icon(Icons.Rounded.Stop, contentDescription = stringResource(R.string.stop_live_monitor))
-                                Spacer(Modifier.width(6.dp))
-                                Text(stringResource(R.string.stop_live_monitor))
-                            }
+                    }
+                    if (liveActive) {
+                        Button(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(CompactButtonHeight),
+                            contentPadding = CompactButtonContentPadding,
+                            onClick = onStopLive,
+                        ) {
+                            Icon(
+                                Icons.Rounded.Stop,
+                                contentDescription = stringResource(R.string.stop_live_monitoring),
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                stringResource(R.string.stop_live_monitoring),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
@@ -254,6 +302,38 @@ fun DashboardTab(
                                     onClick = { selectedDeviceId = device.id },
                                 )
                             }
+                        }
+                    }
+                    val loadedHours = hourlyToday.orEmpty()
+                    if (loadedHours.isNotEmpty()) {
+                        Text(
+                            stringResource(
+                                R.string.hourly_today_subtitle,
+                                YieldFormatting.whToKwhLabel(loadedHours.sumOf { it.yieldWh }),
+                            ),
+                            color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        StatsBarChart(
+                            points = loadedHours,
+                            visibleBars = loadedHours.size.coerceAtLeast(1),
+                            selectedBucketKey = selectedHourKey,
+                            height = 128.dp,
+                            onBarClick = { key ->
+                                selectedHourKey = if (selectedHourKey == key) null else key
+                            },
+                        )
+                        loadedHours.firstOrNull { it.bucketKey == selectedHourKey }?.let { selected ->
+                            Text(
+                                stringResource(
+                                    R.string.hourly_selected,
+                                    selected.label,
+                                    YieldFormatting.whToKwhLabel(selected.yieldWh),
+                                    YieldFormatting.earningsLabel(selected.earnings, portfolio.currency),
+                                ),
+                                color = colors.onSurface,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                     }
                     Text(
@@ -341,11 +421,12 @@ fun DashboardTab(
                         )
                     }
                     if (selectedDeviceId != null) {
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(CompactButtonHeight),
+                                contentPadding = CompactButtonContentPadding,
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
                                     scope.launch {
@@ -364,8 +445,18 @@ fun DashboardTab(
                                         }
                                     }
                                 },
-                            ) { Text(stringResource(R.string.export_csv)) }
+                            ) {
+                                Text(
+                                    stringResource(R.string.export_csv),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             OutlinedButton(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(CompactButtonHeight),
+                                contentPadding = CompactButtonContentPadding,
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
                                     scope.launch {
@@ -384,8 +475,20 @@ fun DashboardTab(
                                         }
                                     }
                                 },
-                            ) { Text(stringResource(R.string.export_pdf)) }
+                            ) {
+                                Text(
+                                    stringResource(R.string.export_pdf),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedButton(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(CompactButtonHeight),
+                                contentPadding = CompactButtonContentPadding,
                                 enabled = loadedChart != null,
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
@@ -408,8 +511,18 @@ fun DashboardTab(
                                         }
                                     }
                                 },
-                            ) { Text(stringResource(R.string.export_period_csv)) }
+                            ) {
+                                Text(
+                                    stringResource(R.string.export_period_csv),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             OutlinedButton(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(CompactButtonHeight),
+                                contentPadding = CompactButtonContentPadding,
                                 enabled = loadedChart != null,
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
@@ -435,7 +548,13 @@ fun DashboardTab(
                                         }
                                     }
                                 },
-                            ) { Text(stringResource(R.string.export_period_pdf)) }
+                            ) {
+                                Text(
+                                    stringResource(R.string.export_period_pdf),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                         }
                     }
                 }

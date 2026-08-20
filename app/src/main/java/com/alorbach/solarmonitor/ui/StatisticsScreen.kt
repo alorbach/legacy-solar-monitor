@@ -7,12 +7,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -65,7 +64,6 @@ import java.time.format.FormatStyle
 import java.util.Locale
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatisticsScreen(
     modifier: Modifier,
@@ -357,21 +355,28 @@ fun StatisticsScreen(
                         ),
                         color = colors.onSurfaceVariant,
                     )
-                    Text(
-                        stringResource(R.string.stats_chart_unit),
-                        color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        stringResource(R.string.stats_chart_drill),
-                        color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                    if (seriesLoading) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator()
+                            Text(stringResource(R.string.stats_loading), color = colors.onSurfaceVariant)
+                        }
+                    } else {
+                        StatsBarChart(
+                            points = points,
+                            visibleBars = StatsSeriesFill.visibleBars(granularity),
+                            selectedBucketKey = selectedBucketKey,
+                            onBarClick = { key ->
+                                selectedBucketKey = if (selectedBucketKey == key) null else key
+                            },
+                            onBarDoubleClick = { key -> drillInto(key) },
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedButton(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(CompactButtonHeight),
+                            contentPadding = CompactButtonContentPadding,
                             enabled = !seriesLoading,
                             onClick = {
                                 scope.launch {
@@ -394,8 +399,18 @@ fun StatisticsScreen(
                                     }
                                 }
                             },
-                        ) { Text(stringResource(R.string.export_period_csv)) }
+                        ) {
+                            Text(
+                                stringResource(R.string.export_csv),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         OutlinedButton(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(CompactButtonHeight),
+                            contentPadding = CompactButtonContentPadding,
                             enabled = !seriesLoading,
                             onClick = {
                                 val deviceLabel = selectedDeviceId?.let { id ->
@@ -424,29 +439,24 @@ fun StatisticsScreen(
                                     }
                                 }
                             },
-                        ) { Text(stringResource(R.string.export_period_pdf)) }
+                        ) {
+                            Text(
+                                stringResource(R.string.export_pdf),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
+                    Text(
+                        stringResource(R.string.stats_chart_hint),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                     exportMessage?.let { message ->
                         Text(
                             message,
                             color = if (exportSuccess) colors.onSurfaceVariant else colors.error,
                             style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    if (seriesLoading) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            CircularProgressIndicator()
-                            Text(stringResource(R.string.stats_loading), color = colors.onSurfaceVariant)
-                        }
-                    } else {
-                        StatsBarChart(
-                            points = points,
-                            visibleBars = StatsSeriesFill.visibleBars(granularity),
-                            selectedBucketKey = selectedBucketKey,
-                            onBarClick = { key ->
-                                selectedBucketKey = if (selectedBucketKey == key) null else key
-                            },
-                            onBarDoubleClick = { key -> drillInto(key) },
                         )
                     }
                 }

@@ -15,7 +15,9 @@ android {
         applicationId = "com.alorbach.solarmonitor"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1000
+        // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
+        // that ships app changes; do not bump again when amending the same unpushed commit.
+        versionCode = 1011
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

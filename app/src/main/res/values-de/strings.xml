@@ -96,6 +96,8 @@
     <string name="no_devices_body">Fügen Sie auf dem Geräte-Tab einen Bluetooth-SMA-Wechselrichter hinzu, um die Überwachung zu starten.</string>
     <string name="production_chart">Erzeugungsdiagramm</string>
     <string name="production_chart_subtitle">Tagesertrag der letzten ~30 Tage (kWh)</string>
+    <string name="hourly_today_subtitle">Heute nach Stunden (%1$s)</string>
+    <string name="hourly_selected">%1$s · %2$s · %3$s</string>
     <string name="bluetooth_discovery">Bluetooth-Suche</string>
     <string name="bluetooth_discovery_body">Geräte in der Nähe suchen und tippen, um ein Geräteprofil mit Name und MAC anzulegen.</string>
     <string name="bluetooth_nearby_paired">In der Nähe (ungepaart): %1$d · Gepaart: %2$d</string>
@@ -256,6 +258,7 @@
     <string name="report_earnings">Erlös: %1$s</string>
     <string name="report_status">Status: %1$s</string>
     <string name="stats_chart_unit">Balken in kWh. Bis zu 16 Stunden bzw. 12 Tage/Monate/Jahre direkt; danach seitlich scrollen.</string>
+    <string name="stats_chart_hint">Balken in kWh. Doppeltippen zum Wechseln; seitlich scrollen.</string>
     <string name="stats_events">Ereignisse in diesem Zeitraum</string>
     <string name="stats_events_empty">Keine Wechselrichter-Ereignisse in diesem Zeitraum. Den Events-Ordner von SBFspot importieren, damit die Liste gefüllt wird.</string>
     <string name="import_channel">Datenimport</string>

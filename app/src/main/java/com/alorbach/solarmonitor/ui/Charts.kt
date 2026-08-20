@@ -41,6 +41,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alorbach.solarmonitor.R
@@ -275,6 +276,7 @@ fun StatsBarChart(
     selectedBucketKey: String? = null,
     onBarClick: ((String) -> Unit)? = null,
     onBarDoubleClick: ((String) -> Unit)? = null,
+    height: Dp = 280.dp,
 ) {
     val colors = MaterialTheme.colorScheme
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
@@ -298,7 +300,7 @@ fun StatsBarChart(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(280.dp)
+            .height(height)
             .background(colors.surface, RoundedCornerShape(22.dp))
             .padding(horizontal = 8.dp, vertical = 10.dp)
             .semantics {
@@ -324,15 +326,24 @@ fun StatsBarChart(
                 val contentWidth = slotWidth * fittedSlots
                 val isScrolling = fittedSlots > visibleBars
                 val manyBars = !isScrolling && fittedSlots >= 8
+                val compactHourTicks = manyBars || height <= 160.dp
                 val hasEventMarkers = points.any { it.eventCount > 0 }
                 val slotPx = with(density) { slotWidth.toPx() }
-                val axisProbe = remember(points, isScrolling) {
+                val tickLabels = points.map { StatsAxisLabels.tick(it.label, compactHourTicks) }
+                val axisProbe = remember(tickLabels, isScrolling) {
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         textSize = with(density) { if (isScrolling) 11.sp.toPx() else 10.sp.toPx() }
                     }
                 }
-                val longestAxisWidth = points.maxOf { axisProbe.measureText(it.label) }
-                val verticalAxisLabels = longestAxisWidth + 8f > slotPx
+                val longestAxisWidth = tickLabels.maxOf { axisProbe.measureText(it) }
+                val verticalAxisLabels = !compactHourTicks && longestAxisWidth + 8f > slotPx
+                val axisStep = StatsAxisLabels.step(
+                    count = tickLabels.size,
+                    slotPx = slotPx,
+                    labelWidthPx = longestAxisWidth,
+                    compactHour = compactHourTicks,
+                    scrolling = isScrolling,
+                )
                 val chartTopPx = with(density) {
                     val base = if (manyBars) 8.dp else 28.dp
                     (if (hasEventMarkers) base + 10.dp else base).toPx()
@@ -456,15 +467,11 @@ fun StatsBarChart(
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
                         textSize = when {
+                            compactHourTicks -> min(barWidth * 0.72f, 10.sp.toPx()).coerceIn(8.sp.toPx(), 10.sp.toPx())
                             isScrolling -> min(barWidth * 0.7f, 12.sp.toPx()).coerceIn(minSp, 13.sp.toPx())
                             verticalAxisLabels -> min(barWidth * 0.95f, 12.sp.toPx()).coerceIn(minSp, 12.sp.toPx())
                             else -> min(barWidth * 0.55f, 13.sp.toPx()).coerceIn(minSp, 14.sp.toPx())
                         }
-                    }
-                    val axisStep = when {
-                        isScrolling || points.size <= 14 -> 1
-                        points.size <= 24 -> 2
-                        else -> (points.size / 12).coerceAtLeast(2)
                     }
 
                     val axisY = chartTop + chartHeight
@@ -553,11 +560,15 @@ fun StatsBarChart(
                             }
                         }
 
-                        val showAxisLabel = index % axisStep == 0 || index == points.lastIndex
+                        val showAxisLabel = index % axisStep == 0 ||
+                            (
+                                index == points.lastIndex &&
+                                    (index - (index / axisStep) * axisStep) * slot >=
+                                    axisPaint.measureText(tickLabels[index]) + 8f
+                                )
                         if (showAxisLabel) {
-                            val axisLabel = point.label
+                            val axisLabel = tickLabels[index]
                             if (verticalAxisLabels) {
-                                // Fully vertical (reads upward), same orientation as in-bar kWh labels.
                                 val labelWidth = axisPaint.measureText(axisLabel)
                                 val pivotY = axisY + 8f + labelWidth / 2f
                                 drawContext.canvas.nativeCanvas.save()

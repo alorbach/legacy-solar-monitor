@@ -181,4 +181,21 @@ class StatsSeriesFillTest {
         assertEquals(12, StatsSeriesFill.visibleBars(StatsGranularity.MONTH))
         assertEquals(12, StatsSeriesFill.visibleBars(StatsGranularity.YEAR))
     }
+
+    @Test
+    fun compactHourTicksDropMinutes() {
+        val labels = com.alorbach.solarmonitor.ui.StatsAxisLabels
+        assertEquals("07", labels.tick("07:00", compactHour = true))
+        assertEquals("07", labels.tick("7:00", compactHour = true))
+        assertEquals("07:00", labels.tick("07:00", compactHour = false))
+        assertEquals("15", labels.tick("15", compactHour = true))
+    }
+
+    @Test
+    fun hourAxisStepSkipsWhenLabelsWiderThanSlot() {
+        assertEquals(1, com.alorbach.solarmonitor.ui.StatsAxisLabels.step(8, slotPx = 40f, labelWidthPx = 20f, compactHour = true, scrolling = false))
+        assertEquals(2, com.alorbach.solarmonitor.ui.StatsAxisLabels.step(12, slotPx = 30f, labelWidthPx = 40f, compactHour = false, scrolling = false))
+        assertEquals(1, com.alorbach.solarmonitor.ui.StatsAxisLabels.step(12, slotPx = 40f, labelWidthPx = 20f, compactHour = true, scrolling = true))
+        assertEquals(2, com.alorbach.solarmonitor.ui.StatsAxisLabels.step(14, slotPx = 40f, labelWidthPx = 18f, compactHour = true, scrolling = false))
+    }
 }
