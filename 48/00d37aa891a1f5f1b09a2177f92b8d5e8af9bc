@@ -1,0 +1,105 @@
+docs/ARCHITECTURE.md
+  s_24af46875ce577::t_c2658067019393 104
+  s_24af46875ce577::t_8d518ab47e1ec7 129,133-135
+  s_24af46875ce577::t_ab3da9b2eec9af 162,169,174-182
+app/src/main/AndroidManifest.xml
+  s_24af46875ce577::t_1ea80d8543e2d0 24-25
+app/src/main/res/xml/backup_rules.xml
+  s_24af46875ce577::t_de549bf6e3c7f0 2-9
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveRemote.kt
+  s_24af46875ce577::t_f79b6e94dc1438 126-145
+docs/PRIVACY.md
+  s_24af46875ce577::t_d5100e8df050dc 3,23-24,26-28,32,34,40,48,50,55,57,75-87,107-108,110-113,115-116,118,124,132,134,139,141,159-171
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollScheduler.kt
+  s_24af46875ce577::t_52ff9697e01586 97-108,110-111,113,142,163-166
+  s_24af46875ce577::t_e6574fbe12daa0 148-149,167,172-173,231
+  s_24af46875ce577::t_ce88138c39ac47 60-62
+  s_4327da082e5556::t_cf1a1f1f80e86a 168
+  s_24af46875ce577::t_ccd3affdd15636 169
+  s_24af46875ce577::t_14078c37cab1a6 9-10,170-171
+  s_24af46875ce577::t_afdbf0707efd3f 143-147
+README.md
+  s_24af46875ce577::t_c36c6222328b75 43-44,48,56
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt
+  s_24af46875ce577::t_56d7a4db07b301 45-46
+docs/PLAY-LISTING.md
+  s_24af46875ce577::t_fb5dba95ba6018 30
+  s_24af46875ce577::t_629ffdf49268e8 93,96,99-100,102
+  s_24af46875ce577::t_f74b5eb4614be1 68,72
+  s_24af46875ce577::t_4c5ac70fb61d3a 34,94
+app/src/test/java/com/alorbach/solarmonitor/CloudBackupPolicyTest.kt
+  s_24af46875ce577::t_d53601608c56f3 129-133
+docs/USER-GUIDE.md
+  s_24af46875ce577::t_228b092d9da763 32,64,178
+  s_24af46875ce577::t_c9dcfb8fd08065 3-5,12,22,33,38-44,75-77,80,100-101,118-128,135,147,153,157-159,161
+docs/DEV-github-release.md
+  s_24af46875ce577::t_075c0c33f1a08b 5,7-17,72,74-79,85-86,109-130,132
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollWindowReceiver.kt
+  s_24af46875ce577::t_af11e45e6e0e5e 19-20
+  s_24af46875ce577::t_b930a99d0a799a 21
+app/src/main/java/com/alorbach/solarmonitor/service/LiveResumeNotifier.kt
+  s_24af46875ce577::t_6ade8fdf34e448 1-59
+docs/PLAY-DATA-SAFETY.md
+  s_24af46875ce577::t_cfedfd1b182969 5-6,8-10,12-16,24-26,28-29,33,35,39,47,51,60-61,65-67,74,84,86,95,99,105,107,109-114,116-117
+  s_24af46875ce577::t_39e0898c7f3ce3 96
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_24af46875ce577::t_a9f99c3741a5fd 929-931
+  s_24af46875ce577::t_8dff8583f27f84 939-942,966-987
+  s_24af46875ce577::t_83ab9a3ea86040 59,64-66,175-196
+  s_24af46875ce577::t_0f8a7da8a922a9 923,925-926,928,932-933
+  s_24af46875ce577::t_fe4fa12eae66d5 924,927
+app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt
+  s_24af46875ce577::t_fbee432aa5f16b 40
+app/src/main/res/xml/data_extraction_rules.xml
+  s_24af46875ce577::t_39444ebf5d7c62 2-20
+app/src/main/res/values/strings.xml
+  s_24af46875ce577::t_87d2e712ec87d5 132
+  s_24af46875ce577::t_0a72f8a860ab9b 21-22
+  s_24af46875ce577::t_460e3bfb6d4696 219
+AGENTS.md
+  s_24af46875ce577::t_551f8823e05f7c 71-74
+  s_24af46875ce577::t_32ed12b01e3bb9 15
+docs/PLAY-SUBMISSION.md
+  s_24af46875ce577::t_37ff126b2f41a5 74-107
+  s_24af46875ce577::t_490d7f812dad39 52
+  s_24af46875ce577::t_0d2e3a6bfdd0ec 1-51,53-73
+app/build.gradle.kts
+  s_24af46875ce577::t_608e16fdefe3cb 21,26,29
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveBackupRepository.kt
+  s_24af46875ce577::t_aedfba862887aa 183-185
+docs/DEV-google-drive.md
+  s_24af46875ce577::t_0888e8e058a518 11,32,56,62-63,83,91,102,114,118-121,123,125,127-130,132,134-136
+docs/USER-GUIDE-DE.md
+  s_24af46875ce577::t_a1b2987d95f815 32,60,114
+  s_24af46875ce577::t_8d8dd105ec31f3 1-31,33-59,61-113,115-117
+app/src/main/res/values-de/strings.xml
+  s_24af46875ce577::t_1b2994cb373703 21-22
+  s_24af46875ce577::t_fee912dbd387e5 219
+  s_24af46875ce577::t_adc7b0b99d6b7b 132
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_24af46875ce577::t_e69d0954d9ea1b 366
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4800d37aa891a1f5f1b09a2177f92b8d5e8af9bc",
+  "prompts": {},
+  "sessions": {
+    "s_24af46875ce577": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "75a1d1e5-521b-4d5b-a9ed-f5ef57177e70",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": null
+    },
+    "s_4327da082e5556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01f20-f242-7e92-b79d-2ca5c4ca5d44",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
