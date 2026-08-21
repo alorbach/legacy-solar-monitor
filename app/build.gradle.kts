@@ -17,7 +17,7 @@ android {
         targetSdk = 35
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1014
+        versionCode = 1016
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -98,6 +98,22 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+
+    // APK ABI splits conflict with bundleRelease in one Gradle invocation
+    // (AGP: multiple shrunk-resources when building an app bundle). Enable only for
+    // assembleRelease via -PenableAbiSplits=true. Play AAB stays unsplit here.
+    val enableAbiSplits = providers.gradleProperty("enableAbiSplits")
+        .map { it.equals("true", ignoreCase = true) }
+        .orElse(false)
+        .get()
+    splits {
+        abi {
+            isEnable = enableAbiSplits
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = true
         }
     }
 }

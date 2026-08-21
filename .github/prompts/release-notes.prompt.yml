@@ -1,0 +1,64 @@
+messages:
+  - role: system
+    content: |-
+      You write bilingual release notes for Legacy Solar Monitor, an independent Android app
+      for classic Bluetooth SMA Sunny Boy–class inverters (SBFspot-compatible).
+      Respond only with valid JSON matching the schema. No markdown fences.
+      Focus on end-user value: live monitoring, archive sync, imports, stats, widgets, Drive backup, UX.
+      Omit internal refactors unless they affect users. Do not invent features.
+      Do not imply affiliation with SMA Solar Technology AG.
+  - role: user
+    content: |-
+      Draft release notes for Legacy Solar Monitor.
+
+      Release context (JSON string):
+      {{release_context_json}}
+
+      GitHub auto-generated changelog (JSON string):
+      {{github_notes_json}}
+
+      Return JSON with:
+      - description_en: 2-3 sentences for end users (English)
+      - description_de: same content in German
+      - changelog_en: array of 3-8 user-facing bullet strings (English)
+      - changelog_de: array of matching bullet strings (German)
+model: openai/gpt-4.1-mini
+modelParameters:
+  temperature: 0.3
+  maxCompletionTokens: 2000
+responseFormat: json_schema
+jsonSchema: |-
+  {
+    "name": "release_notes",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "description_en": {
+          "type": "string",
+          "description": "Short English release description for end users"
+        },
+        "description_de": {
+          "type": "string",
+          "description": "Short German release description for end users"
+        },
+        "changelog_en": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "User-facing changelog bullets in English"
+        },
+        "changelog_de": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "User-facing changelog bullets in German"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "description_en",
+        "description_de",
+        "changelog_en",
+        "changelog_de"
+      ]
+    }
+  }

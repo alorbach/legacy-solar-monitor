@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  models: read
 
 jobs:
   release:
@@ -31,6 +32,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
@@ -59,16 +65,38 @@ jobs:
             echo "Tag ${GITHUB_REF_NAME} does not match versionName ${version_name}"
             exit 1
           fi
-          apk_name="legacy-solar-monitor-${version_name}-vc${version_code}.apk"
-          aab_name="legacy-solar-monitor-${version_name}-vc${version_code}.aab"
+          base="legacy-solar-monitor-${version_name}-vc${version_code}"
+          apk_universal_name="${base}-universal.apk"
+          apk_arm64_name="${base}-arm64-v8a.apk"
+          apk_armv7_name="${base}-armeabi-v7a.apk"
+          apk_x86_name="${base}-x86_64.apk"
+          aab_name="${base}.aab"
+          qr_universal_name="qr-universal.png"
+          qr_arm64_name="qr-arm64-v8a.png"
+          qr_armv7_name="qr-armeabi-v7a.png"
+          qr_x86_name="qr-x86_64.png"
           {
             echo "version=${version_name}"
             echo "version_code=${version_code}"
             echo "version_name=${version_name}"
-            echo "apk_name=${apk_name}"
+            echo "apk_universal_name=${apk_universal_name}"
+            echo "apk_arm64_name=${apk_arm64_name}"
+            echo "apk_armv7_name=${apk_armv7_name}"
+            echo "apk_x86_name=${apk_x86_name}"
             echo "aab_name=${aab_name}"
-            echo "apk_path=dist/${apk_name}"
+            echo "apk_universal_path=dist/${apk_universal_name}"
+            echo "apk_arm64_path=dist/${apk_arm64_name}"
+            echo "apk_armv7_path=dist/${apk_armv7_name}"
+            echo "apk_x86_path=dist/${apk_x86_name}"
             echo "aab_path=dist/${aab_name}"
+            echo "qr_universal_name=${qr_universal_name}"
+            echo "qr_arm64_name=${qr_arm64_name}"
+            echo "qr_armv7_name=${qr_armv7_name}"
+            echo "qr_x86_name=${qr_x86_name}"
+            echo "qr_universal_path=dist/${qr_universal_name}"
+            echo "qr_arm64_path=dist/${qr_arm64_name}"
+            echo "qr_armv7_path=dist/${qr_armv7_name}"
+            echo "qr_x86_path=dist/${qr_x86_name}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Run unit tests
@@ -110,51 +138,102 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
-        run: ./gradlew :app:assembleRelease :app:bundleRelease
+        run: |
+          set -euo pipefail
+          # ABI splits and bundleRelease cannot share one Gradle run (AGP issue 402800800).
+          ./gradlew :app:assembleRelease -PenableAbiSplits=true
+          ./gradlew :app:bundleRelease
 
       - name: Collect artifacts
         run: |
           set -euo pipefail
           mkdir -p dist
-          apk_src="app/build/outputs/apk/release/app-release.apk"
+          out="app/build/outputs/apk/release"
           aab_src="app/build/outputs/bundle/release/app-release.aab"
-          test -f "$apk_src"
+          for abi in universal armeabi-v7a arm64-v8a x86_64; do
+            src="${out}/app-${abi}-release.apk"
+            test -f "$src"
+          done
           test -f "$aab_src"
-          cp "$apk_src" "${{ steps.vars.outputs.apk_path }}"
+          cp "${out}/app-universal-release.apk" "${{ steps.vars.outputs.apk_universal_path }}"
+          cp "${out}/app-arm64-v8a-release.apk" "${{ steps.vars.outputs.apk_arm64_path }}"
+          cp "${out}/app-armeabi-v7a-release.apk" "${{ steps.vars.outputs.apk_armv7_path }}"
+          cp "${out}/app-x86_64-release.apk" "${{ steps.vars.outputs.apk_x86_path }}"
           cp "$aab_src" "${{ steps.vars.outputs.aab_path }}"
+
+      - name: Collect release context
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_OUT_DIR: .release
+        run: node scripts/collect-release-context.js
 
       - name: Generate GitHub changelog
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           RELEASE_OUT_DIR: .release
-          APK_NAME: ${{ steps.vars.outputs.apk_name }}
-          AAB_NAME: ${{ steps.vars.outputs.aab_name }}
         with:
           script: |
             const fs = require('fs');
             const path = require('path');
             const outDir = process.env.RELEASE_OUT_DIR || '.release';
             const tagName = context.ref.replace('refs/tags/', '');
-            const apkName = process.env.APK_NAME;
-            const aabName = process.env.AAB_NAME;
             const notes = await github.rest.repos.generateReleaseNotes({
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tagName,
               target_commitish: context.sha,
             });
-            const changelog = String(notes.data.body || '').trim()
+            const body = String(notes.data.body || '').trim()
               || 'No generated changelog entries were returned for this tag.';
-            const body = [
-              `Signed APK and Play App Bundle for ${tagName}.`,
-              '',
-              `- APK: \`${apkName}\``,
-              `- AAB: \`${aabName}\``,
-              '',
-              changelog,
-            ].join('\n');
             fs.mkdirSync(outDir, { recursive: true });
-            fs.writeFileSync(path.join(outDir, 'release-notes.md'), body);
+            fs.writeFileSync(path.join(outDir, 'github-notes.md'), body);
+
+      - name: Generate AI release notes
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_OUT_DIR: .release
+        run: node scripts/generate-ai-release-notes.js
+
+      - name: Generate APK QR codes
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          APK_UNIVERSAL_NAME: ${{ steps.vars.outputs.apk_universal_name }}
+          APK_ARM64_NAME: ${{ steps.vars.outputs.apk_arm64_name }}
+          APK_ARMV7_NAME: ${{ steps.vars.outputs.apk_armv7_name }}
+          APK_X86_NAME: ${{ steps.vars.outputs.apk_x86_name }}
+          QR_UNIVERSAL_PATH: ${{ steps.vars.outputs.qr_universal_path }}
+          QR_ARM64_PATH: ${{ steps.vars.outputs.qr_arm64_path }}
+          QR_ARMV7_PATH: ${{ steps.vars.outputs.qr_armv7_path }}
+          QR_X86_PATH: ${{ steps.vars.outputs.qr_x86_path }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qrencode
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}"
+          qrencode -o "$QR_UNIVERSAL_PATH" -s 8 -m 2 "${base}/${APK_UNIVERSAL_NAME}"
+          qrencode -o "$QR_ARM64_PATH" -s 6 -m 2 "${base}/${APK_ARM64_NAME}"
+          qrencode -o "$QR_ARMV7_PATH" -s 6 -m 2 "${base}/${APK_ARMV7_NAME}"
+          qrencode -o "$QR_X86_PATH" -s 6 -m 2 "${base}/${APK_X86_NAME}"
+          ls -la dist/qr-*.png
+
+      - name: Assemble release description
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.vars.outputs.version }}
+          RELEASE_VERSION_CODE: ${{ steps.vars.outputs.version_code }}
+          RELEASE_OUT_DIR: .release
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          APK_UNIVERSAL_NAME: ${{ steps.vars.outputs.apk_universal_name }}
+          APK_ARM64_NAME: ${{ steps.vars.outputs.apk_arm64_name }}
+          APK_ARMV7_NAME: ${{ steps.vars.outputs.apk_armv7_name }}
+          APK_X86_NAME: ${{ steps.vars.outputs.apk_x86_name }}
+          AAB_NAME: ${{ steps.vars.outputs.aab_name }}
+          QR_UNIVERSAL_NAME: ${{ steps.vars.outputs.qr_universal_name }}
+          QR_ARM64_NAME: ${{ steps.vars.outputs.qr_arm64_name }}
+          QR_ARMV7_NAME: ${{ steps.vars.outputs.qr_armv7_name }}
+          QR_X86_NAME: ${{ steps.vars.outputs.qr_x86_name }}
+        run: node scripts/assemble-release-notes.js
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -164,5 +243,12 @@ jobs:
           body_path: .release/release-notes.md
           fail_on_unmatched_files: true
           files: |
-            ${{ steps.vars.outputs.apk_path }}
+            ${{ steps.vars.outputs.apk_universal_path }}
+            ${{ steps.vars.outputs.apk_arm64_path }}
+            ${{ steps.vars.outputs.apk_armv7_path }}
+            ${{ steps.vars.outputs.apk_x86_path }}
             ${{ steps.vars.outputs.aab_path }}
+            ${{ steps.vars.outputs.qr_universal_path }}
+            ${{ steps.vars.outputs.qr_arm64_path }}
+            ${{ steps.vars.outputs.qr_armv7_path }}
+            ${{ steps.vars.outputs.qr_x86_path }}

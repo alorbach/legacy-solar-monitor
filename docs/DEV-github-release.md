@@ -1,6 +1,6 @@
 # DEV: GitHub Release APK and AAB
 
-Pushing a version tag (`v*`) builds a **signed** release APK (sideload) and AAB (Play Console) and attaches them to a GitHub Release.
+Pushing a version tag (`v*`) builds **signed** release APKs (sideload) and an AAB (Play Console), attaches them to a GitHub Release with bilingual notes and QR codes for phone download.
 
 Workflow: [`.github/workflows/release.yml`](../.github/workflows/release.yml). Drive OAuth for the AAB still needs the publisher Cloud Console steps in [DEV-google-drive.md](DEV-google-drive.md). Play listing copy: [PLAY-LISTING.md](PLAY-LISTING.md).
 
@@ -56,14 +56,21 @@ The tagged commit must already be on `origin/main`. The workflow refuses tags th
 The job:
 
 1. Runs `:app:testDebugUnitTest`
-2. Builds `:app:assembleRelease` and `:app:bundleRelease` with the upload key and `GOOGLE_WEB_CLIENT_ID`
-3. Writes GitHub-generated notes
-4. Creates or updates the GitHub Release for that tag (existing assets are kept if a later step fails) with:
+2. Builds `:app:assembleRelease -PenableAbiSplits=true` (ABI splits: `armeabi-v7a`, `arm64-v8a`, `x86_64`, plus universal APK), then `:app:bundleRelease` separately — AGP forbids splits and the AAB in one Gradle invocation
+3. Collects commit context, GitHub auto-changelog, and optional AI bilingual notes via GitHub Models (`models: read`; falls back to technical changelog if inference fails)
+4. Generates QR PNGs (`qrencode`) pointing at deterministic APK download URLs
+5. Assembles the release description and creates or updates the GitHub Release with:
 
-- `legacy-solar-monitor-1.0.0-vc1013.apk`
-- `legacy-solar-monitor-1.0.0-vc1013.aab`
+- `legacy-solar-monitor-1.0.0-vc1016-universal.apk` — recommended sideload
+- `legacy-solar-monitor-1.0.0-vc1016-arm64-v8a.apk` — smaller, modern phones
+- `legacy-solar-monitor-1.0.0-vc1016-armeabi-v7a.apk`
+- `legacy-solar-monitor-1.0.0-vc1016-x86_64.apk`
+- `legacy-solar-monitor-1.0.0-vc1016.aab` — Play Console only
+- `qr-universal.png`, `qr-arm64-v8a.png`, `qr-armeabi-v7a.png`, `qr-x86_64.png` — embedded on the release page
 
-Upload the **AAB** in Play Console. The APK is for GitHub / sideload.
+Scripts: [`scripts/collect-release-context.js`](../scripts/collect-release-context.js), [`scripts/generate-ai-release-notes.js`](../scripts/generate-ai-release-notes.js), [`scripts/assemble-release-notes.js`](../scripts/assemble-release-notes.js). Prompt reference: [`.github/prompts/release-notes.prompt.yml`](../.github/prompts/release-notes.prompt.yml).
+
+Upload the **AAB** in Play Console. Use the **universal APK** (or an ABI-specific APK) for GitHub / sideload; scan the QR on the release page from a phone.
 
 ## 4. Local signed release (optional)
 
@@ -75,10 +82,13 @@ $env:RELEASE_STORE_PASSWORD = "..."
 $env:RELEASE_KEY_ALIAS = "upload"
 $env:RELEASE_KEY_PASSWORD = "..."
 $env:GOOGLE_WEB_CLIENT_ID = "....apps.googleusercontent.com"
-.\gradlew.bat :app:assembleRelease :app:bundleRelease
+.\gradlew.bat :app:assembleRelease -PenableAbiSplits=true
+.\gradlew.bat :app:bundleRelease
 ```
 
 Without those env vars, `release` is not signed with the upload key (no debug-key fallback). If any one of them is set, Gradle fails instead of producing an unsigned package.
+
+With `-PenableAbiSplits=true`, APK outputs land under `app/build/outputs/apk/release/` as `app-universal-release.apk` and `app-<abi>-release.apk`. Do not pass that property when building the AAB.
 
 ## 5. Play Console after the AAB
 
