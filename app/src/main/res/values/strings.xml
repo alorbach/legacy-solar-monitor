@@ -381,6 +381,10 @@
     <string name="widget_device">Widget device</string>
     <string name="widget_device_hint">Compact and medium home-screen widgets show this inverter first.</string>
     <string name="widget_device_first">First device</string>
+    <string name="chart_bar_color">Chart bar color</string>
+    <string name="chart_bar_color_hint">Color for yield bars on Start, Statistics, and home-screen widgets. Gold is the default.</string>
+    <string name="chart_bar_color_gold">Gold</string>
+    <string name="chart_bar_color_cyan">Cyan</string>
     <string name="widget_loading">Loading…</string>
     <string name="restore_from_cloud">Restore from cloud</string>
     <string name="restore_confirm_title">Replace local database?</string>

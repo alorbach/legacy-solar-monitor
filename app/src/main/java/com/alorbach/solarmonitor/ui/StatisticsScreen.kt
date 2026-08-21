@@ -365,6 +365,7 @@ fun StatisticsScreen(
                             points = points,
                             visibleBars = StatsSeriesFill.visibleBars(granularity),
                             selectedBucketKey = selectedBucketKey,
+                            barAccent = settings.chartBarAccent,
                             onBarClick = { key ->
                                 selectedBucketKey = if (selectedBucketKey == key) null else key
                             },

@@ -3,6 +3,7 @@ package com.alorbach.solarmonitor.ui.theme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import com.alorbach.solarmonitor.data.settings.ChartBarAccent
 
 /** Brand tokens from the meter-sun launcher mark. */
 object SolarPalette {
@@ -32,6 +33,27 @@ object SolarPalette {
     val ErrorContainerDark = Color(0xFF5C1414)
     val OnErrorContainerDark = Color(0xFFF5D6D6)
 }
+
+/** Resolved colors for yield bar charts / widget hour bars. */
+data class ChartBarColors(
+    val bar: Color,
+    val selected: Color,
+    val onBar: Color,
+)
+
+fun chartBarColors(accent: ChartBarAccent): ChartBarColors =
+    when (accent) {
+        ChartBarAccent.GOLD -> ChartBarColors(
+            bar = SolarPalette.Gold,
+            selected = SolarPalette.GoldDim,
+            onBar = SolarPalette.Ink,
+        )
+        ChartBarAccent.CYAN -> ChartBarColors(
+            bar = SolarPalette.Cyan,
+            selected = SolarPalette.Gold,
+            onBar = SolarPalette.Ink,
+        )
+    }
 
 val SolarLightColors = lightColorScheme(
     primary = SolarPalette.Ink,

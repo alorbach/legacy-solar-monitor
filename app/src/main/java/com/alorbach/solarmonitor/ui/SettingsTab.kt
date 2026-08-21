@@ -104,6 +104,7 @@ import com.alorbach.solarmonitor.data.model.ImportJobStatus
 import com.alorbach.solarmonitor.data.model.PortfolioSummary
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
+import com.alorbach.solarmonitor.data.settings.ChartBarAccent
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
 import com.alorbach.solarmonitor.domain.LivePollWindow
 import com.alorbach.solarmonitor.domain.YieldFormatting
@@ -372,6 +373,54 @@ fun SettingsTab(
                                 },
                             )
                         }
+                    }
+                }
+            }
+        }
+        item {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+                shape = RoundedCornerShape(28.dp),
+            ) {
+                Column(modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        stringResource(R.string.chart_bar_color),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        stringResource(R.string.chart_bar_color_hint),
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        DeviceChip(
+                            label = stringResource(R.string.chart_bar_color_gold),
+                            selected = settings.chartBarAccent == ChartBarAccent.GOLD,
+                            onClick = {
+                                scope.launch {
+                                    container.settingsStore.update {
+                                        it.copy(chartBarAccent = ChartBarAccent.GOLD)
+                                    }
+                                    com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(context)
+                                }
+                            },
+                        )
+                        DeviceChip(
+                            label = stringResource(R.string.chart_bar_color_cyan),
+                            selected = settings.chartBarAccent == ChartBarAccent.CYAN,
+                            onClick = {
+                                scope.launch {
+                                    container.settingsStore.update {
+                                        it.copy(chartBarAccent = ChartBarAccent.CYAN)
+                                    }
+                                    com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(context)
+                                }
+                            },
+                        )
                     }
                 }
             }

@@ -37,9 +37,11 @@ import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.SolarMonitorApplication
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
 import com.alorbach.solarmonitor.data.model.StatsPoint
+import com.alorbach.solarmonitor.data.settings.ChartBarAccent
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.ui.parseZoneId
 import com.alorbach.solarmonitor.ui.theme.SolarPalette
+import com.alorbach.solarmonitor.ui.theme.chartBarColors
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -73,36 +75,41 @@ private data class WidgetSnapshot(
     val summaries: List<DeviceDashboardSummary>,
     val hours: List<StatsPoint>,
     val zone: ZoneId,
+    val barAccent: ChartBarAccent,
 )
 
-private fun widgetPalette(night: Boolean) = if (night) {
-    WidgetPalette(
-        background = SolarPalette.Navy,
-        onBackground = SolarPalette.Cream,
-        onBackgroundMuted = SolarPalette.Cream.copy(alpha = 0.70f),
-        bar = SolarPalette.Cyan.copy(alpha = 0.28f),
-        barNow = SolarPalette.Cyan.copy(alpha = 0.45f),
-    )
-} else {
-    WidgetPalette(
-        background = SolarPalette.Cream,
-        onBackground = SolarPalette.Ink,
-        onBackgroundMuted = SolarPalette.Ink.copy(alpha = 0.70f),
-        bar = SolarPalette.Cyan.copy(alpha = 0.22f),
-        barNow = SolarPalette.Gold.copy(alpha = 0.38f),
-    )
+private fun widgetPalette(night: Boolean, accent: ChartBarAccent): WidgetPalette {
+    val colors = chartBarColors(accent)
+    return if (night) {
+        WidgetPalette(
+            background = SolarPalette.Navy,
+            onBackground = SolarPalette.Cream,
+            onBackgroundMuted = SolarPalette.Cream.copy(alpha = 0.70f),
+            bar = colors.bar.copy(alpha = 0.28f),
+            barNow = colors.selected.copy(alpha = 0.45f),
+        )
+    } else {
+        WidgetPalette(
+            background = SolarPalette.Cream,
+            onBackground = SolarPalette.Ink,
+            onBackgroundMuted = SolarPalette.Ink.copy(alpha = 0.70f),
+            bar = colors.bar.copy(alpha = 0.22f),
+            barNow = colors.selected.copy(alpha = 0.38f),
+        )
+    }
 }
 
 @Composable
 private fun WidgetFrame(
     hours: List<StatsPoint>,
     currentHourKey: String?,
+    barAccent: ChartBarAccent,
     content: @Composable (onColor: ColorProvider, muted: ColorProvider) -> Unit,
 ) {
     val context = LocalContext.current
     val night = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
         Configuration.UI_MODE_NIGHT_YES
-    val palette = widgetPalette(night)
+    val palette = widgetPalette(night, barAccent)
     Box(
         modifier = GlanceModifier.fillMaxSize()
             .cornerRadius(16.dp)
@@ -188,7 +195,11 @@ class CompactStatsWidget : GlanceAppWidget() {
         val summary = snapshot.summaries.firstOrNull()
         val hourKey = LocalDateTime.now(snapshot.zone).hour.toString()
         provideContent {
-            WidgetFrame(hours = snapshot.hours, currentHourKey = hourKey) { onColor, muted ->
+            WidgetFrame(
+                hours = snapshot.hours,
+                currentHourKey = hourKey,
+                barAccent = snapshot.barAccent,
+            ) { onColor, muted ->
                 WidgetDeviceHeader(
                     name = summary?.deviceName ?: context.getString(R.string.widget_no_device),
                     updatedAtEpochSeconds = summary?.lastUpdateEpochSeconds,
@@ -216,7 +227,11 @@ class MediumStatsWidget : GlanceAppWidget() {
         val summary = snapshot.summaries.firstOrNull()
         val hourKey = LocalDateTime.now(snapshot.zone).hour.toString()
         provideContent {
-            WidgetFrame(hours = snapshot.hours, currentHourKey = hourKey) { onColor, muted ->
+            WidgetFrame(
+                hours = snapshot.hours,
+                currentHourKey = hourKey,
+                barAccent = snapshot.barAccent,
+            ) { onColor, muted ->
                 WidgetDeviceHeader(
                     name = summary?.deviceName ?: context.getString(R.string.widget_no_device),
                     updatedAtEpochSeconds = summary?.lastUpdateEpochSeconds,
@@ -256,7 +271,11 @@ class TopDevicesWidget : GlanceAppWidget() {
         val summaries = snapshot.summaries.sortedByDescending { it.currentPowerW ?: 0 }.take(3)
         val hourKey = LocalDateTime.now(snapshot.zone).hour.toString()
         provideContent {
-            WidgetFrame(hours = snapshot.hours, currentHourKey = hourKey) { onColor, muted ->
+            WidgetFrame(
+                hours = snapshot.hours,
+                currentHourKey = hourKey,
+                barAccent = snapshot.barAccent,
+            ) { onColor, muted ->
                 Text(
                     context.getString(R.string.widget_top_devices),
                     style = TextStyle(color = muted, fontSize = 12.sp, fontWeight = FontWeight.Bold),
@@ -290,8 +309,9 @@ class TopDevicesWidget : GlanceAppWidget() {
 
 private suspend fun loadWidgetData(context: Context, allDevices: Boolean): WidgetSnapshot {
     val container = (context.applicationContext as SolarMonitorApplication).container
+    val settings = container.settingsStore.settings.first()
     val devices = container.repository.observeDevices().first()
-    val preferredId = container.settingsStore.settings.first().widgetDeviceId
+    val preferredId = settings.widgetDeviceId
     val ordered = if (preferredId != null) {
         val preferred = devices.filter { it.id == preferredId }
         preferred + devices.filter { it.id != preferredId }
@@ -306,7 +326,12 @@ private suspend fun loadWidgetData(context: Context, allDevices: Boolean): Widge
     }
     val zone = parseZoneId(ordered.firstOrNull()?.timezone)
     val hours = container.repository.getHourlySeriesToday(ids)
-    return WidgetSnapshot(summaries = summaries, hours = hours, zone = zone)
+    return WidgetSnapshot(
+        summaries = summaries,
+        hours = hours,
+        zone = zone,
+        barAccent = settings.chartBarAccent,
+    )
 }
 
 class CompactStatsWidgetReceiver : GlanceAppWidgetReceiver() {

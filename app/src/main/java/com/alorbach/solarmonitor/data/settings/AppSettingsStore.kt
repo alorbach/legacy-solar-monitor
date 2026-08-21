@@ -20,6 +20,18 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import java.io.IOException
 
+/** Accent color for statistics / hourly yield bars (and widget hour backdrop). */
+enum class ChartBarAccent {
+    GOLD,
+    CYAN,
+    ;
+
+    companion object {
+        fun fromStored(value: String?): ChartBarAccent =
+            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: GOLD
+    }
+}
+
 data class AppSettings(
     val cloudBackupEnabled: Boolean = false,
     val googleAccountEmail: String = "",
@@ -49,6 +61,8 @@ data class AppSettings(
     val inverterWarningAlertsEnabled: Boolean = false,
     /** Per-device last notified event entryId, encoded as "id:entryId,id:entryId". */
     val eventAlertWatermarks: String = "",
+    /** Color for yield bar charts and widget hour bars. */
+    val chartBarAccent: ChartBarAccent = ChartBarAccent.GOLD,
 )
 
 class AppSettingsStore(
@@ -117,6 +131,7 @@ class AppSettingsStore(
             }
             prefs[Keys.inverterWarningAlertsEnabled] = updated.inverterWarningAlertsEnabled
             prefs[Keys.eventAlertWatermarks] = updated.eventAlertWatermarks
+            prefs[Keys.chartBarAccent] = updated.chartBarAccent.name
         }
     }
 
@@ -155,6 +170,7 @@ class AppSettingsStore(
             widgetDeviceId = prefs[Keys.widgetDeviceId],
             inverterWarningAlertsEnabled = prefs[Keys.inverterWarningAlertsEnabled] ?: false,
             eventAlertWatermarks = prefs[Keys.eventAlertWatermarks] ?: "",
+            chartBarAccent = ChartBarAccent.fromStored(prefs[Keys.chartBarAccent]),
         )
     }
 
@@ -182,5 +198,6 @@ class AppSettingsStore(
         val widgetDeviceId = longPreferencesKey("widget_device_id")
         val inverterWarningAlertsEnabled = booleanPreferencesKey("inverter_warning_alerts_enabled")
         val eventAlertWatermarks = stringPreferencesKey("event_alert_watermarks")
+        val chartBarAccent = stringPreferencesKey("chart_bar_accent")
     }
 }

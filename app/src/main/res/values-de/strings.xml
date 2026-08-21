@@ -378,6 +378,10 @@
     <string name="widget_device">Widget-Gerät</string>
     <string name="widget_device_hint">Kompakt- und Mittel-Widgets auf dem Startbildschirm zeigen zuerst diesen Wechselrichter.</string>
     <string name="widget_device_first">Erstes Gerät</string>
+    <string name="chart_bar_color">Balkenfarbe</string>
+    <string name="chart_bar_color_hint">Farbe der Ertragsbalken auf Start, Statistik und Startbildschirm-Widgets. Gold ist die Voreinstellung.</string>
+    <string name="chart_bar_color_gold">Gold</string>
+    <string name="chart_bar_color_cyan">Cyan</string>
     <string name="widget_loading">Laden…</string>
     <string name="restore_from_cloud">Aus der Cloud wiederherstellen</string>
     <string name="restore_confirm_title">Lokale Datenbank ersetzen?</string>

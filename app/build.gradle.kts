@@ -17,7 +17,7 @@ android {
         targetSdk = 35
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1016
+        versionCode = 1017
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

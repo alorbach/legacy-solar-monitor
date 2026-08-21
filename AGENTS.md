@@ -44,7 +44,7 @@ Compact Start/Statistik actions use `CompactButtonHeight` / `CompactButtonConten
 Glance widgets in `widget/SolarWidgets.kt`: compact, medium, top-devices.
 
 - Compact/medium: widget device (Settings) first.
-- Hourly backdrop: `getHourlySeries` for today; muted cyan bars so text stays readable in light and dark.
+- Hourly backdrop: `getHourlySeries` for today; muted bars use Settings chart bar color (gold default) so text stays readable in light and dark.
 - Refresh after live/import via `SolarWidgets.refreshAll`.
 
 ## Versioning

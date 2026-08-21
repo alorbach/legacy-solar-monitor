@@ -129,6 +129,7 @@ fun DashboardTab(
     onStartLive: (List<Long>) -> Unit,
     onStopLive: () -> Unit,
 ) {
+    val settings by container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     var selectedDeviceId by rememberSaveable { mutableStateOf<Long?>(null) }
     LaunchedEffect(devices) {
         if (selectedDeviceId == null || devices.none { it.id == selectedDeviceId }) {
@@ -318,6 +319,7 @@ fun DashboardTab(
                             points = loadedHours,
                             visibleBars = loadedHours.size.coerceAtLeast(1),
                             selectedBucketKey = selectedHourKey,
+                            barAccent = settings.chartBarAccent,
                             height = 128.dp,
                             onBarClick = { key ->
                                 selectedHourKey = if (selectedHourKey == key) null else key

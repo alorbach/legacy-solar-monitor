@@ -47,9 +47,11 @@ import androidx.compose.ui.unit.sp
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.StatsPoint
+import com.alorbach.solarmonitor.data.settings.ChartBarAccent
 import com.alorbach.solarmonitor.domain.ProductionStepline
 import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import com.alorbach.solarmonitor.domain.YieldFormatting
+import com.alorbach.solarmonitor.ui.theme.chartBarColors
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -274,20 +276,22 @@ fun StatsBarChart(
     points: List<StatsPoint>,
     visibleBars: Int = StatsSeriesFill.VISIBLE_PERIOD_BARS,
     selectedBucketKey: String? = null,
+    barAccent: ChartBarAccent = ChartBarAccent.GOLD,
     onBarClick: ((String) -> Unit)? = null,
     onBarDoubleClick: ((String) -> Unit)? = null,
     height: Dp = 280.dp,
 ) {
     val colors = MaterialTheme.colorScheme
+    val barColors = remember(barAccent) { chartBarColors(barAccent) }
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
     val midYield = (maxYield / 2f).toLong()
     val outsideLabelColor = colors.onBackground.toArgb()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
     val eventMarkerColor = colors.error
-    val selectedBarColor = colors.secondary
-    val defaultBarColor = colors.tertiary
-    val insideLabelColor = colors.onTertiary.toArgb()
+    val selectedBarColor = barColors.selected
+    val defaultBarColor = barColors.bar
+    val insideLabelColor = barColors.onBar.toArgb()
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val emptyHint = stringResource(R.string.chart_empty_hint)
