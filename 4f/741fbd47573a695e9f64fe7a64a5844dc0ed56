@@ -1,0 +1,55 @@
+app/src/main/res/values-de/strings.xml
+  s_a4ad6a2795e9fd::t_098c38fc71a18c 381-384
+app/src/main/java/com/alorbach/solarmonitor/data/settings/AppSettingsStore.kt
+  s_a4ad6a2795e9fd::t_ba3f1ca498f8f0 201
+  s_a4ad6a2795e9fd::t_43f4412009b7e3 23-34,64-65
+  s_a4ad6a2795e9fd::t_e29c508d14ceec 134
+  s_a4ad6a2795e9fd::t_9b114c9e37191a 173
+app/src/main/java/com/alorbach/solarmonitor/widget/SolarWidgets.kt
+  s_a4ad6a2795e9fd::t_c5ba29071f13ad 312,314,329-334
+  s_a4ad6a2795e9fd::t_fae4991b48fd56 198-202,230-234,274-278
+  s_a4ad6a2795e9fd::t_bb4d9d07c283cf 40,44
+  s_a4ad6a2795e9fd::t_66c2e9ffe024bb 78,81-99,106,112
+AGENTS.md
+  s_a4ad6a2795e9fd::t_e4bcaa14f3267b 47
+app/src/main/java/com/alorbach/solarmonitor/ui/theme/SolarTheme.kt
+  s_a4ad6a2795e9fd::t_10b97b13fee794 6,44,46,51
+  s_a4ad6a2795e9fd::t_ae2174a3d61a17 37-43,45,47-50,52-57
+app/build.gradle.kts
+  s_a4ad6a2795e9fd::t_5606d6856a8507 20
+app/src/main/java/com/alorbach/solarmonitor/ui/StatisticsScreen.kt
+  s_a4ad6a2795e9fd::t_d82c41aded536a 368
+app/src/main/res/values/strings.xml
+  s_a4ad6a2795e9fd::t_80ecaf567a0da6 384-387
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_a4ad6a2795e9fd::t_030acdac57be5b 50,54
+  s_a4ad6a2795e9fd::t_367cd03ced3ada 279,285,292-294
+app/src/main/java/com/alorbach/solarmonitor/ui/DashboardTab.kt
+  s_3e53788aa56bf1::t_d3a7ab21a705f8 132,322
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_a4ad6a2795e9fd::t_b174874f8f5b6d 107,380-427
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4f741fbd47573a695e9f64fe7a64a5844dc0ed56",
+  "prompts": {},
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_a4ad6a2795e9fd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b27a7874-948d-4fe5-90cc-c351380757a9",
+        "model": "default"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
