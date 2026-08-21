@@ -48,7 +48,7 @@ First Play Store release: live Bluetooth monitor, archive sync, SBFspot import, 
 | `docs/screenshots/devices.png` | Devices: classic Bluetooth scan and inverter profile |
 | `docs/screenshots/stats.png` | Stats: hourly, daily, monthly, and yearly yield |
 | `docs/screenshots/import.png` | Import: SBFspot CSV, ZIP, SQLite from file, URL, FTP, or SFTP |
-| `docs/screenshots/settings.png` | Settings: live interval, Drive backup, language |
+| `docs/screenshots/settings.png` | Settings: live interval, poll window, Drive backup, language |
 
 ---
 
@@ -91,7 +91,7 @@ Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth c
 5. Console declarations:
    - Data Safety — copy [PLAY-DATA-SAFETY.md](PLAY-DATA-SAFETY.md)
    - Location: foreground only, to discover unpaired classic Bluetooth devices (not GPS tracking)
-   - Foreground services: `connectedDevice` (live monitor), `dataSync` (import / WorkManager)
+   - Foreground services: `connectedDevice` (live monitor during the poll window), `dataSync` (import / WorkManager)
    - Battery optimization exemption: live Bluetooth polling and scheduled FTP/SFTP imports
    - Content rating (IARC), target audience, countries
    - Privacy policy URL above
@@ -109,7 +109,7 @@ Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth c
 | App content → Privacy policy | `https://github.com/alorbach/legacy-solar-monitor/blob/main/docs/PRIVACY.md` |
 | App content → Data safety | [PLAY-DATA-SAFETY.md](PLAY-DATA-SAFETY.md) |
 | App content → Location | Foreground only; unpaired classic Bluetooth discovery; not maps or tracking |
-| App content → Foreground services | `connectedDevice` (live monitor), `dataSync` (import / WorkManager) |
+| App content → Foreground services | `connectedDevice` (live monitor in the poll window), `dataSync` (import / WorkManager) |
 | App content → Battery | Unrestricted: live Bluetooth polling and scheduled FTP/SFTP imports |
 | App content → Target audience | Not designed for children; no Families program |
 | App content → News / COVID / Health | None of these |

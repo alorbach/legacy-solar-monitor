@@ -53,6 +53,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +62,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -83,6 +86,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.alorbach.solarmonitor.BuildConfig
+import com.alorbach.solarmonitor.MainActivity
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.AppContainer
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
@@ -101,8 +105,10 @@ import com.alorbach.solarmonitor.data.model.PortfolioSummary
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
+import com.alorbach.solarmonitor.domain.LivePollWindow
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
+import com.alorbach.solarmonitor.service.LivePollScheduler
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
@@ -132,6 +138,7 @@ fun SettingsTab(
     var signInBusy by remember { mutableStateOf(false) }
     var signInError by remember { mutableStateOf<String?>(null) }
     var pollSeconds by rememberSaveable { mutableStateOf(settings.livePollIntervalSeconds.toString()) }
+    var pickerTarget by remember { mutableStateOf<PollWindowBound?>(null) }
     val colors = MaterialTheme.colorScheme
     val neverLabel = stringResource(R.string.backup_never)
     val signedIn = CloudBackupPolicy.isAccountConfigured(settings.googleAccountEmail)
@@ -393,6 +400,29 @@ fun SettingsTab(
                     }) {
                         Text(stringResource(R.string.save))
                     }
+                    Text(stringResource(R.string.live_poll_window), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.live_poll_window_hint), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(
+                            onClick = { pickerTarget = PollWindowBound.START },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                "${stringResource(R.string.live_poll_window_start)} ${formatPollMinutes(settings.livePollWindowStartMinutes)}",
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { pickerTarget = PollWindowBound.END },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(
+                                "${stringResource(R.string.live_poll_window_end)} ${formatPollMinutes(settings.livePollWindowEndMinutes)}",
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -413,8 +443,21 @@ fun SettingsTab(
                         Switch(
                             checked = settings.inverterWarningAlertsEnabled,
                             onCheckedChange = { enabled ->
-                                scope.launch {
-                                    container.settingsStore.update { it.copy(inverterWarningAlertsEnabled = enabled) }
+                                val activity = context as? MainActivity
+                                if (!enabled) {
+                                    scope.launch {
+                                        container.settingsStore.update {
+                                            it.copy(inverterWarningAlertsEnabled = false)
+                                        }
+                                    }
+                                } else if (activity == null) {
+                                    scope.launch {
+                                        container.settingsStore.update {
+                                            it.copy(inverterWarningAlertsEnabled = true)
+                                        }
+                                    }
+                                } else {
+                                    activity.ensureNotificationPermissionForWarnings()
                                 }
                             },
                         )
@@ -705,4 +748,79 @@ fun SettingsTab(
             }
         }
     }
+    pickerTarget?.let { bound ->
+        PollWindowTimePickerDialog(
+            bound = bound,
+            startMinutes = settings.livePollWindowStartMinutes,
+            endMinutes = settings.livePollWindowEndMinutes,
+            onDismiss = { pickerTarget = null },
+            onConfirm = { minutes ->
+                pickerTarget = null
+                scope.launch {
+                    container.settingsStore.update { current ->
+                        when (bound) {
+                            PollWindowBound.START -> current.copy(
+                                livePollWindowStartMinutes = LivePollWindow.normalizeMinutes(minutes),
+                            )
+                            PollWindowBound.END -> current.copy(
+                                livePollWindowEndMinutes = LivePollWindow.normalizeMinutes(minutes),
+                            )
+                        }
+                    }
+                    LivePollScheduler.syncAfterSettingsChange(context)
+                }
+            },
+        )
+    }
+}
+
+private enum class PollWindowBound { START, END }
+
+private fun formatPollMinutes(minutes: Int): String {
+    val normalized = LivePollWindow.normalizeMinutes(minutes)
+    return "%02d:%02d".format(normalized / 60, normalized % 60)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PollWindowTimePickerDialog(
+    bound: PollWindowBound,
+    startMinutes: Int,
+    endMinutes: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    val initial = LivePollWindow.normalizeMinutes(
+        if (bound == PollWindowBound.START) startMinutes else endMinutes,
+    )
+    val state = rememberTimePickerState(
+        initialHour = initial / 60,
+        initialMinute = initial % 60,
+        is24Hour = true,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                stringResource(
+                    if (bound == PollWindowBound.START) {
+                        R.string.live_poll_window_start
+                    } else {
+                        R.string.live_poll_window_end
+                    },
+                ),
+            )
+        },
+        text = { TimePicker(state = state) },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour * 60 + state.minute) }) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        },
+    )
 }

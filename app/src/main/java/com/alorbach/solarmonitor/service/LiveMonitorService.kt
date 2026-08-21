@@ -52,6 +52,7 @@ class LiveMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            LivePollScheduler.cancel(this)
             clearPersistedDeviceIds()
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             val stopGen = runGeneration.get()
@@ -68,10 +69,42 @@ class LiveMonitorService : Service() {
             return START_NOT_STICKY
         }
 
-        val incoming = resolveDeviceIds(intent)
+        if (intent?.action == ACTION_PAUSE) {
+            val pauseGen = intent.getIntExtra(EXTRA_RUN_GENERATION, -1)
+            if (pauseGen >= 0 && pauseGen != runGeneration.get()) {
+                return START_NOT_STICKY
+            }
+            val pauseStartId = startId
+            coordinatorJob?.cancel()
+            stopJob?.cancel()
+            (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
+            stopJob = scope.launch {
+                val ids = loadPersistedDeviceIds()
+                LivePollScheduler.scheduleResume(this@LiveMonitorService, ids)
+                teardownSessions(USER_STOP_JOIN_TIMEOUT_MS, pauseGen.takeIf { it >= 0 } ?: runGeneration.get())
+                if (pauseGen < 0 || runGeneration.get() == pauseGen) {
+                    ServiceCompat.stopForeground(
+                        this@LiveMonitorService,
+                        ServiceCompat.STOP_FOREGROUND_REMOVE,
+                    )
+                    stopSelf(pauseStartId)
+                }
+            }
+            return START_NOT_STICKY
+        }
+
+        val resumeOnly = intent?.action == ACTION_RESUME
+        val incoming = if (resumeOnly) longArrayOf() else resolveDeviceIds(intent)
         val deviceIds = (loadPersistedDeviceIds().toList() + incoming.toList()).distinct().toLongArray()
-        if (deviceIds.isEmpty()) return START_NOT_STICKY
+        if (deviceIds.isEmpty()) {
+            if (resumeOnly) {
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                stopSelf(startId)
+            }
+            return START_NOT_STICKY
+        }
         val startGen = runGeneration.incrementAndGet()
+        publishedRunGeneration.set(startGen)
         stopJob?.cancel()
         stopJob = null
 
@@ -103,9 +136,36 @@ class LiveMonitorService : Service() {
                 // first stopAll; clear again so restart starts from a clean continuous set.
                 container.liveMonitoringRepository.stopAll()
                 ensureActive()
+                if (!LivePollScheduler.anyDeviceInWindow(this@LiveMonitorService, deviceIds)) {
+                    LivePollScheduler.scheduleResume(this@LiveMonitorService, deviceIds)
+                    ServiceCompat.stopForeground(
+                        this@LiveMonitorService,
+                        ServiceCompat.STOP_FOREGROUND_REMOVE,
+                    )
+                    if (runGeneration.get() == startGen) {
+                        stopSelf()
+                    }
+                    return@launch
+                }
+                LivePollScheduler.cancel(this@LiveMonitorService)
+                val policy = LivePollScheduler.loadPolicy(this@LiveMonitorService, deviceIds)
                 deviceIds.forEach { deviceId ->
                     pollJobs[deviceId] = launch {
                         while (isActive) {
+                            val now = java.time.Instant.now()
+                            if (!policy.isOpen(deviceId, now)) {
+                                container.liveMonitoringRepository.stopDevice(deviceId)
+                                val remaining = loadPersistedDeviceIds()
+                                if (!policy.anyOpen(remaining)) {
+                                    startService(
+                                        pauseIntent(this@LiveMonitorService)
+                                            .putExtra(EXTRA_RUN_GENERATION, startGen),
+                                    )
+                                    return@launch
+                                }
+                                delay(policy.millisUntilOpen(deviceId).coerceAtLeast(1_000L))
+                                continue
+                            }
                             val result = container.liveMonitoringRepository.start(deviceId, continuous = true)
                             val aggregate = container.liveMonitoringRepository.state.value.message
                             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -114,7 +174,14 @@ class LiveMonitorService : Service() {
                             val intervalSeconds = runCatching {
                                 container.settingsStore.settings.first().livePollIntervalSeconds
                             }.getOrDefault(POLL_INTERVAL_MS / 1000).coerceIn(15L, 3600L)
-                            delay(intervalSeconds * 1000)
+                            val intervalMs = intervalSeconds * 1000L
+                            val untilClose = policy.millisUntilClose(deviceId)
+                            val sleepMs = if (untilClose == Long.MAX_VALUE) {
+                                intervalMs
+                            } else {
+                                minOf(intervalMs, untilClose)
+                            }
+                            delay(sleepMs.coerceAtLeast(0L))
                         }
                     }
                 }
@@ -183,7 +250,7 @@ class LiveMonitorService : Service() {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.live_monitoring_status, message))
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(R.drawable.ic_stat_notify)
             .setOngoing(true)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
@@ -230,12 +297,18 @@ class LiveMonitorService : Service() {
         const val EXTRA_DEVICE_ID = "device_id"
         const val EXTRA_DEVICE_IDS = "device_ids"
         const val ACTION_STOP = "com.alorbach.solarmonitor.action.STOP_LIVE_MONITOR"
+        const val ACTION_PAUSE = "com.alorbach.solarmonitor.action.PAUSE_LIVE_MONITOR"
+        const val ACTION_RESUME = "com.alorbach.solarmonitor.action.RESUME_LIVE_MONITOR"
+        const val EXTRA_RUN_GENERATION = "run_generation"
         private const val CHANNEL_ID = "live_monitor"
         private const val NOTIFICATION_ID = 4001
         private const val POLL_INTERVAL_MS = 60_000L
         private const val USER_STOP_JOIN_TIMEOUT_MS = 30_000L
         private const val PREFS = "live_monitor"
         private const val KEY_DEVICE_IDS = "device_ids"
+        private val publishedRunGeneration = AtomicInteger(0)
+
+        fun currentRunGeneration(): Int = publishedRunGeneration.get()
 
         fun persistedDeviceIds(context: Context): LongArray =
             context.applicationContext.getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -257,6 +330,13 @@ class LiveMonitorService : Service() {
 
         fun stopIntent(context: Context): Intent =
             Intent(context, LiveMonitorService::class.java).setAction(ACTION_STOP)
+
+        fun pauseIntent(context: Context): Intent =
+            Intent(context, LiveMonitorService::class.java).setAction(ACTION_PAUSE)
+
+        /** Resume from alarm/boot/settings using only currently persisted IDs (honors Stop). */
+        fun resumeIntent(context: Context): Intent =
+            Intent(context, LiveMonitorService::class.java).setAction(ACTION_RESUME)
 
         fun startIntent(context: Context, deviceIds: LongArray): Intent =
             Intent(context, LiveMonitorService::class.java)

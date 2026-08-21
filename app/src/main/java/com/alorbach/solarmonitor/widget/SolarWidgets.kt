@@ -39,6 +39,7 @@ import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
 import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.ui.parseZoneId
+import com.alorbach.solarmonitor.ui.theme.SolarPalette
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -76,19 +77,19 @@ private data class WidgetSnapshot(
 
 private fun widgetPalette(night: Boolean) = if (night) {
     WidgetPalette(
-        background = Color(0xFF1B2430),
-        onBackground = Color(0xFFF4F0E8),
-        onBackgroundMuted = Color(0xFFF4F0E8).copy(alpha = 0.70f),
-        bar = Color(0xFFD4A017).copy(alpha = 0.28f),
-        barNow = Color(0xFFD4A017).copy(alpha = 0.45f),
+        background = SolarPalette.Navy,
+        onBackground = SolarPalette.Cream,
+        onBackgroundMuted = SolarPalette.Cream.copy(alpha = 0.70f),
+        bar = SolarPalette.Cyan.copy(alpha = 0.28f),
+        barNow = SolarPalette.Cyan.copy(alpha = 0.45f),
     )
 } else {
     WidgetPalette(
-        background = Color(0xFFF5F1E8),
-        onBackground = Color(0xFF17212B),
-        onBackgroundMuted = Color(0xFF17212B).copy(alpha = 0.70f),
-        bar = Color(0xFF6B4F1A).copy(alpha = 0.22f),
-        barNow = Color(0xFF6B4F1A).copy(alpha = 0.38f),
+        background = SolarPalette.Cream,
+        onBackground = SolarPalette.Ink,
+        onBackgroundMuted = SolarPalette.Ink.copy(alpha = 0.70f),
+        bar = SolarPalette.Cyan.copy(alpha = 0.22f),
+        barNow = SolarPalette.Gold.copy(alpha = 0.38f),
     )
 }
 

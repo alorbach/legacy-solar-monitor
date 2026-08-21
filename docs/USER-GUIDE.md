@@ -20,7 +20,7 @@ Same-generation units can usually be added in the UI with no code change. See [D
 | Precise location | Classic discovery of **unpaired** devices |
 | Location (GPS) on | Same unpaired discovery |
 | Bluetooth adapter on | Any Bluetooth action |
-| Notifications (Android 13+) | Live monitor, import progress, inverter warnings |
+| Notifications (Android 13+) | Live monitor, import progress, inverter warnings. Asked when you start live monitor or enable warnings, not at launch. Inverter warnings start off until you enable them in Settings. |
 | Unrestricted battery | Scheduled imports, long FTP, and live reliability on aggressive OEMs |
 | Internet | URL / FTP / SFTP import and Drive backup |
 | Storage via the system file picker | Local file import (no broad storage permission) |
@@ -31,7 +31,7 @@ The yellow banner at the top of the app opens App, Location, or Bluetooth settin
 
 <p align="center"><img src="screenshots/devices.png" width="360" alt="Devices tab: Bluetooth scan and SMA Sunny Boy profile"></p>
 
-1. Open **Devices**. Grant Nearby devices and precise location if asked, and turn Location on.
+1. Open **Devices**. Tap **Scan** and grant Nearby devices and precise location if asked, and turn Location on.
 2. Tap **Scan**. Unpaired devices show while the scan runs; already-bonded ones are listed too. Names containing `SMA` sort first.
 3. Tap a result to create a profile (Bluetooth name, MAC, model `Legacy SMA`, PIN seed `0000`). A new profile also gets a default EUR tariff.
 4. Or tap **+**. That seeds from the best nearby/bonded device, or a blank profile if nothing is in range. You can type the MAC later.
@@ -56,9 +56,9 @@ On **Start**:
 
 <p align="center"><img src="screenshots/start.png" width="360" alt="Start tab: portfolio metrics and live monitor controls"></p>
 
-While live runs you get a persistent **Live monitor** notification. Poll interval is **Settings → Live poll interval (seconds)** (15–3600, default 60). After reboot or quickboot, live restarts automatically **only if** you had not tapped Stop (about 8 seconds delay so Bluetooth is up). After an app update it restarts immediately if those IDs are still persisted.
+While live runs you get a persistent **Live monitor** notification. Poll interval is **Settings → Live poll interval (seconds)** (15–3600, default 60). **Live poll window** (default **06:00–22:00**) uses each inverter’s timezone; equal start and end means 24 hours. Outside the window the foreground service stops and resumes near the next start (Doze may slip a few minutes). After reboot or quickboot, live restarts automatically **only if** you had not tapped Stop and the window is open (about 8 seconds delay so Bluetooth is up). After an app update it restarts immediately if those IDs are still persisted and the window is open.
 
-Allow **unrestricted battery** in Settings if the phone kills the service overnight.
+Allow **unrestricted battery** in Settings if the phone kills the service overnight. The poll window already skips night-time Bluetooth when inverters are offline.
 
 Needs a saved MAC and PIN, and a working Bluetooth login.
 
@@ -128,7 +128,7 @@ Compact and medium use **Settings → Widget device** (or the first device if un
 
 ## Cloud backup
 
-<p align="center"><img src="screenshots/settings.png" width="360" alt="Settings: language, cloud backup, and inverter warnings"></p>
+<p align="center"><img src="screenshots/settings.png" width="360" alt="Settings: live poll window, language, cloud backup, and inverter warnings"></p>
 
 In-app steps only. Publisher OAuth (one-time Cloud Console work) is in [DEV-google-drive.md](DEV-google-drive.md). Users never create a Google Cloud project.
 

@@ -108,8 +108,7 @@ fun formatEpochSeconds(value: Long, zoneId: ZoneId = ZoneId.systemDefault()): St
 }
 
 fun parseZoneId(timezone: String?): ZoneId =
-    runCatching { ZoneId.of(timezone?.takeIf { it.isNotBlank() } ?: ZoneId.systemDefault().id) }
-        .getOrDefault(ZoneId.systemDefault())
+    com.alorbach.solarmonitor.domain.parseZoneId(timezone)
 
 @Preview(showBackground = true)
 @Composable

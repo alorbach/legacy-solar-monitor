@@ -43,7 +43,7 @@ object ImportNotifications {
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.import_notification_title))
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_stat_notify)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(

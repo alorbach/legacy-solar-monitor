@@ -75,8 +75,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,7 +87,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -122,6 +119,7 @@ import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.service.LiveMonitorService
+import com.alorbach.solarmonitor.service.LivePollScheduler
 import com.alorbach.solarmonitor.ui.DashboardTab
 import com.alorbach.solarmonitor.ui.DevicesTab
 import com.alorbach.solarmonitor.ui.ImportTab
@@ -129,6 +127,8 @@ import com.alorbach.solarmonitor.ui.SettingsTab
 import com.alorbach.solarmonitor.ui.StatisticsScreen
 import com.alorbach.solarmonitor.ui.createDeviceFromBluetooth
 import com.alorbach.solarmonitor.ui.preferredBluetoothSeed
+import com.alorbach.solarmonitor.ui.theme.SolarDarkColors
+import com.alorbach.solarmonitor.ui.theme.SolarLightColors
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
@@ -138,47 +138,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.lifecycle.lifecycleScope
 import kotlin.coroutines.cancellation.CancellationException
-
-private val SolarLightColors = lightColorScheme(
-    primary = Color(0xFF17212B),
-    onPrimary = Color(0xFFFFD86B),
-    secondary = Color(0xFFF4B400),
-    tertiary = Color(0xFF246B3D),
-    onTertiary = Color(0xFFF4F0E8),
-    tertiaryContainer = Color(0xFFD6EBD9),
-    onTertiaryContainer = Color(0xFF0F3A1C),
-    background = Color(0xFFF4F0E8),
-    surface = Color(0xFFF8F5EE),
-    surfaceVariant = Color(0xFFE4DED5),
-    onBackground = Color(0xFF17212B),
-    onSurface = Color(0xFF17212B),
-    onSurfaceVariant = Color(0xFF5C636B),
-    error = Color(0xFF8E2A2A),
-    onError = Color(0xFFFFF8F6),
-    errorContainer = Color(0xFFF5D6D6),
-    onErrorContainer = Color(0xFF5C1414),
-)
-
-private val SolarDarkColors = darkColorScheme(
-    primary = Color(0xFFFFD86B),
-    onPrimary = Color(0xFF17212B),
-    secondary = Color(0xFFF4B400),
-    tertiary = Color(0xFF7BC794),
-    onTertiary = Color(0xFF0F3A1C),
-    tertiaryContainer = Color(0xFF1E4A2C),
-    onTertiaryContainer = Color(0xFFD6EBD9),
-    background = Color(0xFF121820),
-    surface = Color(0xFF1B2430),
-    surfaceVariant = Color(0xFF2A3442),
-    onBackground = Color(0xFFF4F0E8),
-    onSurface = Color(0xFFF4F0E8),
-    onSurfaceVariant = Color(0xFFB8BFC7),
-    error = Color(0xFFE08A8A),
-    onError = Color(0xFF3A1010),
-    errorContainer = Color(0xFF5C1414),
-    onErrorContainer = Color(0xFFF5D6D6),
-)
 
 class MainActivity : ComponentActivity() {
     private val container: AppContainer by lazy {
@@ -192,6 +153,9 @@ class MainActivity : ComponentActivity() {
         permissionBannerState.value = message
         permissionBannerActionState.value = action
     }
+
+    @Volatile
+    private var pendingPermissionWork: PendingPermissionWork? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -208,6 +172,11 @@ class MainActivity : ComponentActivity() {
                 else -> null
             }
         )
+        val pending = pendingPermissionWork
+        pendingPermissionWork = null
+        if (denied.isEmpty() && pending != null) {
+            resumePendingPermissionWork(pending)
+        }
     }
 
     override fun attachBaseContext(newBase: Context) {
@@ -216,8 +185,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingPermissionWork = PendingPermissionWork.fromBundle(savedInstanceState)
         enableEdgeToEdge()
-        requestPermissionsIfNeeded()
         setContent {
             val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
             MaterialTheme(colorScheme = if (darkTheme) SolarDarkColors else SolarLightColors) {
@@ -226,21 +195,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestPermissionsIfNeeded() {
-        val permissions = buildList {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                add(Manifest.permission.BLUETOOTH_CONNECT)
-                add(Manifest.permission.BLUETOOTH_SCAN)
-            }
-            // Classic discovery of unpaired devices needs location on all current Android versions.
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (permissions.isNotEmpty()) permissionLauncher.launch(permissions.toTypedArray())
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        pendingPermissionWork?.writeTo(outState)
     }
 
     fun ensureBluetoothScanPermissions(): Boolean {
@@ -253,9 +210,101 @@ class MainActivity : ComponentActivity() {
         }.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
-        if (permissions.isEmpty()) return true
+        if (permissions.isEmpty()) {
+            startBluetoothScan()
+            return true
+        }
+        pendingPermissionWork = PendingPermissionWork.Scan
         permissionLauncher.launch(permissions.toTypedArray())
         return false
+    }
+
+    fun ensureLiveMonitorPermissions(deviceIds: LongArray): Boolean {
+        val permissions = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (permissions.isEmpty()) {
+            startLiveMonitor(deviceIds)
+            return true
+        }
+        pendingPermissionWork = PendingPermissionWork.LiveStart(deviceIds)
+        permissionLauncher.launch(permissions.toTypedArray())
+        return false
+    }
+
+    fun ensureNotificationPermissionForWarnings(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            enableInverterWarnings()
+            return true
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            enableInverterWarnings()
+            return true
+        }
+        pendingPermissionWork = PendingPermissionWork.EnableWarnings
+        permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+        return false
+    }
+
+    private fun resumePendingPermissionWork(pending: PendingPermissionWork) {
+        when (pending) {
+            PendingPermissionWork.Scan -> startBluetoothScan()
+            is PendingPermissionWork.LiveStart -> startLiveMonitor(pending.deviceIds)
+            PendingPermissionWork.EnableWarnings -> enableInverterWarnings()
+        }
+    }
+
+    fun startBluetoothScan() {
+        if (!isBluetoothEnabled()) {
+            setPermissionBanner(
+                getString(R.string.bluetooth_disabled),
+                BannerAction.BLUETOOTH_SETTINGS,
+            )
+            return
+        }
+        setPermissionBanner(null)
+        when (container.bluetoothGateway.startDiscovery()) {
+            null -> setPermissionBanner(null)
+            "location_disabled" ->
+                setPermissionBanner(
+                    getString(R.string.location_required_for_scan),
+                    BannerAction.LOCATION_SETTINGS,
+                )
+            "location_precise_required" ->
+                setPermissionBanner(getString(R.string.location_precise_required))
+            "missing_permission" ->
+                setPermissionBanner(getString(R.string.permissions_denied))
+            "bluetooth_disabled" ->
+                setPermissionBanner(
+                    getString(R.string.bluetooth_disabled),
+                    BannerAction.BLUETOOTH_SETTINGS,
+                )
+            else ->
+                setPermissionBanner(getString(R.string.bluetooth_scan_failed))
+        }
+    }
+
+    private fun startLiveMonitor(deviceIds: LongArray) {
+        if (deviceIds.isEmpty()) return
+        ContextCompat.startForegroundService(
+            this,
+            LiveMonitorService.startIntent(this, deviceIds),
+        )
+    }
+
+    private fun enableInverterWarnings() {
+        lifecycleScope.launch {
+            container.settingsStore.update { it.copy(inverterWarningAlertsEnabled = true) }
+        }
     }
 
     fun isBluetoothEnabled(): Boolean {
@@ -265,6 +314,38 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class BannerAction { APP_SETTINGS, LOCATION_SETTINGS, BLUETOOTH_SETTINGS }
+
+private sealed class PendingPermissionWork {
+    data object Scan : PendingPermissionWork()
+    data class LiveStart(val deviceIds: LongArray) : PendingPermissionWork()
+    data object EnableWarnings : PendingPermissionWork()
+
+    fun writeTo(outState: Bundle) {
+        when (this) {
+            Scan -> outState.putString(KEY_PENDING, VALUE_SCAN)
+            is LiveStart -> {
+                outState.putString(KEY_PENDING, VALUE_LIVE)
+                outState.putLongArray(KEY_LIVE_IDS, deviceIds)
+            }
+            EnableWarnings -> outState.putString(KEY_PENDING, VALUE_WARNINGS)
+        }
+    }
+
+    companion object {
+        private const val KEY_PENDING = "pending_permission_work"
+        private const val KEY_LIVE_IDS = "pending_live_ids"
+        private const val VALUE_SCAN = "scan"
+        private const val VALUE_LIVE = "live"
+        private const val VALUE_WARNINGS = "warnings"
+
+        fun fromBundle(state: Bundle?): PendingPermissionWork? = when (state?.getString(KEY_PENDING)) {
+            VALUE_SCAN -> Scan
+            VALUE_LIVE -> LiveStart(state.getLongArray(KEY_LIVE_IDS) ?: longArrayOf())
+            VALUE_WARNINGS -> EnableWarnings
+            else -> null
+        }
+    }
+}
 
 private enum class AppTab { DASHBOARD, STATISTICS, DEVICES, IMPORT, SETTINGS }
 
@@ -279,6 +360,11 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
     val isScanning by container.bluetoothGateway.isDiscovering.collectAsStateWithLifecycle()
     val settings by container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     var localDataEpoch by remember { mutableStateOf(0L) }
+
+    LaunchedEffect(Unit) {
+        // Activity context can start the FGS when a background alarm was blocked overnight.
+        LivePollScheduler.attemptResume(activity)
+    }
     val importJobsFingerprint = remember(importJobs) {
         importJobs.joinToString(";") { job ->
             "${job.id}:${job.status}:${job.completedAtEpochSeconds ?: job.createdAtEpochSeconds}"
@@ -455,10 +541,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     liveActiveDeviceIds = liveState.activeDeviceIds,
                     dataEpoch = dataRevision,
                     onStartLive = { deviceIds ->
-                        ContextCompat.startForegroundService(
-                            activity,
-                            LiveMonitorService.startIntent(activity, deviceIds.toLongArray()),
-                        )
+                        activity.ensureLiveMonitorPermissions(deviceIds.toLongArray())
                     },
                     onStopLive = {
                         activity.startService(LiveMonitorService.stopIntent(activity))
@@ -486,29 +569,8 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                                 activity.getString(R.string.bluetooth_disabled),
                                 BannerAction.BLUETOOTH_SETTINGS,
                             )
-                        } else if (!activity.ensureBluetoothScanPermissions()) {
-                            // System permission dialog is open; do not claim the user denied yet.
-                            activity.setPermissionBanner(null)
                         } else {
-                            when (container.bluetoothGateway.startDiscovery()) {
-                                null -> activity.setPermissionBanner(null)
-                                "location_disabled" ->
-                                    activity.setPermissionBanner(
-                                        activity.getString(R.string.location_required_for_scan),
-                                        BannerAction.LOCATION_SETTINGS,
-                                    )
-                                "location_precise_required" ->
-                                    activity.setPermissionBanner(activity.getString(R.string.location_precise_required))
-                                "missing_permission" ->
-                                    activity.setPermissionBanner(activity.getString(R.string.permissions_denied))
-                                "bluetooth_disabled" ->
-                                    activity.setPermissionBanner(
-                                        activity.getString(R.string.bluetooth_disabled),
-                                        BannerAction.BLUETOOTH_SETTINGS,
-                                    )
-                                else ->
-                                    activity.setPermissionBanner(activity.getString(R.string.bluetooth_scan_failed))
-                            }
+                            activity.ensureBluetoothScanPermissions()
                         }
                     },
                     onStopBluetooth = { container.bluetoothGateway.stopDiscovery() },

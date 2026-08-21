@@ -105,6 +105,7 @@ import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
+import com.alorbach.solarmonitor.service.LivePollScheduler
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
@@ -354,6 +355,9 @@ internal fun DeviceEditorCard(
             testSuccess = false
             testMessage = context.getString(R.string.duplicate_mac, mac)
             return null
+        }
+        if (updated.timezone != device.timezone) {
+            LivePollScheduler.syncAfterSettingsChange(context)
         }
         val saved = container.repository.getDevice(device.id) ?: updated
         actionMac = saved.btMac

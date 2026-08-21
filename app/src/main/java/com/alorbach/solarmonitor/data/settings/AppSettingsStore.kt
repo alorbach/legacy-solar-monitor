@@ -14,6 +14,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.security.CredentialStore
+import com.alorbach.solarmonitor.domain.LivePollWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
@@ -38,10 +39,14 @@ data class AppSettings(
     val hourAggregatesSchemaVersion: Int = 0,
     /** Seconds between live Bluetooth polls while the foreground service runs. */
     val livePollIntervalSeconds: Long = 60,
+    /** Inclusive start of the live-poll clock window, minutes from midnight (device timezone). */
+    val livePollWindowStartMinutes: Int = 6 * 60,
+    /** Exclusive end of the live-poll clock window, minutes from midnight (device timezone). */
+    val livePollWindowEndMinutes: Int = 22 * 60,
     /** Home-screen compact/medium widgets; null = first device by name. */
     val widgetDeviceId: Long? = null,
-    /** Notify on new inverter WARNING events from the last 24 hours. */
-    val inverterWarningAlertsEnabled: Boolean = true,
+    /** Notify on new inverter WARNING events from the last 24 hours. Off by default on Android 13+ until the user enables it (and grants POST_NOTIFICATIONS). */
+    val inverterWarningAlertsEnabled: Boolean = false,
     /** Per-device last notified event entryId, encoded as "id:entryId,id:entryId". */
     val eventAlertWatermarks: String = "",
 )
@@ -101,6 +106,10 @@ class AppSettingsStore(
             prefs[Keys.hourAggregatesBackfilled] = updated.hourAggregatesBackfilled
             prefs[Keys.hourAggregatesSchemaVersion] = updated.hourAggregatesSchemaVersion
             prefs[Keys.livePollIntervalSeconds] = updated.livePollIntervalSeconds.coerceIn(15L, 3600L)
+            prefs[Keys.livePollWindowStartMinutes] =
+                LivePollWindow.normalizeMinutes(updated.livePollWindowStartMinutes)
+            prefs[Keys.livePollWindowEndMinutes] =
+                LivePollWindow.normalizeMinutes(updated.livePollWindowEndMinutes)
             if (updated.widgetDeviceId == null) {
                 prefs.remove(Keys.widgetDeviceId)
             } else {
@@ -139,8 +148,12 @@ class AppSettingsStore(
             hourAggregatesBackfilled = prefs[Keys.hourAggregatesBackfilled] ?: false,
             hourAggregatesSchemaVersion = prefs[Keys.hourAggregatesSchemaVersion] ?: 0,
             livePollIntervalSeconds = prefs[Keys.livePollIntervalSeconds] ?: 60L,
+            livePollWindowStartMinutes = prefs[Keys.livePollWindowStartMinutes]
+                ?: LivePollWindow.DEFAULT_START_MINUTES,
+            livePollWindowEndMinutes = prefs[Keys.livePollWindowEndMinutes]
+                ?: LivePollWindow.DEFAULT_END_MINUTES,
             widgetDeviceId = prefs[Keys.widgetDeviceId],
-            inverterWarningAlertsEnabled = prefs[Keys.inverterWarningAlertsEnabled] ?: true,
+            inverterWarningAlertsEnabled = prefs[Keys.inverterWarningAlertsEnabled] ?: false,
             eventAlertWatermarks = prefs[Keys.eventAlertWatermarks] ?: "",
         )
     }
@@ -164,6 +177,8 @@ class AppSettingsStore(
         val hourAggregatesBackfilled = booleanPreferencesKey("hour_aggregates_backfilled")
         val hourAggregatesSchemaVersion = intPreferencesKey("hour_aggregates_schema_version")
         val livePollIntervalSeconds = longPreferencesKey("live_poll_interval_seconds")
+        val livePollWindowStartMinutes = intPreferencesKey("live_poll_window_start_minutes")
+        val livePollWindowEndMinutes = intPreferencesKey("live_poll_window_end_minutes")
         val widgetDeviceId = longPreferencesKey("widget_device_id")
         val inverterWarningAlertsEnabled = booleanPreferencesKey("inverter_warning_alerts_enabled")
         val eventAlertWatermarks = stringPreferencesKey("event_alert_watermarks")

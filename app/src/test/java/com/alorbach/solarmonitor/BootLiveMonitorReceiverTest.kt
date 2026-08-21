@@ -15,6 +15,39 @@ class BootLiveMonitorReceiverTest {
     }
 
     @Test
+    fun windowClosedBootSchedulesInsteadOfForeground() {
+        val ids = longArrayOf(1L)
+        assertFalse(
+            BootLiveMonitorReceiver.shouldStartForeground(
+                ids,
+                bluetoothConnectGranted = true,
+                anyDeviceInWindow = false,
+            ),
+        )
+        assertTrue(
+            BootLiveMonitorReceiver.shouldScheduleWindowResume(
+                ids,
+                bluetoothConnectGranted = true,
+                anyDeviceInWindow = false,
+            ),
+        )
+        assertTrue(
+            BootLiveMonitorReceiver.shouldStartForeground(
+                ids,
+                bluetoothConnectGranted = true,
+                anyDeviceInWindow = true,
+            ),
+        )
+        assertFalse(
+            BootLiveMonitorReceiver.shouldScheduleWindowResume(
+                ids,
+                bluetoothConnectGranted = true,
+                anyDeviceInWindow = true,
+            ),
+        )
+    }
+
+    @Test
     fun restartActionsIncludeBootAndPackageReplace() {
         assertTrue(BootLiveMonitorReceiver.isRestartAction(Intent.ACTION_BOOT_COMPLETED))
         assertTrue(BootLiveMonitorReceiver.isRestartAction(Intent.ACTION_MY_PACKAGE_REPLACED))

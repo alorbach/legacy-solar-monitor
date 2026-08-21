@@ -87,7 +87,7 @@ These are not Data Safety rows but often sit next to it:
 | Declaration | What to write |
 |---|---|
 | Location | Foreground only; classic Bluetooth discovery of unpaired inverters; not used for maps or tracking |
-| Foreground service `connectedDevice` | Persistent live monitor that polls the inverter over Bluetooth |
+| Foreground service `connectedDevice` | Live Bluetooth monitor during a configurable daily window (default 06:00–22:00 in each inverter timezone). The service stops outside that window and resumes at the next start. |
 | Foreground service `dataSync` | Long SBFspot import (file/URL/FTP/SFTP) and WorkManager backup/import |
 | Battery unrestricted | Live Bluetooth polling and scheduled imports on OEMs that otherwise kill the service |
 | Photos / videos | Not used |

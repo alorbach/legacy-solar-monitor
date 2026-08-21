@@ -63,7 +63,7 @@ class EventAlertNotifier(
             manager.notify(
                 notificationId(deviceId),
                 NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.stat_notify_error)
+                    .setSmallIcon(R.drawable.ic_stat_notify)
                     .setContentTitle(context.getString(R.string.event_alert_title))
                     .setContentText(text)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(text))

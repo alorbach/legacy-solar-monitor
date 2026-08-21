@@ -282,12 +282,12 @@ fun StatsBarChart(
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
     val midYield = (maxYield / 2f).toLong()
     val outsideLabelColor = colors.onBackground.toArgb()
-    val insideLabelColor = colors.onSecondary.toArgb()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
     val axisLineColor = colors.outline.copy(alpha = 0.45f)
     val eventMarkerColor = colors.error
-    val selectedBarColor = colors.tertiary
-    val defaultBarColor = colors.secondary
+    val selectedBarColor = colors.secondary
+    val defaultBarColor = colors.tertiary
+    val insideLabelColor = colors.onTertiary.toArgb()
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
     val emptyHint = stringResource(R.string.chart_empty_hint)
