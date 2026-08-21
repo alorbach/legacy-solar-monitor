@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.WorkManager
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
+import com.alorbach.solarmonitor.data.importing.ImportCopyStore
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
@@ -56,6 +57,9 @@ class SolarRepository(
     }
     private val dao = db.dao()
     private val hourRecomputeMutexes = ConcurrentHashMap<Long, Mutex>()
+    private val importCopyStore = ImportCopyStore(appContext) { deviceId ->
+        dao.getDeviceById(deviceId) != null
+    }
 
     private fun hourRecomputeMutex(deviceId: Long): Mutex =
         hourRecomputeMutexes.getOrPut(deviceId) { Mutex() }
@@ -164,27 +168,34 @@ class SolarRepository(
 
     suspend fun deleteDevice(deviceId: Long) {
         val jobs = dao.getImportJobsForDevice(deviceId)
-        ScheduledImportWorker.cancelAll(appContext, jobs.map { it.id })
-        WorkManager.getInstance(appContext)
-            .cancelAllWorkByTag(ScheduledImportWorker.deviceTag(deviceId))
         val credentialIds = jobs.mapNotNull { it.passwordCredentialId }
             .filter { it.isNotBlank() }
             .toSet()
         val device = dao.getDeviceById(deviceId)
-        dao.deleteDeviceWithImportJobs(deviceId)
-        reclaimOrphanImportCredentials(credentialIds, ignoreWork = true)
-        val ref = device?.passwordRef
-        if (credentialStore?.isCredentialId(ref) == true) {
-            credentialStore.deleteSecret(ref)
-        }
-        settingsStore.update { current ->
-            current.copy(
-                widgetDeviceId = current.widgetDeviceId?.takeUnless { it == deviceId },
-                statsSelectedDeviceId = current.statsSelectedDeviceId?.takeUnless { it == deviceId },
-                eventAlertWatermarks = EventAlertPolicy.encodeWatermarks(
-                    EventAlertPolicy.parseWatermarks(current.eventAlertWatermarks) - deviceId,
-                ),
-            )
+        importCopyStore.deleteForDevice(
+            deviceId = deviceId,
+            legacyPaths = jobs.mapNotNull { it.preservedCopyPath },
+        ) {
+            // Do this first: a failed cleanup must not leave the surviving device with
+            // its scheduled import work already cancelled.
+            ScheduledImportWorker.cancelAll(appContext, jobs.map { it.id })
+            WorkManager.getInstance(appContext)
+                .cancelAllWorkByTag(ScheduledImportWorker.deviceTag(deviceId))
+            dao.deleteDeviceWithImportJobs(deviceId)
+            reclaimOrphanImportCredentials(credentialIds, ignoreWork = true)
+            val ref = device?.passwordRef
+            if (credentialStore?.isCredentialId(ref) == true) {
+                credentialStore.deleteSecret(ref)
+            }
+            settingsStore.update { current ->
+                current.copy(
+                    widgetDeviceId = current.widgetDeviceId?.takeUnless { it == deviceId },
+                    statsSelectedDeviceId = current.statsSelectedDeviceId?.takeUnless { it == deviceId },
+                    eventAlertWatermarks = EventAlertPolicy.encodeWatermarks(
+                        EventAlertPolicy.parseWatermarks(current.eventAlertWatermarks) - deviceId,
+                    ),
+                )
+            }
         }
     }
 
@@ -916,52 +927,7 @@ class SolarRepository(
         relativeName: String,
         bytes: ByteArray,
         overwritePath: String? = null,
-    ): String {
-        val importsRoot = appContext.getDir("imports", Context.MODE_PRIVATE)
-        val targetDir = importsRoot.resolve("device-$deviceId")
-        targetDir.mkdirs()
-        if (!overwritePath.isNullOrBlank()) {
-            val overwrite = java.io.File(overwritePath)
-            require(overwrite.isInside(importsRoot)) {
-                "Invalid import path"
-            }
-            // Legacy copies lived directly under imports/; migrate into device-<id>/.
-            // Use Path component checks so device-10 is not treated as inside device-1.
-            val target = if (overwrite.isInside(targetDir)) {
-                overwrite
-            } else {
-                targetDir.resolve(overwrite.name)
-            }
-            require(target.isInside(targetDir)) {
-                "Invalid import path"
-            }
-            target.parentFile?.mkdirs()
-            target.writeBytes(bytes)
-            if (target.canonicalPath != overwrite.canonicalPath && overwrite.exists()) {
-                runCatching { overwrite.delete() }
-            }
-            return target.absolutePath
-        }
-        val safeName = relativeName
-            .substringAfterLast('/')
-            .substringAfterLast('\\')
-            .replace("..", "")
-            .ifBlank { "import.bin" }
-        val dot = safeName.lastIndexOf('.')
-        val base = if (dot > 0) safeName.substring(0, dot) else safeName
-        val ext = if (dot > 0) safeName.substring(dot) else ""
-        var candidate = targetDir.resolve(safeName)
-        var suffix = 1
-        while (candidate.exists()) {
-            candidate = targetDir.resolve("$base-$suffix$ext")
-            suffix++
-        }
-        require(candidate.isInside(targetDir)) {
-            "Invalid import path"
-        }
-        candidate.writeBytes(bytes)
-        return candidate.absolutePath
-    }
+    ): String = importCopyStore.store(deviceId, relativeName, bytes, overwritePath)
 
     suspend fun updateDeviceStatus(
         deviceId: Long,
@@ -999,11 +965,4 @@ class SolarRepository(
 
     private suspend fun tariffsByDevice(deviceIds: List<Long>): Map<Long, List<TariffPeriodEntity>> =
         dao.getTariffsForDevices(deviceIds).groupBy { it.deviceId }
-}
-
-/** True when [this] is [directory] or a descendant; component-aware (not raw string prefix). */
-private fun java.io.File.isInside(directory: java.io.File): Boolean {
-    val dirPath = directory.canonicalFile.toPath()
-    val filePath = canonicalFile.toPath()
-    return filePath.startsWith(dirPath)
 }

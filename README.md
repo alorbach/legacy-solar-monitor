@@ -40,10 +40,12 @@ Package name (do not change): `com.alorbach.solarmonitor`
 
 ## Docs
 
-- [User guide](docs/USER-GUIDE.md) — permissions, devices, live, import, widgets, backup
+- [User guide (EN)](docs/USER-GUIDE.md) — permissions, devices, live, import, widgets, backup
+- [Benutzerhandbuch (DE)](docs/USER-GUIDE-DE.md) — deutsche Anleitung
 - [Privacy policy](docs/PRIVACY.md) — Play Store URL; EN + DE
 - [Play listing copy](docs/PLAY-LISTING.md) — store text, screenshots, publisher checklist
 - [Play Data Safety](docs/PLAY-DATA-SAFETY.md) — Console form answers from the code
+- [Play submission checklist](docs/PLAY-SUBMISSION.md) — target API, declarations, smoke tests
 - [Architecture](docs/ARCHITECTURE.md) — layers, Room, Bluetooth, import, Drive, tests
 - [Add another old device](docs/DEV-add-device.md) — UI-only vs protocol tweak vs new vendor
 - [Google Drive backup setup](docs/DEV-google-drive.md) — publisher OAuth; users only sign in
@@ -51,7 +53,7 @@ Package name (do not change): `com.alorbach.solarmonitor`
 
 ## Build
 
-Android Studio / Gradle **9.7**, JDK **21**. `minSdk` 28, `compileSdk`/`targetSdk` 35. Kotlin bytecode is Java 17.
+Android Studio / Gradle **9.7**, JDK **21**. `minSdk` 28, `compileSdk`/`targetSdk` **36**. Kotlin bytecode is Java 17.
 
 Optional Drive sign-in: set `google.web.client.id` in `local.properties` as described in the Drive doc. The file is not in Git.
 

@@ -101,7 +101,7 @@ Gateway implementation and Path A/B/C: [DEV-add-device.md](DEV-add-device.md).
 
 [LiveMonitoringRepository.kt](../app/src/main/java/com/alorbach/solarmonitor/data/repository/LiveMonitoringRepository.kt) runs test, one-shot live, and day/month archive sync (default last 30 days / 12 months; no event download), then writes through `SolarRepository`. Archive sync can enqueue auto Drive backup.
 
-[LiveMonitorService.kt](../app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt) is a `connectedDevice` foreground service. It polls each persisted device ID at `livePollIntervalSeconds`. [BootLiveMonitorReceiver.kt](../app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt) restarts after `BOOT_COMPLETED` / HTC quickboot (~8 s delay) and after `MY_PACKAGE_REPLACED` (no delay) if IDs are still persisted. **Stop** clears those IDs.
+[LiveMonitorService.kt](../app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt) is a `connectedDevice` foreground service. It polls each persisted device ID at `livePollIntervalSeconds`. [LivePollScheduler.kt](../app/src/main/java/com/alorbach/solarmonitor/service/LivePollScheduler.kt) uses **inexact** `setAndAllowWhileIdle` only (no `SCHEDULE_EXACT_ALARM`); when the app is backgrounded, [LivePollWindowReceiver.kt](../app/src/main/java/com/alorbach/solarmonitor/service/LivePollWindowReceiver.kt) posts a notification instead of starting the foreground service or retrying indefinitely. Opening the app performs the permitted start; Doze/OEM policy may delay the notification by several minutes. [BootLiveMonitorReceiver.kt](../app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt) restarts after `BOOT_COMPLETED` / HTC quickboot (~8 s delay) and after `MY_PACKAGE_REPLACED` (no delay) if IDs are still persisted. **Stop** clears those IDs.
 
 ## Import pipeline
 
@@ -126,11 +126,13 @@ Publisher Cloud Console steps stay in [DEV-google-drive.md](DEV-google-drive.md)
 | Auth | [GoogleDriveAuth.kt](../app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveAuth.kt) — Play Services Identity, `BuildConfig.GOOGLE_WEB_CLIENT_ID` |
 | Upload / restore | [GoogleDriveBackupRepository.kt](../app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveBackupRepository.kt), [GoogleDriveRemote.kt](../app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveRemote.kt) |
 | Schedule | [CloudBackupCoordinator.kt](../app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupCoordinator.kt) → [CloudBackupWorker.kt](../app/src/main/java/com/alorbach/solarmonitor/work/CloudBackupWorker.kt) |
-| Policy | [CloudBackupPolicy.kt](../app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt) — 15 min auto throttle, folder `Legacy Solar Monitor` (+ previous `SMA Solar Monitor`), `solar-monitor.db` |
+| Policy | [CloudBackupPolicy.kt](../app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt) — 15 min auto throttle, folder `Legacy Solar Monitor` (+ previous `SMA Solar Monitor`), `solar-monitor.db`, restore size cap |
 
 Auto backup is enqueued after a successful archive **Sync**, a successful import, clear history, or import-job deletes — not after one-shot **Live** or live-monitor polls.
 
-Restore replaces the local Room DB and restarts via [AppProcessRestarter.kt](../app/src/main/java/com/alorbach/solarmonitor/service/AppProcessRestarter.kt) / [RestartRelayActivity.kt](../app/src/main/java/com/alorbach/solarmonitor/service/RestartRelayActivity.kt) (second process, so the UI is not killed in place). `CredentialStore` (SMA PINs, FTP/SFTP passwords) is not in `solar-monitor.db` and is not restored. Scope is `drive.file` only.
+Restore replaces the local Room DB and restarts via [AppProcessRestarter.kt](../app/src/main/java/com/alorbach/solarmonitor/service/AppProcessRestarter.kt) / [RestartRelayActivity.kt](../app/src/main/java/com/alorbach/solarmonitor/service/RestartRelayActivity.kt) (second process, so the UI is not killed in place). `CredentialStore` (SMA PINs, FTP/SFTP passwords) is not in `solar-monitor.db` and is not restored. Scope is `drive.file` only (app-created / user-opened files — not full Drive).
+
+Deleting a device also removes app-private preserved import copies under `imports/device-<id>/`. Cloud Auto Backup is off (`allowBackup=false`); `data_extraction_rules.xml` / `backup_rules.xml` exclude DB, files, and prefs from cloud backup and (where honored) device-to-device transfer.
 
 The app implements `Configuration.Provider` and disables the default WorkManager initializer in the manifest.
 
@@ -157,15 +159,24 @@ Widgets: Glance receivers in the manifest; [SolarWidgets.kt](../app/src/main/jav
 | JDK for Gradle | **21** |
 | `compileOptions` / `jvmTarget` | 17 |
 | `minSdk` | 28 |
-| `compileSdk` / `targetSdk` | 35 |
+| `compileSdk` / `targetSdk` | **36** (Play requirement for new apps/updates from 31 Aug 2026) |
 | Secret | `google.web.client.id` in `local.properties` or env `GOOGLE_WEB_CLIENT_ID` → `BuildConfig.GOOGLE_WEB_CLIENT_ID` |
 
 Release builds minify and shrink resources.
 
 ## Tests
 
-**Unit** (`app/src/test`): CSV parser, earnings, aggregator, dashboard metrics, day merger, event catalog/alerts/grouping, cloud policy, import grouping/retry, boot receiver, remote browse helpers, report format, production stepline.
+**Unit** (`app/src/test`): CSV parser, earnings, aggregator, dashboard metrics, day merger, event catalog/alerts/grouping, cloud policy (including restore size gate), import grouping/retry, boot receiver, remote browse helpers (capped reads), report format, production stepline, URL import policy, live poll window.
 
 **androidTest**: [MigrationAndSaveDeviceTest.kt](../app/src/androidTest/java/com/alorbach/solarmonitor/MigrationAndSaveDeviceTest.kt) — Room migrations and unique MAC save.
 
 No Bluetooth gateway or full UI instrumentation suite.
+
+Commands:
+
+```text
+gradlew.bat :app:testDebugUnitTest
+gradlew.bat :app:assembleDebug
+gradlew.bat :app:lintDebug
+gradlew.bat :app:bundleRelease
+```

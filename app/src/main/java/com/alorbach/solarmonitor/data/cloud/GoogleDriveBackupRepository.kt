@@ -178,8 +178,16 @@ class GoogleDriveBackupRepository(
                     )
                 }
             runCatching {
-                remote.downloadFile(folderId, CloudBackupPolicy.DATABASE_BACKUP_FILENAME, download)
+                remote.downloadFile(
+                    folderId = folderId,
+                    name = CloudBackupPolicy.DATABASE_BACKUP_FILENAME,
+                    target = download,
+                    maxBytes = CloudBackupPolicy.MAX_RESTORE_DATABASE_BYTES,
+                )
             }.onFailure { error ->
+                // A capped streaming download may have written hundreds of MiB before
+                // rejecting the response. Do not retain that partial database in cache.
+                runCatching { download.delete() }
                 val message = when {
                     error is GoogleDriveNeedsUserException ->
                         error.message ?: context.getString(R.string.backup_needs_reauth)

@@ -9,21 +9,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class LivePollWindowReceiver : BroadcastReceiver() {
+/** Handles the user action from the inexact-alarm resume notification. */
+class LiveResumeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != LivePollScheduler.ACTION_RESUME) return
+        if (intent?.action != ACTION_RESUME) return
         val appContext = context.applicationContext
         val pending = goAsync()
         scope.launch {
             try {
-                // An inexact alarm is not an Android 12+ background-FGS exemption. If the app
-                // is backgrounded, the scheduler posts a notification instead of retrying forever.
                 LivePollScheduler.attemptResume(
                     appContext,
-                    LivePollScheduler.FgsStartPolicy.NOTIFICATION_ONLY,
+                    LivePollScheduler.FgsStartPolicy.ALLOW_BACKGROUND_START,
                 )
             } catch (error: RuntimeException) {
-                Log.w(TAG, "Live poll window resume failed", error)
+                Log.w(TAG, "Live monitor did not resume from notification", error)
             } finally {
                 pending.finish()
             }
@@ -31,7 +30,8 @@ class LivePollWindowReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        private const val TAG = "LivePollWindow"
+        const val ACTION_RESUME = "com.alorbach.solarmonitor.action.RESUME_LIVE_FROM_NOTIFICATION"
+        private const val TAG = "LiveResumeReceiver"
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 }

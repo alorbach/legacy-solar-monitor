@@ -1,6 +1,6 @@
 # Privacy policy — Legacy Solar Monitor
 
-**Last updated:** 20 August 2026  
+**Last updated:** 21 August 2026
 **Contact:** Andre Lorbach, [alorbach@adiscon.com](mailto:alorbach@adiscon.com)  
 **App:** Legacy Solar Monitor (`com.alorbach.solarmonitor`)
 
@@ -20,19 +20,24 @@ The app does **not** include advertising, analytics, crash reporters, or third-p
 
 | Data | Why |
 |---|---|
-| Inverter profiles (name, Bluetooth MAC, serial, timezone, model) | Identify and connect to your inverter |
+| Inverter profiles (name, Bluetooth MAC, serial, timezone, model, plant name, owner / plant operator) | Identify and connect to your inverter |
+| Reserved profile fields `address`, `latitude`, `longitude` | Present in the database schema for future use; the current UI does **not** edit or fill GPS coordinates |
 | Energy history (power in W, yield in Wh, events, tariffs) | Charts, reports, widgets |
+| Connection diagnostics text (`lastDiagnostics`, may include MAC / RFCOMM details) | Troubleshooting Test / Live / Sync |
+| Import job metadata (source labels, hosts, paths, usernames, status, opaque credential IDs, optional preserved-copy paths) | Re-run / schedule imports |
+| Optional copies of imported files under app-private `imports/` | Optional Drive backup of originals |
 | SMA user PIN and FTP/SFTP passwords | Login to the inverter and to import servers you configure |
 | Google account email | Only if you sign in for Drive backup |
 | SFTP host keys (trust-on-first-use) | Verify later SFTP connections |
+| App settings (language, live interval/window, widget device, chart color, warning toggles) | Preferences |
 
-PINs and import passwords are stored in **encrypted** app storage (`EncryptedSharedPreferences`), not in the Room database. System cloud backup of the app is **disabled**.
+PINs and import passwords are stored in **encrypted** app storage (`EncryptedSharedPreferences`), not as plaintext in the Room database. Room may keep opaque `cred_…` IDs that reference those secrets.
 
 ### Location
 
 The app requests **precise location** so Android can discover **unpaired** classic Bluetooth inverters. Location (GPS) must also be turned on for that scan.
 
-The app does **not** read or store GPS coordinates, does **not** track your position, and does **not** use background location.
+The app does **not** read or store GPS coordinates for tracking, does **not** track your position, and does **not** use background location. Schema fields `latitude` / `longitude` are unused by the current editor.
 
 ### Bluetooth
 
@@ -40,16 +45,16 @@ Nearby-devices permission is used to scan, pair/connect, read live values, and s
 
 ### Optional Google Drive backup
 
-If you tap **Sign in with Google**, the app uses the Drive scope `https://www.googleapis.com/auth/drive.file` (only files this app creates). It may upload:
+If you tap **Sign in with Google**, the app uses the Drive scope `https://www.googleapis.com/auth/drive.file` (the app’s backup folder and files it creates, or that you open/share with it — not broad access to your entire Drive). It may upload:
 
-- a snapshot of `solar-monitor.db` (devices, history, events, tariffs — **not** PINs or FTP/SFTP passwords)
+- a snapshot of `solar-monitor.db` (devices, history, events, tariffs, import job metadata, diagnostics — **not** PINs or FTP/SFTP passwords)
 - optional copies of imported files
 
 into a Drive folder named **Legacy Solar Monitor**.
 
-Restore replaces the local database. **SMA PINs and FTP/SFTP passwords stay on this phone** and are not in the backup. After restore on another device you must re-enter them.
+Restore replaces the local Room database. **SMA PINs and FTP/SFTP passwords stay on this phone** and are not in the backup. After restore on another device you must re-enter them. Restore does not restore or clear local `imports/` file copies.
 
-You can sign out in Settings. Google’s own privacy policy applies to your Google account.
+**Sign out** in Settings disconnects the Google account in the app. It does **not** delete files already in your Google Drive. Google’s own privacy policy applies to your Google account.
 
 ### Network imports (URL / FTP / SFTP)
 
@@ -67,7 +72,19 @@ The app is not directed at children.
 
 ### Retention and deletion
 
-Data stays on the device until you delete a device, clear history, restore a backup, or uninstall the app. Uninstalling removes local data. Drive files remain in your Google Drive until you delete them there.
+| Action | What is removed |
+|---|---|
+| Clear history (device) | Spot samples, day/month/hour aggregates, and events for that device |
+| Delete device | Profile, Room history, events, tariffs, import jobs for that device, encrypted PIN for that device, and local `imports/device-<id>/` copies |
+| Remove import job / clear import list | Job history rows only (solar data stays); orphaned encrypted import passwords are reclaimed when unused |
+| Restore from Drive | Replaces `solar-monitor.db`; keeps local credentials; does not sync `imports/` copies |
+| Sign out of Drive | Local Google account link only — Drive files remain |
+| Uninstall | Removes local app data (Room, encrypted prefs, imports, cache) |
+| Delete in Google Drive | Required to remove uploaded backup files |
+
+### Android system backup
+
+Cloud Auto Backup is disabled (`allowBackup=false`). Explicit data-extraction / full-backup rules exclude app databases, files, and preferences from cloud backup and, where the OEM honors them, from device-to-device transfer. Some manufacturers may still migrate app data during phone setup; treat Google Drive backup as the supported path for moving data.
 
 ### Changes
 
@@ -87,19 +104,24 @@ Die App enthält **keine** Werbung, keine Analyse-SDKs, keine Crash-Reporter und
 
 | Daten | Zweck |
 |---|---|
-| Wechselrichter-Profile (Name, Bluetooth-MAC, Seriennummer, Zeitzone, Modell) | Gerät erkennen und verbinden |
+| Wechselrichter-Profile (Name, Bluetooth-MAC, Seriennummer, Zeitzone, Modell, Anlagenname, Anlagenbetreiber) | Gerät erkennen und verbinden |
+| Reservierte Felder `address`, `latitude`, `longitude` | Im Schema vorhanden; die aktuelle Oberfläche pflegt **keine** GPS-Koordinaten |
 | Energiehistorie (Leistung in W, Ertrag in Wh, Ereignisse, Tarife) | Diagramme, Berichte, Widgets |
-| SMA-Benutzer-PIN und FTP/SFTP-Passwörter | Anmeldung am Wechselrichter und an von Ihnen konfigurierten Import-Servern |
+| Verbindungsdiagnose (`lastDiagnostics`, ggf. mit MAC) | Fehlersuche |
+| Import-Metadaten (Quellen, Hosts, Pfade, Benutzername, Status, Credential-IDs, optionale Kopienpfade) | Erneuter / geplanter Import |
+| Optionale Kopien importierter Dateien unter `imports/` | Optionales Drive-Backup der Originale |
+| SMA-Benutzer-PIN und FTP/SFTP-Passwörter | Anmeldung am Wechselrichter und an Import-Servern |
 | Google-Konto-E-Mail | Nur bei Anmeldung für Drive-Backup |
-| SFTP-Hostschlüssel (Trust-on-first-use) | Spätere SFTP-Verbindungen prüfen |
+| SFTP-Hostschlüssel (TOFU) | Spätere SFTP-Verbindungen prüfen |
+| App-Einstellungen | Präferenzen |
 
-PINs und Import-Passwörter liegen in **verschlüsseltem** App-Speicher (`EncryptedSharedPreferences`), nicht in der Room-Datenbank. Die System-Cloud-Sicherung der App ist **aus**.
+PINs und Import-Passwörter liegen in **verschlüsseltem** App-Speicher (`EncryptedSharedPreferences`). Room speichert ggf. undurchsichtige `cred_…`-IDs.
 
 ### Standort
 
 Die App fordert **genauen Standort** an, damit Android **ungepaarte** klassische Bluetooth-Wechselrichter finden kann. Der Standort (GPS) muss für diesen Scan ebenfalls eingeschaltet sein.
 
-Die App liest und speichert **keine** GPS-Koordinaten, verfolgt Ihren Standort nicht und nutzt keinen Hintergrund-Standort.
+Die App speichert **keine** GPS-Koordinaten zur Verfolgung, verfolgt Ihren Standort nicht und nutzt keinen Hintergrund-Standort.
 
 ### Bluetooth
 
@@ -107,16 +129,16 @@ Die Berechtigung „Geräte in der Nähe“ dient zum Scannen, Verbinden, Live-L
 
 ### Optionales Google-Drive-Backup
 
-Wenn Sie **Mit Google anmelden** tippen, nutzt die App den Drive-Scope `https://www.googleapis.com/auth/drive.file` (nur Dateien, die diese App anlegt). Hochgeladen werden können:
+Wenn Sie **Mit Google anmelden** tippen, nutzt die App den Drive-Scope `https://www.googleapis.com/auth/drive.file` (Backup-Ordner und Dateien, die diese App anlegt oder die Sie mit der App öffnen/teilen — kein Vollzugriff auf Drive). Hochgeladen werden können:
 
-- ein Abbild von `solar-monitor.db` (Geräte, Historie, Ereignisse, Tarife — **keine** PINs oder FTP/SFTP-Passwörter)
+- ein Abbild von `solar-monitor.db` (Geräte, Historie, Ereignisse, Tarife, Import-Metadaten, Diagnose — **keine** PINs oder FTP/SFTP-Passwörter)
 - optional Kopien importierter Dateien
 
 in einen Drive-Ordner **Legacy Solar Monitor**.
 
-Wiederherstellen ersetzt die lokale Datenbank. **SMA-PINs und FTP/SFTP-Passwörter bleiben auf diesem Telefon** und stecken nicht im Backup. Nach dem Wiederherstellen auf einem anderen Gerät müssen Sie sie erneut eingeben.
+Wiederherstellen ersetzt die lokale Room-Datenbank. **SMA-PINs und FTP/SFTP-Passwörter bleiben auf diesem Telefon**. Nach dem Wiederherstellen auf einem anderen Gerät müssen Sie sie erneut eingeben. Lokale Importkopien unter `imports/` werden weder wiederhergestellt noch gelöscht.
 
-Abmelden geht in den Einstellungen. Für das Google-Konto gilt die Datenschutzerklärung von Google.
+**Abmelden** trennt das Google-Konto in der App und löscht **nicht** Dateien in Google Drive. Für das Google-Konto gilt die Datenschutzerklärung von Google.
 
 ### Netzwerk-Import (URL / FTP / SFTP)
 
@@ -134,7 +156,19 @@ Die App richtet sich nicht an Kinder.
 
 ### Aufbewahrung und Löschen
 
-Daten bleiben auf dem Gerät, bis Sie ein Gerät löschen, die Historie leeren, ein Backup wiederherstellen oder die App deinstallieren. Deinstallieren entfernt lokale Daten. Drive-Dateien bleiben in Ihrem Google Drive, bis Sie sie dort löschen.
+| Aktion | Was entfernt wird |
+|---|---|
+| Historie löschen | Spot-Samples, Aggregate und Events des Geräts |
+| Gerät löschen | Profil, Room-Historie, Events, Tarife, Import-Jobs, PIN und lokale `imports/device-<id>/`-Kopien |
+| Importversuch entfernen | Nur Verlaufseinträge; Solardaten bleiben |
+| Drive-Wiederherstellung | Ersetzt `solar-monitor.db`; lokale Geheimnisse bleiben; `imports/` wird nicht synchronisiert |
+| Drive abmelden | Nur lokale Kontoverknüpfung — Drive-Dateien bleiben |
+| Deinstallieren | Entfernt lokale App-Daten |
+| In Google Drive löschen | Erforderlich, um hochgeladene Backup-Dateien zu entfernen |
+
+### Android-Systemsicherung
+
+Cloud-Auto-Backup ist aus (`allowBackup=false`). Explizite Data-Extraction-/Backup-Regeln schließen Datenbanken, Dateien und Einstellungen aus. Manche Hersteller können bei Gerätewechsel trotzdem migrieren; Google Drive ist der unterstützte Weg.
 
 ### Änderungen
 

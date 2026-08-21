@@ -37,7 +37,10 @@ class BootLiveMonitorReceiver : BroadcastReceiver() {
         scope.launch {
             try {
                 delay(delayMs)
-                LivePollScheduler.attemptResume(appContext)
+                LivePollScheduler.attemptResume(
+                    appContext,
+                    LivePollScheduler.FgsStartPolicy.ALLOW_BACKGROUND_START,
+                )
             } catch (error: RuntimeException) {
                 Log.w("BootLiveMonitor", "Delayed live monitor start failed", error)
             } finally {

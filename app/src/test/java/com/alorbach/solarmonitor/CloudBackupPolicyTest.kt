@@ -126,6 +126,11 @@ class CloudBackupPolicyTest {
         assertFalse(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 6)))
     }
 
+    @Test
+    fun restoreDatabaseCap_isAtLeastHalfGibibyte() {
+        assertTrue(CloudBackupPolicy.MAX_RESTORE_DATABASE_BYTES >= 512L * 1024L * 1024L)
+    }
+
     private fun sqliteHeader(userVersion: Int): ByteArray {
         val bytes = ByteArray(64)
         val magic = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)

@@ -27,11 +27,11 @@ Live data, archive sync, and SBFspot imports for old Bluetooth solar inverters.
 ```text
 Legacy Solar Monitor is a free app for old classic-Bluetooth solar inverters (SBFspot-compatible Sunny Boy–class hardware). Read live power, sync day and month archives, import SBFspot CSV/ZIP/SQLite, chart yield, export CSV/PDF reports, and use home-screen widgets.
 
-Optional Google Drive backup uses only files this app creates (drive.file). Google Play services are required for Drive, not for Bluetooth monitoring.
+Optional Google Drive backup uses files this app creates or that you open/share with it (`drive.file`). Google Play services are required for Drive, not for Bluetooth monitoring.
 
 This is an independent hobby project. It is not affiliated with, endorsed by, or an official product of SMA Solar Technology AG. SMA, Sunny Boy, and related names are trademarks of their owners and are used only to describe compatible hardware.
 
-Needs Android 9+, Nearby devices, and precise location (with Location turned on) to discover unpaired inverters. Unrestricted battery helps live monitoring and scheduled imports stay reliable. URL import allows HTTPS anywhere and HTTP only on private/LAN addresses. FTP is cleartext; prefer SFTP on untrusted networks.
+Needs Android 9+, Nearby devices, and precise location (with Location turned on) to discover unpaired inverters. Unrestricted battery helps live monitoring and scheduled imports stay reliable. When the app is backgrounded, the live poll window posts a notification to resume monitoring because inexact alarms cannot start its foreground service directly. URL import allows HTTPS anywhere and HTTP only on private/LAN addresses. FTP is cleartext; prefer SFTP on untrusted networks.
 ```
 
 ### What’s new (1.0.0)
@@ -65,11 +65,11 @@ Live-Daten, Archiv-Sync und SBFspot-Import für alte Bluetooth-Wechselrichter.
 ```text
 Legacy Solar Monitor ist eine kostenlose App für alte klassische Bluetooth-Solarwechselrichter (SBFspot-kompatible Sunny-Boy-Klasse). Live-Leistung lesen, Tages- und Monatsarchive synchronisieren, SBFspot-CSV/ZIP/SQLite importieren, Ertrag darstellen, CSV/PDF exportieren und Homescreen-Widgets nutzen.
 
-Optionales Google-Drive-Backup gilt nur für Dateien, die diese App anlegt (drive.file). Google Play-Dienste braucht nur Drive, nicht die Bluetooth-Überwachung.
+Optionales Google-Drive-Backup gilt für Dateien, die diese App anlegt oder die Sie mit der App öffnen/teilen (`drive.file`). Google Play-Dienste braucht nur Drive, nicht die Bluetooth-Überwachung.
 
 Unabhängiges Hobbyprojekt. Nicht verbunden mit, nicht unterstützt von und kein offizielles Produkt von SMA Solar Technology AG. SMA, Sunny Boy und verwandte Namen sind Marken ihrer Inhaber und beschreiben nur kompatible Hardware.
 
-Benötigt Android 9+, Geräte in der Nähe und genauen Standort (Standort eingeschaltet), um ungepaarte Wechselrichter zu finden. Uneingeschränkte Batterie hilft Live-Monitor und geplanten Imports. URL-Import: HTTPS überall, HTTP nur im privaten LAN. FTP ist Klartext; im unsicheren Netz SFTP bevorzugen.
+Benötigt Android 9+, Geräte in der Nähe und genauen Standort (Standort eingeschaltet), um ungepaarte Wechselrichter zu finden. Uneingeschränkte Batterie hilft Live-Monitor und geplanten Imports. Das Live-Abfragefenster kann einige Minuten verspätet starten (ungenaue Planung). URL-Import: HTTPS überall, HTTP nur im privaten LAN. FTP ist Klartext; im unsicheren Netz SFTP bevorzugen.
 ```
 
 ### Neuigkeiten (1.0.0)
@@ -90,14 +90,16 @@ Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth c
 4. Publish the OAuth consent screen to **Production** (or start sensitive-scope verification for `drive.file`). Until then only listed test users can sign in.
 5. Console declarations:
    - Data Safety — copy [PLAY-DATA-SAFETY.md](PLAY-DATA-SAFETY.md)
-   - Location: foreground only, to discover unpaired classic Bluetooth devices (not GPS tracking)
-   - Foreground services: `connectedDevice` (live monitor during the poll window), `dataSync` (import / WorkManager)
+   - Location: foreground only, to discover unpaired classic Bluetooth devices (not GPS tracking; coordinates not stored)
+   - Foreground services: `connectedDevice` (live monitor during the poll window; background resume requires a user tap), `dataSync` (import / WorkManager)
    - Battery optimization exemption: live Bluetooth polling and scheduled FTP/SFTP imports
+   - Do **not** declare exact alarms
    - Content rating (IARC), target audience, countries
    - Privacy policy URL above
-   - Feature graphic + at least two phone screenshots
-6. Leave `android:allowBackup="false"` in the manifest. Do not turn on Auto Backup.
+   - Feature graphic + at least two phone screenshots (Settings must not show a missing Web client ID error)
+6. Leave `android:allowBackup="false"` and wired data-extraction / backup rules. Do not turn on Auto Backup.
 7. Drive backup needs Google Play services on the device; Bluetooth monitoring does not.
+8. Full gate list: [PLAY-SUBMISSION.md](PLAY-SUBMISSION.md).
 
 ### Console field map (copy from this repo)
 

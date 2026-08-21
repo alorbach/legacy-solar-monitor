@@ -1,13 +1,15 @@
 # User guide
 
-Legacy Solar Monitor is a free Android app for **old classic-Bluetooth SMA Sunny Boy–class inverters**. Tab names below match the English UI (`Start`, `Stats`, `Devices`, `Import`, `Settings`). The in-app language can be System, Deutsch, or English.
+Legacy Solar Monitor is a free Android app for **legacy classic-Bluetooth SMA Sunny Boy–class inverters** (SBFspot-compatible). Tab names below match the English UI (`Start`, `Stats`, `Devices`, `Import`, `Settings`). The in-app language can be System, Deutsch, or English.
+
+German users: see [USER-GUIDE-DE.md](USER-GUIDE-DE.md).
 
 This project is not affiliated with SMA Solar Technology AG. SMA and Sunny Boy names describe compatible hardware only.
 
 ## What you need
 
 - An inverter that speaks the **SBFspot-compatible SMA Bluetooth** protocol. There is no vendor or protocol picker; every device uses that stack.
-- Many of these boxes stay **unpaired**. That is expected. Android still needs Nearby devices, **precise location**, and Location (GPS) turned on so they appear in Scan.
+- Many of these inverters stay **unpaired**. That is expected. Android still needs Nearby devices, **precise location**, and Location (GPS) turned on so they appear in Scan.
 - One profile per Bluetooth MAC.
 
 Same-generation units can usually be added in the UI with no code change. See [DEV-add-device.md](DEV-add-device.md).
@@ -17,7 +19,7 @@ Same-generation units can usually be added in the UI with no code change. See [D
 | Permission / setting | Why |
 |---|---|
 | Nearby devices (`BLUETOOTH_SCAN` / `BLUETOOTH_CONNECT` on Android 12+) | Scan, connect, live, and archive sync |
-| Precise location | Classic discovery of **unpaired** devices |
+| Precise location | Classic discovery of **unpaired** devices (the app does **not** store GPS coordinates) |
 | Location (GPS) on | Same unpaired discovery |
 | Bluetooth adapter on | Any Bluetooth action |
 | Notifications (Android 13+) | Live monitor, import progress, inverter warnings. Asked when you start live monitor or enable warnings, not at launch. Inverter warnings start off until you enable them in Settings. |
@@ -27,16 +29,19 @@ Same-generation units can usually be added in the UI with no code change. See [D
 
 The yellow banner at the top of the app opens App, Location, or Bluetooth settings when something required is off.
 
+**Note:** The live poll window uses an *inexact* alarm. If the app is in the background when the window opens, Android does not allow that alarm to start the connected-device foreground service; the app posts a **Live monitor ready** notification instead. Tap it (or open the app) to resume. Android / OEM battery policies may delay the notification by a few minutes. Exact-alarm special access is intentionally not requested.
+
 ## Add a device
 
 <p align="center"><img src="screenshots/devices.png" width="360" alt="Devices tab: Bluetooth scan and SMA Sunny Boy profile"></p>
 
-1. Open **Devices**. Tap **Scan** and grant Nearby devices and precise location if asked, and turn Location on.
-2. Tap **Scan**. Unpaired devices show while the scan runs; already-bonded ones are listed too. Names containing `SMA` sort first.
-3. Tap a result to create a profile (Bluetooth name, MAC, model `Legacy SMA`, PIN seed `0000`). A new profile also gets a default EUR tariff.
-4. Or tap **+**. That seeds from the best nearby/bonded device, or a blank profile if nothing is in range. You can type the MAC later.
-5. Edit name, owner, PIN, MAC, serial, and model. PIN is digits, max 12. Login is **user-level** only (seed `0000` on many boxes). An installer PIN will not work.
-6. Tap **Save**, then **Test**. When that succeeds, use **Live** (one-shot read) and **Sync** (archive).
+1. Open **Devices**. Tap **Scan**.
+2. If Android asks, grant Nearby devices and precise location, and turn Location on. After you approve, the scan starts automatically — you do **not** need to tap Scan a second time unless the list is empty or the previous scan finished.
+3. Unpaired devices show while the scan runs; already-bonded ones are listed too. Names containing `SMA` sort first.
+4. Tap a result to create a profile (Bluetooth name, MAC, model `Legacy SMA`, PIN seed `0000`). A new profile also gets a default EUR tariff.
+5. Or tap **+**. That seeds from the best nearby/bonded device, or a blank profile if nothing is in range. You can type the MAC later.
+6. Edit name, owner (plant operator), PIN, MAC, serial, and model. PIN is digits, max 12. Login is **user-level** only (seed `0000` on many inverters). An installer PIN will not work.
+7. Tap **Save**, then **Test**. When that succeeds, use **Live** (one-shot read) and **Sync** (archive).
 
 One profile per MAC. Duplicate MACs are rejected.
 
@@ -56,7 +61,7 @@ On **Start**:
 
 <p align="center"><img src="screenshots/start.png" width="360" alt="Start tab: portfolio metrics and live monitor controls"></p>
 
-While live runs you get a persistent **Live monitor** notification. Poll interval is **Settings → Live poll interval (seconds)** (15–3600, default 60). **Live poll window** (default **06:00–22:00**) uses each inverter’s timezone; equal start and end means 24 hours. Outside the window the foreground service stops and resumes near the next start (Doze may slip a few minutes). After reboot or quickboot, live restarts automatically **only if** you had not tapped Stop and the window is open (about 8 seconds delay so Bluetooth is up). After an app update it restarts immediately if those IDs are still persisted and the window is open.
+While live runs you get a persistent **Live monitor** notification. Poll interval is **Settings → Live poll interval (seconds)** (15–3600, default 60). **Live poll window** (default **06:00–22:00**) uses each inverter’s timezone; equal start and end means 24 hours. Outside the window the foreground service stops. Near the next start, an inexact alarm posts a resume notification when the app is backgrounded; tap it to start live. If the app is visible, it can resume directly. After reboot or quickboot, live restarts automatically **only if** you had not tapped Stop and the window is open (about 8 seconds delay so Bluetooth is up); boot is an Android exemption for this start. After an app update it restarts immediately if those IDs are still persisted and the window is open.
 
 Allow **unrestricted battery** in Settings if the phone kills the service overnight. The poll window already skips night-time Bluetooth when inverters are offline.
 
@@ -67,12 +72,12 @@ Needs a saved MAC and PIN, and a working Bluetooth login.
 On the expanded device card:
 
 - **Sync** pulls about the last **30 days** of day archive and **12 months** of month archive from the inverter. It does **not** download inverter events. Bluetooth archive ranks above CSV on the same day; other stored history is kept.
-- **Clear history** deletes spot samples, day/month/hour aggregates, and events for that device. The profile stays. Disabled while live monitor is running for that device. Sync afterward only refills those 30-day / 12-month windows. Older or imported data outside them is gone unless you re-import.
-- **Delete** removes the profile, Room history, events, and stored PINs/import passwords. Irreversible. Original import file copies under app-private storage are **not** deleted; if Cloud backup includes original import files, those leftovers can still be uploaded. Uninstalling the app removes them.
-- **Feed-in tariffs** — dated €/kWh (or other currency) periods. Earnings on Start, Stats, and widgets need at least one period. Open-ended “to” is allowed.
+- **Clear history** deletes spot samples, day/month/hour aggregates, and events for that device. The profile stays. Disabled while live monitor is running for that device. Sync afterward only refills those 30-day / 12-month windows. Older or imported data outside them is gone unless you re-import. Preserved import *file copies* under app-private storage are **not** removed by Clear history.
+- **Delete** removes the profile, Room history, events, stored PINs for that device, scheduled imports for that device, and local preserved import copies under `imports/device-<id>/`. Irreversible. Files already uploaded to Google Drive remain until you delete them in Drive.
+- **Feed-in tariffs** — dated €/kWh (or other currency) periods. Earnings on Start, Stats, and widgets need at least one period. Open-ended “to” is allowed. Earnings are **estimates** from yield × matching tariff — not billing or accounting results.
 - **Inverter events** — last 50 events from **import** (SBFspot Events CSV or SQLite `EventData`). Filters: All / Warning / Info.
 
-**Show diagnostics** prints the last connection log (RFCOMM strategy, errors). Useful if Test or Live fails.
+**Show diagnostics** prints the last connection log (RFCOMM strategy, errors). Useful if Test or Live fails. Diagnostics may include the Bluetooth MAC and stay on the device (and in a Drive DB snapshot if database backup is on).
 
 ## Start, Stats, and reports
 
@@ -92,6 +97,8 @@ On the expanded device card:
 
 Empty charts mean you still need a Sync or an SBFspot import.
 
+**Reports:** Period **CSV** includes the full series and events list for that query. Period **PDF** truncates series and event rows to the first **40** each (the PDF notes when truncated). Prefer CSV for complete exports.
+
 ## Import SBFspot data
 
 <p align="center"><img src="screenshots/import.png" width="360" alt="Import tab: file, URL, and FTP/SFTP sources"></p>
@@ -108,13 +115,24 @@ CSV day files have a datetime header; month files a date-only header. Event CSVs
 
 **Merge rule:** other history is kept unless the remote wizard **Delete existing device data before import** is checked. On a given day, Bluetooth archive and SQLite outrank month CSV, which outranks other CSV. A lower-ranked file does **not** overwrite a higher-ranked day. Equal rank overwrites, except a zero/negative ordinary CSV yield does not replace a stored positive value.
 
+**Limits (approximate):**
+
+| Limit | Value |
+|---|---|
+| Single file download / parse | 50 MiB |
+| ZIP entries | 5,000 |
+| ZIP total uncompressed | 200 MiB |
+| Folder import CSV count | 25,000 |
+| Folder import total download | 2 GiB |
+| SQLite rows per table | 250,000 |
+
 FTP sends username, password, and files in **cleartext**. Prefer SFTP. The first SFTP connection stores the server host key (TOFU); verify the host on a trusted network. Folder imports have CSV-count and size limits; pick a smaller subfolder if you hit them.
 
 Only one import runs at a time (foreground **Data import** notification; you can stop it there). Job history lists attempts; removing a job does **not** delete imported solar data.
 
 **Run import again** re-downloads the same source and merges. You may need the password or URL again.
 
-**Schedule import** on a successful job repeats every N hours (1–168). Credentials must already be stored. Allow unrestricted battery so WorkManager is not killed.
+**Schedule import** on a successful job repeats about every N hours (1–168) via WorkManager. Timing is approximate: it needs network connectivity and can be delayed by Doze or OEM battery restrictions. Credentials must already be stored. Allow unrestricted battery so WorkManager is not killed.
 
 ## Home-screen widgets
 
@@ -126,19 +144,21 @@ Only one import runs at a time (foreground **Data import** notification; you can
 
 Compact and medium use **Settings → Widget device** (or the first device if unset). Updates are about every 30 minutes. Tap a widget to open the app.
 
-## Cloud backup
+## Google Drive backup
 
 <p align="center"><img src="screenshots/settings.png" width="360" alt="Settings: live poll window, language, cloud backup, and inverter warnings"></p>
 
 In-app steps only. Publisher OAuth (one-time Cloud Console work) is in [DEV-google-drive.md](DEV-google-drive.md). Users never create a Google Cloud project.
 
-1. **Settings → Cloud backup → Sign in with Google**. Allow Drive access (`drive.file` — files this app creates).
+1. **Settings → Cloud backup → Sign in with Google**. Allow Drive access (`drive.file` — the app’s Drive folder and files it creates or that you open/share with it; not broad access to your entire Drive).
 2. Optional toggles: include database, include original import files. If both are off, backup is skipped.
 3. **Backup now**, or wait for auto backup after archive **Sync**, imports, clear history, or job deletes (throttled to about 15 minutes). One-shot **Live** reads and the foreground live monitor do **not** enqueue a backup.
 4. Files go to Drive folder **Legacy Solar Monitor** (`solar-monitor.db` plus optional import copies). Older **SMA Solar Monitor** folders are still found and renamed when possible. Inverter PINs and FTP/SFTP passwords are **not** in the backup.
-5. **Restore from cloud** downloads `solar-monitor.db`, replaces all devices/history/events on the phone, and restarts the app. Live, import, and schedules are stopped first. A copy of the previous database is kept in cache. Re-enter the SMA PIN (and any FTP/SFTP passwords) after restore, especially on another phone.
+5. **Restore from cloud** downloads `solar-monitor.db`, replaces all devices/history/events on the phone, and restarts the app. Live, import, and schedules are stopped first. A copy of the previous database is kept temporarily in cache. Re-enter the SMA PIN (and any FTP/SFTP passwords) after restore, especially on another phone. Restore does **not** restore or clear local import file copies under `imports/`.
 
-Android system backup is off (`allowBackup=false`). Drive is the supported backup path. Sign-in needs Google Play services and a build that has `google.web.client.id` set. If the Sign in button is grey and you see a red config message, that build was compiled without the Web client ID.
+Android **cloud** Auto Backup is off (`allowBackup=false`). Explicit data-extraction rules also exclude app data from cloud backup and, where the OEM honors them, from device-to-device transfer. Some manufacturers may still migrate app data during phone setup; Drive remains the supported backup path. Sign-in needs Google Play services and a build that has `google.web.client.id` set. If the Sign in button is grey and you see a red config message, that build was compiled without the Web client ID.
+
+**Sign out** disconnects the Google account in the app. It does **not** delete files already in your Google Drive folder — delete those in Drive yourself.
 
 ## Language and About
 
@@ -155,6 +175,7 @@ Android system backup is off (`allowBackup=false`). Drive is the supported backu
 | Scan list empty / only bonded devices | Nearby devices + **precise** location granted; Location (GPS) on; Bluetooth on; tap Scan again |
 | Login / Test fails | Confirm the **user** PIN (often `0000`); installer PINs are not supported; stay close; check diagnostics for RFCOMM strategy |
 | Live dies after reboot | You tapped Stop (clears persisted IDs); allow unrestricted battery; confirm live was running before reboot |
+| Live does not resume at the window open | Tap the **Live monitor ready** notification or open the app; inexact alarms cannot start the foreground service from the background. Allow unrestricted battery to reduce timing delays. |
 | Live or scheduled import stops overnight | Unrestricted battery; OEM “sleeping apps” / deep settings |
 | Drive Sign in grey, red config text | Rebuild with `google.web.client.id` — [DEV-google-drive.md](DEV-google-drive.md) |
 | Drive error 10 / `DEVELOPER_ERROR` | Android OAuth client package or SHA-1 mismatch |

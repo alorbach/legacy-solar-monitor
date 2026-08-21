@@ -12,7 +12,7 @@ Independent Android hobby app for **classic Bluetooth SMA inverters** (SBFspot-c
 - Jetpack Compose Material3, system light/dark
 - Manual DI in `AppContainer` (no Hilt/Koin, no ViewModel layer)
 - Room `solar-monitor.db` **v5** (`exportSchema = true`)
-- Gradle **9.7**, JDK **21**, `jvmTarget` 17, `minSdk` 28, `compileSdk`/`targetSdk` 35
+- Gradle **9.7**, JDK **21**, `jvmTarget` 17, `minSdk` 28, `compileSdk`/`targetSdk` **36**
 
 ## Commands
 
@@ -68,6 +68,10 @@ Glance widgets in `widget/SolarWidgets.kt`: compact, medium, top-devices.
 - [README.md](README.md)
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - [docs/USER-GUIDE.md](docs/USER-GUIDE.md)
+- [docs/USER-GUIDE-DE.md](docs/USER-GUIDE-DE.md)
+- [docs/PRIVACY.md](docs/PRIVACY.md)
+- [docs/PLAY-DATA-SAFETY.md](docs/PLAY-DATA-SAFETY.md)
+- [docs/PLAY-SUBMISSION.md](docs/PLAY-SUBMISSION.md)
 - [docs/DEV-add-device.md](docs/DEV-add-device.md)
 - [docs/DEV-google-drive.md](docs/DEV-google-drive.md)
 - [docs/DEV-github-release.md](docs/DEV-github-release.md)

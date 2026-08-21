@@ -18,15 +18,15 @@ fun localOrEnv(propertyKey: String, envKey: String): String =
 
 android {
     namespace = "com.alorbach.solarmonitor"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.alorbach.solarmonitor"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 36
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1021
+        versionCode = 1022
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

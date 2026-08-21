@@ -363,7 +363,10 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
 
     LaunchedEffect(Unit) {
         // Activity context can start the FGS when a background alarm was blocked overnight.
-        LivePollScheduler.attemptResume(activity)
+        LivePollScheduler.attemptResume(
+            activity,
+            LivePollScheduler.FgsStartPolicy.ALLOW_BACKGROUND_START,
+        )
     }
     val importJobsFingerprint = remember(importJobs) {
         importJobs.joinToString(";") { job ->

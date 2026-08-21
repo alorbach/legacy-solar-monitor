@@ -4,9 +4,10 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.alorbach.solarmonitor.SolarMonitorApplication
 import com.alorbach.solarmonitor.domain.LivePollWindow
 import com.alorbach.solarmonitor.domain.parseZoneId
@@ -39,6 +40,26 @@ data class LivePollPolicy(
             ?: LivePollWindow.millisUntilNextOpen(now, startMinutes, endMinutes, parseZoneId(null))
         return now.toEpochMilli() + wait
     }
+
+    fun earliestFollowingWindowOpenEpochMillis(
+        deviceIds: LongArray,
+        now: Instant = Instant.now(),
+    ): Long {
+        val dayMillis = 24 * 60 * 60 * 1_000L
+        return deviceIds.minOfOrNull { deviceId ->
+            if (!isOpen(deviceId, now)) {
+                now.toEpochMilli() + millisUntilOpen(deviceId, now)
+            } else {
+                val untilClose = millisUntilClose(deviceId, now)
+                if (untilClose == Long.MAX_VALUE) {
+                    now.toEpochMilli() + dayMillis
+                } else {
+                    val afterClose = now.plusMillis(untilClose + 1_000L)
+                    afterClose.toEpochMilli() + millisUntilOpen(deviceId, afterClose)
+                }
+            }
+        } ?: now.toEpochMilli() + dayMillis
+    }
 }
 
 object LivePollScheduler {
@@ -56,12 +77,9 @@ object LivePollScheduler {
         val at = triggerAtMillis.coerceAtLeast(System.currentTimeMillis() + MIN_DELAY_MS)
         val am = alarmManager(context)
         val pi = pendingIntent(context)
-        // Exact alarms are the Android 12+ exemption that allows FGS starts from this receiver.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && am.canScheduleExactAlarms()) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-        } else {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
-        }
+        // Inexact only: avoids SCHEDULE_EXACT_ALARM / Play special-access review.
+        // Doze and OEM battery policies may delay the window resume by several minutes.
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
     }
 
     suspend fun loadPolicy(context: Context, deviceIds: LongArray): LivePollPolicy {
@@ -96,11 +114,16 @@ object LivePollScheduler {
         scheduleAt(context, System.currentTimeMillis() + delayMs)
     }
 
+    enum class FgsStartPolicy {
+        ALLOW_BACKGROUND_START,
+        NOTIFICATION_ONLY,
+    }
+
     /**
-     * Single owner for boot/alarm/app-open resume: re-reads persisted IDs before and after
-     * the suspending window check so a user Stop is never undone by a stale start.
+     * Single owner for resume: re-reads persisted IDs before and after the suspending
+     * window check so a user Stop is never undone by a stale start.
      */
-    suspend fun attemptResume(context: Context) {
+    suspend fun attemptResume(context: Context, startPolicy: FgsStartPolicy) {
         val appContext = context.applicationContext
         val alreadyActive = (appContext as? SolarMonitorApplication)
             ?.container
@@ -129,6 +152,11 @@ object LivePollScheduler {
                 scheduleResume(appContext, freshIds)
             }
             BootLiveMonitorReceiver.shouldStartForeground(freshIds, freshBt, inWindow) -> {
+                if (startPolicy == FgsStartPolicy.NOTIFICATION_ONLY && !isAppVisible()) {
+                    LiveResumeNotifier.post(appContext)
+                    scheduleFollowingWindowResume(appContext, freshIds)
+                    return
+                }
                 try {
                     ContextCompat.startForegroundService(
                         appContext,
@@ -140,6 +168,16 @@ object LivePollScheduler {
                 }
             }
         }
+    }
+
+    private suspend fun scheduleFollowingWindowResume(context: Context, deviceIds: LongArray) {
+        val policy = loadPolicy(context, deviceIds)
+        scheduleAt(context, policy.earliestFollowingWindowOpenEpochMillis(deviceIds))
+    }
+
+    private fun isAppVisible(): Boolean {
+        return ProcessLifecycleOwner.get().lifecycle.currentState
+            .isAtLeast(Lifecycle.State.STARTED)
     }
 
     suspend fun syncAfterSettingsChange(context: Context) {
@@ -199,4 +237,5 @@ object LivePollScheduler {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
     }
+
 }

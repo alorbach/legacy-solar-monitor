@@ -18,6 +18,8 @@
     <string name="live_monitoring_status">Live-Überwachung: %1$s</string>
     <string name="live_connecting">Verbinde</string>
     <string name="live_monitor_channel">Live-Monitor</string>
+    <string name="live_monitor_resume_title">Live-Monitor bereit</string>
+    <string name="live_monitor_resume_body">Legacy Solar Monitor öffnen, um die Live-Überwachung fortzusetzen.</string>
     <string name="permissions_denied">Geräte in der Nähe und präziser Standort sind erforderlich, um SMA-Wechselrichter zu finden. Tippen, um App-Berechtigungen zu öffnen.</string>
     <string name="bluetooth_disabled">Bluetooth ist deaktiviert. Bluetooth aktivieren, um fortzufahren.</string>
     <string name="location_required_for_scan">Standort (GPS) einschalten, damit Android ungepaarte Bluetooth-Geräte finden kann. Tippen, um Standorteinstellungen zu öffnen.</string>
@@ -127,7 +129,7 @@
     <string name="import_sources_body">SBFspot-CSV-, ZIP- oder SQLite-Dateien aus lokalem Speicher, per URL oder per FTP/SFTP importieren.</string>
     <string name="import_add_device_first">Zuerst ein Gerät hinzufügen, dann Daten dafür importieren.</string>
     <string name="import_url">Import-URL</string>
-    <string name="import_url_hint">http und https sind erlaubt. https bevorzugen, außer bei einem lokalen NAS.</string>
+    <string name="import_url_hint">HTTPS ist überall erlaubt. HTTP nur auf einer privaten/LAN-Adresse (zum Beispiel NAS).</string>
     <string name="import_failed">Import fehlgeschlagen</string>
     <string name="no_imports_yet">Noch keine Importe</string>
     <string name="no_imports_body">Importierte Aufträge erscheinen hier mit Status und gespeicherten Dateipfaden.</string>
@@ -214,7 +216,7 @@
     <string name="start_live_selected">Auswahl starten</string>
     <string name="production_chart_for">Tagesertrag · %1$s</string>
     <string name="delete_device_title">Dieses Gerät löschen?</string>
-    <string name="delete_device_body">Löscht das Geräteprofil, die gespeicherte Historie und die Events. Das kann nicht rückgängig gemacht werden.</string>
+    <string name="delete_device_body">Löscht das Geräteprofil, die gespeicherte Historie, die Events und lokale Kopien importierter Dateien für dieses Gerät. Das kann nicht rückgängig gemacht werden.</string>
     <string name="delete_device_confirm">Gerät löschen</string>
     <string name="tariffs">Einspeisetarife</string>
     <string name="tariff_price">Preis pro kWh</string>

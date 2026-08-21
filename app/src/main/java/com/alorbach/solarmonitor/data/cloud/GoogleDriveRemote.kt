@@ -19,7 +19,12 @@ interface DriveRemote {
         fallbackNames: List<String> = emptyList(),
     ): String
     suspend fun upsertFile(folderId: String, name: String, file: File)
-    suspend fun downloadFile(folderId: String, name: String, target: File)
+    suspend fun downloadFile(
+        folderId: String,
+        name: String,
+        target: File,
+        maxBytes: Long,
+    )
 }
 
 class GoogleDriveRemote(
@@ -111,7 +116,12 @@ class GoogleDriveRemote(
         )
     }
 
-    override suspend fun downloadFile(folderId: String, name: String, target: File) {
+    override suspend fun downloadFile(
+        folderId: String,
+        name: String,
+        target: File,
+        maxBytes: Long,
+    ) {
         val existing = findInFolder(folderId, name)
             ?: error("Drive file not found: $name")
         val request = authorized(
@@ -123,7 +133,26 @@ class GoogleDriveRemote(
         http.newCall(request).execute().use { response ->
             require(response.isSuccessful) { "Drive request failed: ${response.code}" }
             val body = response.body ?: error("Drive download empty")
-            target.outputStream().use { output -> body.byteStream().copyTo(output) }
+            val declared = body.contentLength()
+            if (declared >= 0) {
+                require(declared <= maxBytes) {
+                    "Drive download exceeds ${maxBytes / (1024 * 1024)} MiB limit"
+                }
+            }
+            target.outputStream().use { output ->
+                val buffer = ByteArray(8 * 1024)
+                var total = 0L
+                val input = body.byteStream()
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    require(total <= maxBytes) {
+                        "Drive download exceeds ${maxBytes / (1024 * 1024)} MiB limit"
+                    }
+                    output.write(buffer, 0, read)
+                }
+            }
         }
         require(target.exists() && target.length() > 0L) { "Drive download empty" }
     }

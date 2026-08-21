@@ -18,6 +18,8 @@
     <string name="live_monitoring_status">Live monitoring: %1$s</string>
     <string name="live_connecting">Connecting</string>
     <string name="live_monitor_channel">Live monitor</string>
+    <string name="live_monitor_resume_title">Live monitor ready</string>
+    <string name="live_monitor_resume_body">Open Legacy Solar Monitor to resume live monitoring.</string>
     <string name="permissions_denied">Nearby devices and precise location are required to scan for SMA inverters. Tap to open app permissions.</string>
     <string name="bluetooth_disabled">Bluetooth is disabled. Enable Bluetooth to continue.</string>
     <string name="location_required_for_scan">Turn on Location (GPS) so Android can discover unpaired Bluetooth devices. Tap to open location settings.</string>
@@ -127,7 +129,7 @@
     <string name="import_sources_body">Import SBFspot CSV, ZIP, or SQLite files from local storage, a URL, or FTP/SFTP.</string>
     <string name="import_add_device_first">Add a device first, then import data for it.</string>
     <string name="import_url">Import URL</string>
-    <string name="import_url_hint">http and https are allowed. Prefer https except for a local NAS.</string>
+    <string name="import_url_hint">HTTPS is allowed anywhere. HTTP only on a private/LAN address (for example a NAS).</string>
     <string name="import_failed">Import failed</string>
     <string name="no_imports_yet">No imports yet</string>
     <string name="no_imports_body">Imported jobs will appear here with status and preserved file paths.</string>
@@ -214,7 +216,7 @@
     <string name="start_live_selected">Start selected</string>
     <string name="production_chart_for">Daily yield · %1$s</string>
     <string name="delete_device_title">Delete this device?</string>
-    <string name="delete_device_body">Removes the device profile, stored history, and events. This cannot be undone.</string>
+    <string name="delete_device_body">Removes the device profile, stored history, events, and local copies of imported files for this device. This cannot be undone.</string>
     <string name="delete_device_confirm">Delete device</string>
     <string name="tariffs">Feed-in tariffs</string>
     <string name="tariff_price">Price per kWh</string>

@@ -42,6 +42,8 @@ object CloudBackupPolicy {
     const val KEY_TRIGGER = "trigger"
     const val AUTO_THROTTLE_SECONDS = 15 * 60L
     const val DATABASE_BACKUP_FILENAME = "solar-monitor.db"
+    /** Soft cap for a restored Room snapshot download (avoids unbounded cache growth). */
+    const val MAX_RESTORE_DATABASE_BYTES = 512L * 1024L * 1024L
     const val DRIVE_FOLDER_NAME = "Legacy Solar Monitor"
     /** Must match Room `@Database(version)` in SolarMonitorDatabase. */
     const val ROOM_USER_VERSION = 5
