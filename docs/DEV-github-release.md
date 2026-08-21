@@ -61,16 +61,18 @@ The job:
 4. Generates QR PNGs (`qrencode`) pointing at deterministic APK download URLs
 5. Assembles the release description and creates or updates the GitHub Release with:
 
-- `legacy-solar-monitor-1.0.0-vc1016-universal.apk` — recommended sideload
-- `legacy-solar-monitor-1.0.0-vc1016-arm64-v8a.apk` — smaller, modern phones
-- `legacy-solar-monitor-1.0.0-vc1016-armeabi-v7a.apk`
-- `legacy-solar-monitor-1.0.0-vc1016-x86_64.apk`
-- `legacy-solar-monitor-1.0.0-vc1016.aab` — Play Console only
-- `qr-universal.png`, `qr-arm64-v8a.png`, `qr-armeabi-v7a.png`, `qr-x86_64.png` — embedded on the release page
+- `legacy-solar-monitor-1.0.1-vc1018-universal.apk` — recommended sideload
+- `legacy-solar-monitor-1.0.1-vc1018-arm64-v8a.apk` — smaller, modern phones
+- `legacy-solar-monitor-1.0.1-vc1018-armeabi-v7a.apk`
+- `legacy-solar-monitor-1.0.1-vc1018-x86_64.apk`
+- `legacy-solar-monitor-1.0.1-vc1018.aab` — Play Console only
+- `qr-universal.png`, `qr-arm64-v8a.png`, `qr-armeabi-v7a.png`, `qr-x86_64.png` — embedded on the release page with vertical spacing
 
 Scripts: [`scripts/collect-release-context.js`](../scripts/collect-release-context.js), [`scripts/generate-ai-release-notes.js`](../scripts/generate-ai-release-notes.js), [`scripts/assemble-release-notes.js`](../scripts/assemble-release-notes.js). Prompt reference: [`.github/prompts/release-notes.prompt.yml`](../.github/prompts/release-notes.prompt.yml).
 
 Upload the **AAB** in Play Console. Use the **universal APK** (or an ABI-specific APK) for GitHub / sideload; scan the QR on the release page from a phone.
+
+**Sideload tip:** If the phone shows “App not installed” / „App nicht installiert“ with no detail, uninstall any existing Studio/debug build of `com.alorbach.solarmonitor` first (signature mismatch), then install the universal release APK again.
 
 ## 4. Local signed release (optional)
 

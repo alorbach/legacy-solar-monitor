@@ -211,10 +211,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq qrencode
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}"
-          qrencode -o "$QR_UNIVERSAL_PATH" -s 8 -m 2 "${base}/${APK_UNIVERSAL_NAME}"
-          qrencode -o "$QR_ARM64_PATH" -s 6 -m 2 "${base}/${APK_ARM64_NAME}"
-          qrencode -o "$QR_ARMV7_PATH" -s 6 -m 2 "${base}/${APK_ARMV7_NAME}"
-          qrencode -o "$QR_X86_PATH" -s 6 -m 2 "${base}/${APK_X86_NAME}"
+          qrencode -o "$QR_UNIVERSAL_PATH" -s 8 -m 4 "${base}/${APK_UNIVERSAL_NAME}"
+          qrencode -o "$QR_ARM64_PATH" -s 6 -m 4 "${base}/${APK_ARM64_NAME}"
+          qrencode -o "$QR_ARMV7_PATH" -s 6 -m 4 "${base}/${APK_ARMV7_NAME}"
+          qrencode -o "$QR_X86_PATH" -s 6 -m 4 "${base}/${APK_X86_NAME}"
           ls -la dist/qr-*.png
 
       - name: Assemble release description
