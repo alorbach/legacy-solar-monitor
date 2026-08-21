@@ -1,0 +1,42 @@
+.github/prompts/release-notes.prompt.yml
+  s_c28ca11d9bdf42::t_989a5e2321f603 1-64
+scripts/generate-ai-release-notes.js
+  s_c28ca11d9bdf42::t_62fd8d9fbcf797 1-95
+scripts/assemble-release-notes.js
+  s_c28ca11d9bdf42::t_baf241cf5b82e3 1-124
+scripts/collect-release-context.js
+  s_c28ca11d9bdf42::t_88755d4d2e0df0 1-2,4-73
+  s_c28ca11d9bdf42::t_21ceed3581ed3a 3
+app/build.gradle.kts
+  s_c28ca11d9bdf42::t_c2b95146946f3d 103-112
+  s_c28ca11d9bdf42::t_e00162e72d0b55 20
+.github/workflows/release.yml
+  s_c28ca11d9bdf42::t_7bc879e891de4d 10,36-40,68-77,82-85,87-90,92-99,147,149-152,154-157,160-165,182,185-232,242-245,247-250
+docs/DEV-github-release.md
+  s_c28ca11d9bdf42::t_2b2b939e093098 3,59-62,64-69,71-73,90
+  s_c8f7ec07eb1872::t_d436a32898eb10 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e61df73f2d2877a18afbf2c653eb0af32552c6a9",
+  "prompts": {},
+  "sessions": {
+    "s_c28ca11d9bdf42": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "85f24a03-a848-45f3-8e6a-ee91a54463b0",
+        "model": "default"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_c8f7ec07eb1872": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe1f0-7f49-7653-aefd-14f734b40348",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
