@@ -66,6 +66,13 @@ class CredentialStore(context: Context) {
         return if (isCredentialId(passwordRef)) getSecret(passwordRef) else passwordRef
     }
 
+    /**
+     * Value for the device PIN field. Never surfaces opaque `cred_…` ids (e.g. after Drive restore
+     * without secrets) — those look like a huge “PIN” once digits are kept.
+     */
+    fun pinForDisplay(passwordRef: String?): String =
+        pinForDisplay(passwordRef, resolveSmaPin(passwordRef))
+
     fun persistSmaPin(plainPin: String, existingRef: String?): String {
         val existingId = existingRef.takeIf { isCredentialId(it) }
         return putSecret(plainPin.trim(), existingId)
@@ -79,5 +86,13 @@ class CredentialStore(context: Context) {
         private const val FILE_NAME = "solar_monitor_secrets"
         const val KEY_GCS_SIGNED_URL = "gcs_signed_url"
         const val KEY_GCS_SIGNED_GET_URL = "gcs_signed_get_url"
+
+        /** Pure display helper; [resolvedSecret] is null when a `cred_` id has no stored value. */
+        fun pinForDisplay(passwordRef: String?, resolvedSecret: String?): String {
+            if (!resolvedSecret.isNullOrBlank()) return resolvedSecret
+            if (passwordRef.isNullOrBlank()) return "0000"
+            if (passwordRef.startsWith("cred_")) return ""
+            return passwordRef
+        }
     }
 }

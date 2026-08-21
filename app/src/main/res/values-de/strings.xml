@@ -371,7 +371,7 @@
     <string name="rssi_suffix">RSSI %1$d</string>
     <string name="device_serial">Seriennummer</string>
     <string name="device_model">Modell</string>
-    <string name="sma_pin_default_hint">Die Standard-SMA-Benutzer-PIN ist 0000, sofern sie am Wechselrichter nicht geändert wurde.</string>
+    <string name="sma_pin_default_hint">Die Standard-SMA-Benutzer-PIN ist 0000, sofern sie am Wechselrichter nicht geändert wurde. Nach Cloud-Wiederherstellung PIN erneut eingeben (Geheimnisse sind nicht im Backup).</string>
     <string name="tariff_delete">Tarifzeitraum löschen</string>
     <string name="tariff_open_ended">Ohne Enddatum</string>
     <string name="import_status_pending">Wartend</string>

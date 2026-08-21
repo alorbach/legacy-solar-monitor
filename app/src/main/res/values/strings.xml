@@ -374,7 +374,7 @@
     <string name="rssi_suffix">RSSI %1$d</string>
     <string name="device_serial">Serial</string>
     <string name="device_model">Model</string>
-    <string name="sma_pin_default_hint">Default SMA user PIN is 0000 unless you changed it on the inverter.</string>
+    <string name="sma_pin_default_hint">Default SMA user PIN is 0000 unless you changed it on the inverter. After a cloud restore, re-enter the PIN (secrets are not in the backup).</string>
     <string name="tariff_delete">Delete tariff period</string>
     <string name="tariff_open_ended">No end date</string>
     <string name="import_status_pending">Pending</string>

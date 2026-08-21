@@ -98,6 +98,19 @@ google.web.client.id=PASTE_THE_WEB_CLIENT_ID.apps.googleusercontent.com
 
 Or environment variable `GOOGLE_WEB_CLIENT_ID`.
 
+### Local installs must use the upload key
+
+Studio **debug** installs otherwise use the debug keystore → Drive OAuth fails against the Upload Android client. Point Gradle at the same `upload.jks` CI uses (also via env vars in [DEV-github-release.md](DEV-github-release.md)):
+
+```properties
+release.store.file=C\:\\path\\to\\upload.jks
+release.store.password=...
+release.key.alias=upload
+release.key.password=...
+```
+
+With those set, both `debug` and `release` build types sign with the upload key (same SHA-1 as the GitHub APK).
+
 Then **Rebuild** the app. The ID is compiled into `BuildConfig.GOOGLE_WEB_CLIENT_ID`. Reinstalling an old APK is not enough.
 
 If the red message *Set google.web.client.id in local.properties* remains, the running build still has no ID.

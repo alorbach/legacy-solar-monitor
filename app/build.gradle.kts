@@ -7,6 +7,15 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+fun localOrEnv(propertyKey: String, envKey: String): String =
+    (localProperties.getProperty(propertyKey) ?: System.getenv(envKey) ?: "").trim()
+
 android {
     namespace = "com.alorbach.solarmonitor"
     compileSdk = 35
@@ -17,24 +26,15 @@ android {
         targetSdk = 35
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1019
+        versionCode = 1021
         versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
 
-        val localProperties = Properties()
-        val localFile = rootProject.file("local.properties")
-        if (localFile.exists()) {
-            localFile.inputStream().use { localProperties.load(it) }
-        }
         // OAuth Web client ID for Google Drive sign-in (Android client is registered in Cloud Console).
         // Set google.web.client.id=... in local.properties or GOOGLE_WEB_CLIENT_ID in the environment.
-        val webClientId = (
-            localProperties.getProperty("google.web.client.id")
-                ?: System.getenv("GOOGLE_WEB_CLIENT_ID")
-                ?: ""
-            ).trim()
+        val webClientId = localOrEnv("google.web.client.id", "GOOGLE_WEB_CLIENT_ID")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", webClientId.asBuildConfigString())
 
         ksp {
@@ -43,25 +43,28 @@ android {
     }
 
     signingConfigs {
-        val storePath = System.getenv("RELEASE_STORE_FILE")?.trim().orEmpty()
-        val storePassword = System.getenv("RELEASE_STORE_PASSWORD")
-        val keyAlias = System.getenv("RELEASE_KEY_ALIAS")
-        val keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+        // Prefer local.properties so Studio/debug installs match the GitHub upload-key APK (same OAuth SHA-1).
+        val storePath = localOrEnv("release.store.file", "RELEASE_STORE_FILE")
+        val storePassword = localOrEnv("release.store.password", "RELEASE_STORE_PASSWORD")
+        val keyAlias = localOrEnv("release.key.alias", "RELEASE_KEY_ALIAS")
+        val keyPassword = localOrEnv("release.key.password", "RELEASE_KEY_PASSWORD")
         val present = listOf(
             storePath.isNotEmpty(),
-            !storePassword.isNullOrEmpty(),
-            !keyAlias.isNullOrEmpty(),
-            !keyPassword.isNullOrEmpty(),
+            storePassword.isNotEmpty(),
+            keyAlias.isNotEmpty(),
+            keyPassword.isNotEmpty(),
         )
         if (present.any { it } && !present.all { it }) {
             error(
-                "Incomplete release signing env. Set RELEASE_STORE_FILE, " +
-                    "RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD together.",
+                "Incomplete release signing. Set release.store.file / password / key.alias / key.password " +
+                    "in local.properties, or RELEASE_STORE_FILE, RELEASE_STORE_PASSWORD, " +
+                    "RELEASE_KEY_ALIAS, and RELEASE_KEY_PASSWORD together.",
             )
         }
         if (present.all { it }) {
             create("release") {
-                storeFile = file(storePath)
+                val store = file(storePath)
+                storeFile = if (store.isAbsolute) store else rootProject.file(storePath)
                 this.storePassword = storePassword
                 this.keyAlias = keyAlias
                 this.keyPassword = keyPassword
@@ -70,6 +73,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Same upload key as CI when configured — required for Drive OAuth on device installs.
+            signingConfigs.findByName("release")?.let { signingConfig = it }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

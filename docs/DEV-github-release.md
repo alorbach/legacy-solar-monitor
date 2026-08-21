@@ -88,6 +88,8 @@ $env:GOOGLE_WEB_CLIENT_ID = "....apps.googleusercontent.com"
 .\gradlew.bat :app:bundleRelease
 ```
 
+The same values can live in `local.properties` as `release.store.file`, `release.store.password`, `release.key.alias`, `release.key.password` (and `google.web.client.id`). When set, **debug** Studio installs also use the upload key so Drive OAuth matches the GitHub APK SHA-1.
+
 Without those env vars, `release` is not signed with the upload key (no debug-key fallback). If any one of them is set, Gradle fails instead of producing an unsigned package.
 
 With `-PenableAbiSplits=true`, APK outputs land under `app/build/outputs/apk/release/` as `app-universal-release.apk` and `app-<abi>-release.apk`. Do not pass that property when building the AAB.

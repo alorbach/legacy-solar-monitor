@@ -83,12 +83,20 @@ class SolarRepository(
 
     /** In-memory copy with the plaintext SMA PIN for Bluetooth sessions. */
     fun withResolvedPin(device: DeviceProfileEntity): DeviceProfileEntity {
-        val pin = credentialStore?.resolveSmaPin(device.passwordRef) ?: device.passwordRef
+        val store = credentialStore
+        val ref = device.passwordRef
+        val pin = when {
+            store == null -> ref
+            store.isCredentialId(ref) -> store.resolveSmaPin(ref)
+            else -> ref
+        }
         return device.copy(passwordRef = pin)
     }
 
-    fun displayPin(device: DeviceProfileEntity): String =
-        credentialStore?.resolveSmaPin(device.passwordRef) ?: device.passwordRef ?: "0000"
+    fun displayPin(device: DeviceProfileEntity): String {
+        val store = credentialStore ?: return CredentialStore.pinForDisplay(device.passwordRef, null)
+        return store.pinForDisplay(device.passwordRef)
+    }
 
     suspend fun saveEditedDevice(device: DeviceProfileEntity, plainPin: String): Boolean {
         val previousTimezone = dao.getDeviceById(device.id)?.timezone
