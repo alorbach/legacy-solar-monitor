@@ -88,7 +88,8 @@ Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth c
 2. Register Android OAuth clients with package `com.alorbach.solarmonitor`: debug SHA-1, **upload-key SHA-1**, and later the **Play App Signing SHA-1** (App integrity). See [DEV-google-drive.md](DEV-google-drive.md).
 3. Set secret `GOOGLE_WEB_CLIENT_ID` so the tagged AAB has Drive sign-in. Cut a release with `git tag v1.0.0 && git push origin v1.0.0`.
 4. Publish the OAuth consent screen to **Production** (or start sensitive-scope verification for `drive.file`). Until then only listed test users can sign in.
-5. Console declarations:
+5. The release workflow runs unit tests and lint, and rejects a tag if its `versionCode` is not greater than the maximum `versionCode` on any other `v*` tag. Play Console can still contain a higher code from an upload outside this repository, so check Play before tagging.
+6. Console declarations:
    - Data Safety — copy [PLAY-DATA-SAFETY.md](PLAY-DATA-SAFETY.md)
    - Location: foreground only, to discover unpaired classic Bluetooth devices (not GPS tracking; coordinates not stored)
    - Foreground services: `connectedDevice` (live monitor during the poll window; background resume requires a user tap), `dataSync` (import / WorkManager)
@@ -97,9 +98,9 @@ Do these in Play Console / Cloud Console. Do **not** commit keystores or OAuth c
    - Content rating (IARC), target audience, countries
    - Privacy policy URL above
    - Feature graphic + at least two phone screenshots (Settings must not show a missing Web client ID error)
-6. Leave `android:allowBackup="false"` and wired data-extraction / backup rules. Do not turn on Auto Backup.
-7. Drive backup needs Google Play services on the device; Bluetooth monitoring does not.
-8. Full gate list: [PLAY-SUBMISSION.md](PLAY-SUBMISSION.md).
+7. Leave `android:allowBackup="false"` and wired data-extraction / backup rules. Do not turn on Auto Backup.
+8. Drive backup needs Google Play services on the device; Bluetooth monitoring does not.
+9. Full gate list: [PLAY-SUBMISSION.md](PLAY-SUBMISSION.md).
 
 ### Console field map (copy from this repo)
 

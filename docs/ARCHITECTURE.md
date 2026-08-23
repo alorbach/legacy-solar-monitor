@@ -117,6 +117,14 @@ Gateway implementation and Path A/B/C: [DEV-add-device.md](DEV-add-device.md).
 
 Concurrency gate: one import at a time. Day yields merge via [DayAggregateMerger.kt](../app/src/main/java/com/alorbach/solarmonitor/data/local/DayAggregateMerger.kt) (Bluetooth archive / SQLite outrank month CSV, which outranks other CSV). Successful imports can enqueue auto backup. Inverter events come from import parsers, not from Bluetooth archive sync.
 
+URL imports allow HTTPS for any host, but allow HTTP only for loopback, link-local,
+or private IP literals; [UrlImportPolicy.kt](../app/src/main/java/com/alorbach/solarmonitor/data/importing/UrlImportPolicy.kt)
+does not resolve DNS names for HTTP. The Android network security configuration permits
+cleartext traffic at the application level solely to support user-entered private-LAN HTTP
+imports, so every new HTTP client must keep its own HTTPS-or-private-host validation.
+FTP is a separate cleartext protocol and is explicitly user-configured; SFTP uses stored
+known-host keys with trust-on-first-use and rejects changed keys.
+
 ## Drive backup (runtime)
 
 Publisher Cloud Console steps stay in [DEV-google-drive.md](DEV-google-drive.md).
@@ -176,7 +184,13 @@ Commands:
 
 ```text
 gradlew.bat :app:testDebugUnitTest
-gradlew.bat :app:assembleDebug
 gradlew.bat :app:lintDebug
+gradlew.bat :app:assembleDebug
+gradlew.bat :app:assembleRelease
 gradlew.bat :app:bundleRelease
 ```
+
+The tag workflow runs unit tests and lint before signing. It also compares the current
+`versionCode` with the maximum `versionCode` on any other `v*` tag; Play Console's
+already-uploaded maximum still remains the final authority because GitHub tags cannot see
+releases created outside this repository.

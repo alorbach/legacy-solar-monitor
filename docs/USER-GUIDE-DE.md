@@ -14,6 +14,24 @@ Dieses Projekt ist nicht mit SMA Solar Technology AG verbunden. SMA- und Sunny-B
 
 Geräte derselben Generation lassen sich meist ohne Codeänderung in der UI hinzufügen. Siehe [DEV-add-device.md](DEV-add-device.md).
 
+## Erster Start
+
+1. App installieren und **Geräte** öffnen.
+2. Bluetooth und Standort einschalten und **Geräte in der Nähe** sowie
+   **genauen Standort** erlauben. Der genaue Standort ist bei diesen meist
+   ungepaarten Wechselrichtern für die Bluetooth-Suche nötig; GPS-Daten werden
+   von der App nicht aufgezeichnet.
+3. Suchen, für jeden Wechselrichter ein Profil anlegen, die Benutzer-PIN
+   eintragen und zuerst **Test** ausführen. Danach können Live und Sync
+   gestartet werden.
+4. Einen Einspeisetarif nur für lokale Erlösschätzungen anlegen. Überwachung
+   und Import funktionieren auch ohne Tarif.
+
+Die App unterstützt ausschließlich den klassischen SMA-Bluetooth-/SBFspot-Stack.
+Bluetooth Low Energy, Speedwire und fremde Wechselrichter-Protokolle werden
+nicht gefunden. Der Import von SBFspot-Dateien ist unabhängig von der
+Bluetooth-Unterstützung.
+
 ## Berechtigungen
 
 | Berechtigung / Einstellung | Zweck |
@@ -87,15 +105,49 @@ Während Live läuft gibt es eine dauerhafte **Live-Monitor**-Benachrichtigung. 
 
 FTP ist Klartext — SFTP bevorzugen. Geplante Importe laufen ungefähr alle N Stunden (WorkManager, Netz nötig, Doze kann verzögern).
 
+Importe führen vorhandene Historie standardmäßig zusammen. Nur die Option
+**Vorhandene Gerätedaten vor dem Import löschen** entfernt die bisherige
+Historie. Auf einem Tag haben Bluetooth-Archiv und SQLite Vorrang vor
+Monats-CSV und anderen CSV-Dateien. Unterstützt werden SBFspot-CSV
+(Tages-/Monatsdaten und Events), ZIP-Archive und SQLite mit den Tabellen
+`SpotData`, `DayData`, `MonthData` und `EventData`.
+
+Es läuft immer nur ein Import. Ein Importjob kann erneut ausgeführt oder nach
+einem erfolgreichen Lauf ungefähr alle N Stunden geplant werden; der Zeitpunkt
+ist wegen Netz, Doze und Hersteller-Akkuregeln nicht exakt. Für geplante
+FTP-/SFTP-Importe müssen die Zugangsdaten gespeichert sein.
+
+## Widgets
+
+| Widget | Anzeige |
+|---|---|
+| Solar Compact Stats | Leistung und Heute |
+| Solar Device Summary | Leistung, Heute, Monat und Erlös |
+| Solar Top Devices | Die drei Geräte mit der aktuellen Leistung |
+
+Kompakt- und mittlere Widgets verwenden **Einstellungen → Widget-Gerät**
+(oder das erste Gerät, wenn nichts gewählt ist). Die Aktualisierung erfolgt
+ungefähr alle 30 Minuten. Tippen öffnet die App.
+
 ## Google-Drive-Backup
 
 1. **Einstellungen → Cloud-Backup → Mit Google anmelden** (`drive.file`: Ordner und Dateien der App bzw. von Ihnen geöffnete/geteilte Dateien — kein Vollzugriff auf Drive).
 2. Optional: Datenbank und/oder Original-Importdateien.
 3. **Jetzt sichern** oder Auto-Backup nach Sync/Import (ca. 15 Min. Drosselung).
-4. Ordner **Legacy Solar Monitor**. PINs und FTP/SFTP-Passwörter sind **nicht** im Backup.
-5. **Wiederherstellen** ersetzt die lokale Room-Datenbank und startet die App neu. Importkopien unter `imports/` werden weder wiederhergestellt noch gelöscht. PIN erneut eingeben.
+4. Ordner **Legacy Solar Monitor**. Ältere Backups im Ordner **SMA Solar Monitor**
+   werden weiterhin gefunden und möglichst umbenannt. PINs und FTP/SFTP-Passwörter
+   sind **nicht** im Backup.
+5. **Wiederherstellen** stoppt zuerst Live-Monitor, Importe und geplante Jobs,
+   ersetzt die lokale Room-Datenbank und startet die App neu. Eine Kopie der
+   vorherigen Datenbank bleibt vorübergehend im Cache. Importkopien unter
+   `imports/` werden weder wiederhergestellt noch gelöscht. PIN erneut eingeben.
 
 **Abmelden** trennt das Konto in der App; Drive-Dateien bleiben, bis Sie sie in Drive löschen.
+
+Bei der Wiederherstellung auf einem zweiten Telefon zuerst die Datenbank
+wiederherstellen und danach jede Wechselrichter-PIN sowie FTP/SFTP-Passwörter
+erneut eingeben. Diese Geheimnisse bleiben absichtlich verschlüsselt auf dem
+Gerät und sind nicht Teil des Drive-Datenbank-Backups.
 
 Android-Cloud-Auto-Backup ist aus (`allowBackup=false`). Explizite Data-Extraction-Regeln schließen App-Daten aus Cloud-Backup und — sofern der Hersteller sie beachtet — aus Geräte-zu-Gerät-Übertragung aus. Drive bleibt der unterstützte Backup-Weg.
 
@@ -103,7 +155,14 @@ Android-Cloud-Auto-Backup ist aus (`allowBackup=false`). Explizite Data-Extracti
 
 **Einstellungen → Sprache**: System, Deutsch oder English. Auf älteren Android-Versionen App nach Sprachwechsel neu starten.
 
+**Einstellungen → Diagramm-Balkenfarbe**: Gold (Standard) oder Cyan für
+Ertragsbalken in Start, Statistik und Homescreen-Widgets wählen.
+
 **Wechselrichter-Warnungen**: Benachrichtigung bei neuen WARNING-Ereignissen der letzten 24 Stunden.
+
+Die erste Prüfung nach dem Einschalten setzt nur einen Merker, damit alte
+Ereignisse keine Benachrichtigungsflut auslösen. Für Warnungen muss die
+Benachrichtigungsberechtigung erlaubt sein.
 
 ## Fehlersuche
 
@@ -113,5 +172,7 @@ Android-Cloud-Auto-Backup ist aus (`allowBackup=false`). Explizite Data-Extracti
 | Test/Login fehlgeschlagen | Benutzer-PIN (oft `0000`); Installateur-PIN ungeeignet; Diagnose prüfen |
 | Live setzt am Fensterbeginn nicht fort | **Live-Monitor bereit** antippen oder App öffnen; ungenaue Alarme dürfen den Vordergrunddienst im Hintergrund nicht starten. Uneingeschränkten Akku erlauben, um Verzögerungen zu verringern. |
 | Drive-Anmeldung grau | Build mit `google.web.client.id` — [DEV-google-drive.md](DEV-google-drive.md) |
+| Drive-Fehler 10 / `DEVELOPER_ERROR` | Android-OAuth-Client, Paketname oder SHA-1 des installierten Builds stimmt nicht |
+| Zugriff blockiert / App nicht bestätigt | Google-Konto bei einem OAuth-Testlauf als Testnutzer eintragen |
 | Diagramme leer | Archiv-Sync oder SBFspot-Import |
 | Erlös `--` / 0 | Einspeisetarif am Gerät anlegen |

@@ -2,7 +2,7 @@
 
 Use this when filling **App content → Data safety**. It matches Legacy Solar Monitor as implemented (`com.alorbach.solarmonitor`). Privacy prose for users: [PRIVACY.md](PRIVACY.md).
 
-**Last verified against code:** 21 August 2026
+**Last verified against code:** 23 August 2026
 **Play definition:** [Data safety](https://support.google.com/googleplay/android-developer/answer/10787469) — **“Collect” means transmitting data off the user’s device.** Local-only storage is not collection.
 
 ---
@@ -62,7 +62,7 @@ Use this when filling **App content → Data safety**. It matches Legacy Solar M
 
 ### Authentication / credentials
 
-- SMA user PIN and FTP/SFTP passwords: on-device **encrypted** storage. **Not** included in Drive backup. **Not** shared off device by the app.
+- SMA user PIN and FTP/SFTP passwords: on-device **encrypted** storage. **Not** included in Drive backup. FTP/SFTP passwords are sent to the user-configured import server when that import runs; they are not sent to a developer-operated backend.
 - Opaque credential IDs may appear in Room / WorkManager input — not the secret values.
 - Google OAuth access tokens are not persisted by the app; Play Services issues them. Scope: `https://www.googleapis.com/auth/drive.file` only.
 
@@ -71,8 +71,11 @@ Use this when filling **App content → Data safety**. It matches Legacy Solar M
 ## Data sharing
 
 - **Sold?** No.
-- **Shared with third parties?** No developer-operated backend. Optional upload is to **Google Drive owned by the user**. Declare per Play’s current Drive / user-initiated backup wording (service provider or user-initiated as applicable).
+- **Shared with third parties?** No developer-operated backend. Optional backup is processed through **Google APIs / Google Drive owned by the user**, and user-started remote imports send credentials and files to the configured FTP/SFTP/HTTP(S) server. Declare Google as the service provider and remote transfers according to Play’s current user-initiated wording.
 - **Transferred off the device?** Yes when Drive backup, URL/FTP/SFTP import, or user share is used.
+- **Cleartext note:** Public HTTP URL imports are rejected by `UrlImportPolicy`; private/LAN
+  HTTP URL imports remain supported and are cleartext. FTP is also cleartext. Prefer HTTPS
+  or SFTP whenever the source is not a trusted local network.
 
 ---
 
@@ -111,7 +114,7 @@ Use this when filling **App content → Data safety**. It matches Legacy Solar M
 | Device identifiers (BT MAC) | Only via optional Drive DB backup | Only via optional Drive DB backup |
 | App data (yield history, profiles, diagnostics, import metadata) | Only via optional Drive DB backup | Only via optional Drive backup |
 | Files (import copies) | Only if that Drive option is on | Only if that Drive option is on |
-| Credentials (PIN / FTP) | **No** (stay on device encrypted) | **No** |
+| Credentials (PIN / FTP) | **No** for Drive backup; FTP/SFTP passwords are sent to the user-configured import server when an import runs | **Yes** to that user-configured FTP/SFTP server only; **No** to the developer or Drive backup |
 | Analytics / ads / crash SDK | No | No |
 
 If the Console forces a “does the app collect data?” yes/no before optional Drive: answer **Yes** because optional Drive backup transmits app data and email, then complete the rows above accurately.

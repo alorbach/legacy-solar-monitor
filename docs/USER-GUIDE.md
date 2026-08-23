@@ -14,6 +14,23 @@ This project is not affiliated with SMA Solar Technology AG. SMA and Sunny Boy n
 
 Same-generation units can usually be added in the UI with no code change. See [DEV-add-device.md](DEV-add-device.md).
 
+## First run
+
+1. Install the app and open **Devices**.
+2. Turn on Bluetooth and Location, then allow **Nearby devices** and **precise
+   location** when Android asks. Precise location is a Bluetooth-discovery
+   requirement on these older, usually unpaired inverters; the app does not
+   record your GPS position.
+3. Scan, create one profile for each inverter, enter the user-level PIN, and
+   run **Test** before starting Live or Sync.
+4. Add a feed-in tariff only if you want local earnings estimates. The app can
+   monitor and import energy without a tariff.
+
+The app supports the classic SMA Bluetooth/SBFspot-compatible transport only.
+Bluetooth Low Energy, Speedwire, and unrelated inverter protocols are not
+discovered by this app. Importing SBFspot files is independent of live Bluetooth
+support.
+
 ## Permissions
 
 | Permission / setting | Why |
@@ -160,9 +177,16 @@ Android **cloud** Auto Backup is off (`allowBackup=false`). Explicit data-extrac
 
 **Sign out** disconnects the Google account in the app. It does **not** delete files already in your Google Drive folder — delete those in Drive yourself.
 
+If you restore on a second phone, restore the database first and then re-enter
+each inverter PIN and any FTP/SFTP passwords. Those secrets are intentionally
+kept in encrypted local storage and are not part of the Drive database backup.
+
 ## Language and About
 
 **Settings → Language**: System, Deutsch, or English. On older Android versions, restart the app after changing language.
+
+**Settings → Chart bar color**: choose Gold (the default) or Cyan for yield
+bars on Start, Stats, and home-screen widgets.
 
 **About**: free-app line, not-affiliated disclaimer, author, email, privacy policy, GitHub, version.
 

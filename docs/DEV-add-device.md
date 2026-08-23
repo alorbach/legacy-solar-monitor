@@ -74,6 +74,11 @@ Per device:
 
 Legacy inverters often stay **unbonded**. The gateway prefers insecure RFCOMM (`hidden_insecure_channel_1`, `insecure_uuid`); secure strategies run only when the phone already bonded the device.
 
+Record the Android version, whether the inverter was bonded, the user-level PIN
+(never the actual value), the successful RFCOMM strategy, and whether Test, Live,
+day archive, and month archive all completed. A device that only imports SBFspot
+files is not evidence that its Bluetooth protocol is supported.
+
 ## Path B — similar SMA Bluetooth that fails
 
 Tune the existing stack. Prefer a new `LegacyBluetoothCompatibilityMode` over breaking the working single-inverter path.
@@ -85,7 +90,11 @@ Touch:
 - `DevicesTab.kt` — defaults only if the add flow needs extra fields
 - `LiveMonitoringRepository.kt` — persists strategy / status after ops
 
-Capture `SmaLegacyBt` logcat and the profile’s `lastDiagnostics`. Tests: save/MAC (`MigrationAndSaveDeviceTest`), connection/parser tests under `app/src/test`.
+Capture `SmaLegacyBt` logcat and the profile’s `lastDiagnostics`, redacting the
+Bluetooth MAC before sharing it. Tests: save/MAC (`MigrationAndSaveDeviceTest`),
+connection/parser tests under `app/src/test`, plus a physical-device smoke test
+for permission prompts, Test, Live, Sync, and cancellation. Do not add a vendor
+picker or change `applicationId` while tuning this path.
 
 ## Path C — different vendor or Speedwire
 

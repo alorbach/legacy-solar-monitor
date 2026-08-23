@@ -16,6 +16,11 @@ Before tagging:
 4. Do **not** declare `SCHEDULE_EXACT_ALARM` (live window uses inexact alarms).
 5. Confirm Data Safety / privacy docs still match the build.
 
+The workflow also compares the current `versionCode` with the **maximum** `versionCode`
+found on any other `v*` tag and fails before building if the number is reused or decreased.
+This catches a release mistake early; it does not replace checking the highest version code
+already uploaded in Play Console.
+
 ## 1. Upload keystore
 
 Create a dedicated **upload** key (Java keystore). Play App Signing can re-sign what users install.
@@ -65,7 +70,7 @@ The tagged commit must already be on `origin/main`. The workflow refuses tags th
 
 The job:
 
-1. Runs `:app:testDebugUnitTest`
+1. Runs `:app:testDebugUnitTest` and `:app:lintDebug`
 2. Builds `:app:assembleRelease -PenableAbiSplits=true` (ABI splits: `armeabi-v7a`, `arm64-v8a`, `x86_64`, plus universal APK), then `:app:bundleRelease` separately — AGP forbids splits and the AAB in one Gradle invocation
 3. Collects commit context, GitHub auto-changelog, and optional AI bilingual notes via GitHub Models (`models: read`; falls back to technical changelog if inference fails)
 4. Generates QR PNGs (`qrencode`) pointing at deterministic APK download URLs
@@ -96,6 +101,8 @@ $env:RELEASE_STORE_PASSWORD = "..."
 $env:RELEASE_KEY_ALIAS = "upload"
 $env:RELEASE_KEY_PASSWORD = "..."
 $env:GOOGLE_WEB_CLIENT_ID = "....apps.googleusercontent.com"
+.\gradlew.bat :app:testDebugUnitTest
+.\gradlew.bat :app:lintDebug
 .\gradlew.bat :app:assembleRelease -PenableAbiSplits=true
 .\gradlew.bat :app:bundleRelease
 ```

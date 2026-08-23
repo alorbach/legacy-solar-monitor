@@ -1,6 +1,6 @@
 # Privacy policy — Legacy Solar Monitor
 
-**Last updated:** 21 August 2026
+**Last updated:** 23 August 2026
 **Contact:** Andre Lorbach, [alorbach@adiscon.com](mailto:alorbach@adiscon.com)  
 **App:** Legacy Solar Monitor (`com.alorbach.solarmonitor`)
 
@@ -58,7 +58,7 @@ Restore replaces the local Room database. **SMA PINs and FTP/SFTP passwords stay
 
 ### Network imports (URL / FTP / SFTP)
 
-You may import SBFspot CSV, ZIP, or SQLite from a file, HTTPS URL, HTTP on a **private/LAN** address, FTP, or SFTP. FTP and LAN HTTP send data (including passwords for FTP) **without TLS**. Prefer SFTP or HTTPS when the server is not on your LAN.
+You may import SBFspot CSV, ZIP, or SQLite from a file, HTTPS URL, HTTP on a **private/LAN** address, FTP, or SFTP. FTP and LAN HTTP send data (including passwords for FTP) **without TLS**; SFTP/HTTPS send the configured credentials to the server you selected. Prefer SFTP or HTTPS when the server is not on your LAN.
 
 The app does not upload import passwords to Google Drive.
 
@@ -142,7 +142,7 @@ Wiederherstellen ersetzt die lokale Room-Datenbank. **SMA-PINs und FTP/SFTP-Pass
 
 ### Netzwerk-Import (URL / FTP / SFTP)
 
-Sie können SBFspot-CSV, ZIP oder SQLite aus einer Datei, einer HTTPS-URL, HTTP auf einer **privaten/LAN**-Adresse, per FTP oder SFTP importieren. FTP und LAN-HTTP übertragen Daten (einschließlich FTP-Passwörter) **ohne TLS**. Nutzen Sie SFTP oder HTTPS, wenn der Server nicht im LAN liegt.
+Sie können SBFspot-CSV, ZIP oder SQLite aus einer Datei, einer HTTPS-URL, HTTP auf einer **privaten/LAN**-Adresse, per FTP oder SFTP importieren. FTP und LAN-HTTP übertragen Daten (einschließlich FTP-Passwörter) **ohne TLS**; SFTP/HTTPS übertragen die eingegebenen Zugangsdaten an den ausgewählten Server. Nutzen Sie SFTP oder HTTPS, wenn der Server nicht im LAN liegt.
 
 Import-Passwörter werden nicht zu Google Drive hochgeladen.
 

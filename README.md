@@ -58,3 +58,22 @@ Android Studio / Gradle **9.7**, JDK **21**. `minSdk` 28, `compileSdk`/`targetSd
 Optional Drive sign-in: set `google.web.client.id` in `local.properties` as described in the Drive doc. The file is not in Git.
 
 GitHub Release: push a `v*` tag after setting Actions secrets — [docs/DEV-github-release.md](docs/DEV-github-release.md).
+
+### Contributor quick start
+
+1. Open the project with a JDK 21 Gradle runtime.
+2. Let Android Studio create `local.properties`, or provide only the optional
+   `GOOGLE_WEB_CLIENT_ID` value when testing Drive.
+3. Run the checks below before changing release metadata:
+
+```text
+gradlew.bat :app:testDebugUnitTest
+gradlew.bat :app:lintDebug
+gradlew.bat :app:assembleDebug
+```
+
+For a Play candidate, also run `:app:assembleRelease` and `:app:bundleRelease` with
+the upload-key and Web client ID values described in
+[DEV-github-release.md](docs/DEV-github-release.md). Never paste keystore passwords,
+OAuth client secrets, inverter PINs, or personal MAC addresses into source, issues,
+release notes, or screenshots.
