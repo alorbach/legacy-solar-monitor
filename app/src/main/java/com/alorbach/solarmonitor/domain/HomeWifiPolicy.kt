@@ -32,7 +32,11 @@ object HomeWifiPolicy {
         allowedSsids: Iterable<String>,
     ): Boolean {
         if (!checkEnabled) return true
+        // Empty allowlist = not configured yet: allow any network so updates do not pause
+        // automatic monitoring until the user adds specific home SSIDs.
+        val allowlist = normalizedAllowlist(allowedSsids)
+        if (allowlist.isEmpty()) return true
         val current = normalizeSsid(currentSsid)
-        return current.isNotEmpty() && current in normalizedAllowlist(allowedSsids)
+        return current.isNotEmpty() && current in allowlist
     }
 }

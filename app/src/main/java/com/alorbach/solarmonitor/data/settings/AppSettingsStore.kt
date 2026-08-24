@@ -57,9 +57,9 @@ data class AppSettings(
     val livePollWindowStartMinutes: Int = 6 * 60,
     /** Exclusive end of the live-poll clock window, minutes from midnight (device timezone). */
     val livePollWindowEndMinutes: Int = 22 * 60,
-    /** When enabled, automatic Bluetooth polling requires a matching allowed home WLAN. */
+    /** When enabled, automatic Bluetooth polling is limited to allowed home WLANs (empty list = any network). */
     val homeWifiCheckEnabled: Boolean = true,
-    /** SSIDs maintained by the app as allowed home WLANs for automatic Bluetooth polling. */
+    /** SSIDs maintained by the app as allowed home WLANs; empty means unrestricted until the user adds SSIDs. */
     val allowedHomeWifiSsids: Set<String> = emptySet(),
     /** Home-screen compact/medium widgets; null = first device by name. */
     val widgetDeviceId: Long? = null,

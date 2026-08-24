@@ -255,12 +255,12 @@
     <string name="live_poll_window_start">Start</string>
     <string name="live_poll_window_end">End</string>
     <string name="home_wifi_check">Home Wi-Fi check</string>
-    <string name="home_wifi_check_hint">Automatic Bluetooth live monitoring runs only on an allowed Wi-Fi network. Manual Test, Live, and Sync remain available.</string>
+    <string name="home_wifi_check_hint">Automatic Bluetooth live monitoring runs only on an allowed Wi-Fi network. With no SSIDs listed, any network is allowed. Manual Test, Live, and Sync remain available.</string>
     <string name="home_wifi_current">Current Wi-Fi: %1$s</string>
     <string name="home_wifi_unavailable">No identifiable Wi-Fi connection</string>
     <string name="home_wifi_ssid">Home Wi-Fi SSID</string>
     <string name="home_wifi_add_current">Add current Wi-Fi</string>
-    <string name="home_wifi_empty">Add at least one home Wi-Fi SSID or turn off this check.</string>
+    <string name="home_wifi_empty">No home SSIDs yet — automatic monitoring is allowed on any Wi-Fi. Add SSIDs to restrict it to home networks.</string>
     <string name="home_wifi_not_allowed">Automatic monitoring paused: not on an allowed home Wi-Fi.</string>
     <string name="add">Add</string>
     <string name="remove">Remove</string>

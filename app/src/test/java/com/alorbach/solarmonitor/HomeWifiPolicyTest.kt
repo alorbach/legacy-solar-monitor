@@ -13,6 +13,12 @@ class HomeWifiPolicyTest {
     }
 
     @Test
+    fun emptyAllowlistAllowsAnyNetworkWhenCheckEnabled() {
+        assertTrue(HomeWifiPolicy.isAllowed(true, null, emptySet()))
+        assertTrue(HomeWifiPolicy.isAllowed(true, "AnyNet", emptySet()))
+    }
+
+    @Test
     fun matchingSsidIsAllowed() {
         assertTrue(HomeWifiPolicy.isAllowed(true, "\"HomeNet\"", setOf("HomeNet")))
     }

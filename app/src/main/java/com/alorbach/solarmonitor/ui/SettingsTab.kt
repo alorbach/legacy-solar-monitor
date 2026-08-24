@@ -929,7 +929,7 @@ private fun HomeWifiSettingsCard(
             if (settings.allowedHomeWifiSsids.isEmpty()) {
                 Text(
                     stringResource(R.string.home_wifi_empty),
-                    color = colors.error,
+                    color = colors.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
             } else {

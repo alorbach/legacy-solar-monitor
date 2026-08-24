@@ -73,6 +73,11 @@ gradle-*-bin.zip
 # IDE Java-upgrade tooling
 .github/java-upgrade/
 
+# Local Cursor/Cubic data and workspace settings
+.cubic-data/
+.cubic-review-out.json
+.vscode/
+
 # Local portable toolchains (not part of the project)
 .tools/
 
