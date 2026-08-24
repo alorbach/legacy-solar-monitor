@@ -9,11 +9,13 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.alorbach.solarmonitor.data.cloud.CloudBackupPolicy
 import com.alorbach.solarmonitor.data.model.StatsGranularity
 import com.alorbach.solarmonitor.data.security.CredentialStore
+import com.alorbach.solarmonitor.domain.HomeWifiPolicy
 import com.alorbach.solarmonitor.domain.LivePollWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -55,6 +57,10 @@ data class AppSettings(
     val livePollWindowStartMinutes: Int = 6 * 60,
     /** Exclusive end of the live-poll clock window, minutes from midnight (device timezone). */
     val livePollWindowEndMinutes: Int = 22 * 60,
+    /** When enabled, automatic Bluetooth polling requires a matching allowed home WLAN. */
+    val homeWifiCheckEnabled: Boolean = true,
+    /** SSIDs maintained by the app as allowed home WLANs for automatic Bluetooth polling. */
+    val allowedHomeWifiSsids: Set<String> = emptySet(),
     /** Home-screen compact/medium widgets; null = first device by name. */
     val widgetDeviceId: Long? = null,
     /** Notify on new inverter WARNING events from the last 24 hours. Off by default on Android 13+ until the user enables it (and grants POST_NOTIFICATIONS). */
@@ -124,6 +130,8 @@ class AppSettingsStore(
                 LivePollWindow.normalizeMinutes(updated.livePollWindowStartMinutes)
             prefs[Keys.livePollWindowEndMinutes] =
                 LivePollWindow.normalizeMinutes(updated.livePollWindowEndMinutes)
+            prefs[Keys.homeWifiCheckEnabled] = updated.homeWifiCheckEnabled
+            prefs[Keys.allowedHomeWifiSsids] = HomeWifiPolicy.normalizedAllowlist(updated.allowedHomeWifiSsids)
             if (updated.widgetDeviceId == null) {
                 prefs.remove(Keys.widgetDeviceId)
             } else {
@@ -167,6 +175,10 @@ class AppSettingsStore(
                 ?: LivePollWindow.DEFAULT_START_MINUTES,
             livePollWindowEndMinutes = prefs[Keys.livePollWindowEndMinutes]
                 ?: LivePollWindow.DEFAULT_END_MINUTES,
+            homeWifiCheckEnabled = prefs[Keys.homeWifiCheckEnabled] ?: true,
+            allowedHomeWifiSsids = HomeWifiPolicy.normalizedAllowlist(
+                prefs[Keys.allowedHomeWifiSsids].orEmpty(),
+            ),
             widgetDeviceId = prefs[Keys.widgetDeviceId],
             inverterWarningAlertsEnabled = prefs[Keys.inverterWarningAlertsEnabled] ?: false,
             eventAlertWatermarks = prefs[Keys.eventAlertWatermarks] ?: "",
@@ -195,6 +207,8 @@ class AppSettingsStore(
         val livePollIntervalSeconds = longPreferencesKey("live_poll_interval_seconds")
         val livePollWindowStartMinutes = intPreferencesKey("live_poll_window_start_minutes")
         val livePollWindowEndMinutes = intPreferencesKey("live_poll_window_end_minutes")
+        val homeWifiCheckEnabled = booleanPreferencesKey("home_wifi_check_enabled")
+        val allowedHomeWifiSsids = stringSetPreferencesKey("allowed_home_wifi_ssids")
         val widgetDeviceId = longPreferencesKey("widget_device_id")
         val inverterWarningAlertsEnabled = booleanPreferencesKey("inverter_warning_alerts_enabled")
         val eventAlertWatermarks = stringPreferencesKey("event_alert_watermarks")

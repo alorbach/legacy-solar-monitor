@@ -14,12 +14,14 @@ import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGatewayImpl
 import com.alorbach.solarmonitor.domain.ReportExporter
+import com.alorbach.solarmonitor.service.HomeWifiChecker
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val credentialStore = CredentialStore(appContext)
     val settingsStore = AppSettingsStore(appContext, credentialStore)
+    val homeWifiChecker = HomeWifiChecker(appContext)
     val database = SolarMonitorDatabase.create(appContext)
     val bluetoothGateway: SmaLegacyBluetoothGateway = SmaLegacyBluetoothGatewayImpl(appContext)
     val reportExporter = ReportExporter(appContext)

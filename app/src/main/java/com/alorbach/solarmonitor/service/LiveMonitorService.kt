@@ -166,14 +166,32 @@ class LiveMonitorService : Service() {
                                 delay(policy.millisUntilOpen(deviceId).coerceAtLeast(1_000L))
                                 continue
                             }
+                            val settings = runCatching {
+                                container.settingsStore.settings.first()
+                            }.getOrNull()
+                            // Unavailable settings must fail closed for automatic polling, matching
+                            // LivePollScheduler.homeWifiAllowed(), so a transient DataStore error
+                            // cannot bypass the home Wi-Fi gate.
+                            val wifiAllowed = settings != null &&
+                                container.homeWifiChecker.isAllowed(settings)
+                            if (!wifiAllowed) {
+                                container.liveMonitoringRepository.stopDevice(deviceId)
+                                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                                manager.notify(
+                                    NOTIFICATION_ID,
+                                    buildNotification(getString(R.string.home_wifi_not_allowed)),
+                                )
+                                val intervalSeconds = settings?.livePollIntervalSeconds?.coerceIn(15L, 3600L)
+                                    ?: (POLL_INTERVAL_MS / 1000)
+                                delay((intervalSeconds * 1000L).coerceAtLeast(1_000L))
+                                continue
+                            }
                             val result = container.liveMonitoringRepository.start(deviceId, continuous = true)
                             val aggregate = container.liveMonitoringRepository.state.value.message
                             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                             manager.notify(NOTIFICATION_ID, buildNotification(aggregate))
                             result.exceptionOrNull()
-                            val intervalSeconds = runCatching {
-                                container.settingsStore.settings.first().livePollIntervalSeconds
-                            }.getOrDefault(POLL_INTERVAL_MS / 1000).coerceIn(15L, 3600L)
+                            val intervalSeconds = settings.livePollIntervalSeconds.coerceIn(15L, 3600L)
                             val intervalMs = intervalSeconds * 1000L
                             val untilClose = policy.millisUntilClose(deviceId)
                             val sleepMs = if (untilClose == Long.MAX_VALUE) {

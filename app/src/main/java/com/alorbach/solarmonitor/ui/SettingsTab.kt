@@ -106,6 +106,7 @@ import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.data.settings.ChartBarAccent
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
+import com.alorbach.solarmonitor.domain.HomeWifiPolicy
 import com.alorbach.solarmonitor.domain.LivePollWindow
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
@@ -376,6 +377,18 @@ fun SettingsTab(
                     }
                 }
             }
+        }
+        item {
+            HomeWifiSettingsCard(
+                settings = settings,
+                currentSsid = container.homeWifiChecker.currentSsid(),
+                onUpdate = { transform ->
+                    scope.launch {
+                        container.settingsStore.update(transform)
+                        LivePollScheduler.syncAfterSettingsChange(context)
+                    }
+                },
+            )
         }
         item {
             ElevatedCard(
@@ -824,6 +837,123 @@ fun SettingsTab(
 }
 
 private enum class PollWindowBound { START, END }
+
+@Composable
+private fun HomeWifiSettingsCard(
+    settings: AppSettings,
+    currentSsid: String?,
+    onUpdate: (suspend (AppSettings) -> AppSettings) -> Unit,
+) {
+    var homeWifiSsid by rememberSaveable { mutableStateOf("") }
+    val colors = MaterialTheme.colorScheme
+    val unavailableLabel = stringResource(R.string.home_wifi_unavailable)
+
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
+        shape = RoundedCornerShape(28.dp),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                stringResource(R.string.home_wifi_check),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                stringResource(R.string.home_wifi_check_hint),
+                color = colors.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.home_wifi_check),
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = settings.homeWifiCheckEnabled,
+                    onCheckedChange = { enabled ->
+                        onUpdate { it.copy(homeWifiCheckEnabled = enabled) }
+                    },
+                )
+            }
+            Text(
+                stringResource(
+                    R.string.home_wifi_current,
+                    currentSsid ?: unavailableLabel,
+                ),
+                color = colors.onSurfaceVariant,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = homeWifiSsid,
+                    onValueChange = { homeWifiSsid = it },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(stringResource(R.string.home_wifi_ssid)) },
+                    singleLine = true,
+                )
+                Button(
+                    onClick = {
+                        val normalized = HomeWifiPolicy.normalizeSsid(homeWifiSsid)
+                        if (normalized.isNotEmpty()) {
+                            onUpdate {
+                                it.copy(allowedHomeWifiSsids = it.allowedHomeWifiSsids + normalized)
+                            }
+                            homeWifiSsid = ""
+                        }
+                    },
+                    enabled = HomeWifiPolicy.normalizeSsid(homeWifiSsid).isNotEmpty(),
+                ) {
+                    Text(stringResource(R.string.add))
+                }
+            }
+            currentSsid?.let { current ->
+                if (current !in settings.allowedHomeWifiSsids) {
+                    OutlinedButton(
+                        onClick = {
+                            onUpdate {
+                                it.copy(allowedHomeWifiSsids = it.allowedHomeWifiSsids + current)
+                            }
+                        },
+                    ) {
+                        Text(stringResource(R.string.home_wifi_add_current))
+                    }
+                }
+            }
+            if (settings.allowedHomeWifiSsids.isEmpty()) {
+                Text(
+                    stringResource(R.string.home_wifi_empty),
+                    color = colors.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            } else {
+                settings.allowedHomeWifiSsids.sorted().forEach { ssid ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(ssid, modifier = Modifier.weight(1f))
+                        TextButton(
+                            onClick = {
+                                onUpdate {
+                                    it.copy(allowedHomeWifiSsids = it.allowedHomeWifiSsids - ssid)
+                                }
+                            },
+                        ) {
+                            Text(stringResource(R.string.remove))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 private fun formatPollMinutes(minutes: Int): String {
     val normalized = LivePollWindow.normalizeMinutes(minutes)

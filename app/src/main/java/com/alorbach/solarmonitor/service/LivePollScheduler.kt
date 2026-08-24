@@ -138,12 +138,20 @@ object LivePollScheduler {
             cancel(appContext)
             return
         }
+        if (!homeWifiAllowed(appContext)) {
+            scheduleRetry(appContext)
+            return
+        }
         // Suspending window/policy load; re-read IDs afterward so a concurrent Stop wins.
         anyDeviceInWindow(appContext, ids)
         val freshIds = LiveMonitorService.persistedDeviceIds(appContext)
         val freshBt = BootLiveMonitorReceiver.hasBluetoothConnectPermission(appContext)
         if (!BootLiveMonitorReceiver.shouldRestartLiveMonitor(freshIds, freshBt)) {
             cancel(appContext)
+            return
+        }
+        if (!homeWifiAllowed(appContext)) {
+            scheduleRetry(appContext)
             return
         }
         val inWindow = anyDeviceInWindow(appContext, freshIds)
@@ -189,11 +197,19 @@ object LivePollScheduler {
             return
         }
         val bluetoothOk = BootLiveMonitorReceiver.hasBluetoothConnectPermission(appContext)
+        if (!homeWifiAllowed(appContext)) {
+            deferForHomeWifi(appContext, genAtDecision)
+            return
+        }
         anyDeviceInWindow(appContext, ids)
         val freshIds = LiveMonitorService.persistedDeviceIds(appContext)
         val freshBt = BootLiveMonitorReceiver.hasBluetoothConnectPermission(appContext)
         if (freshIds.isEmpty() || !freshBt) {
             cancel(appContext)
+            return
+        }
+        if (!homeWifiAllowed(appContext)) {
+            deferForHomeWifi(appContext, genAtDecision)
             return
         }
         val inWindow = anyDeviceInWindow(appContext, freshIds)
@@ -210,23 +226,44 @@ object LivePollScheduler {
             }
         } else {
             scheduleResume(appContext, freshIds)
-            val active = (appContext as? SolarMonitorApplication)
-                ?.container
-                ?.liveMonitoringRepository
-                ?.state
-                ?.value
-                ?.active == true
-            if (active && LiveMonitorService.currentRunGeneration() == genAtDecision) {
-                appContext.startService(
-                    LiveMonitorService.pauseIntent(appContext)
-                        .putExtra(LiveMonitorService.EXTRA_RUN_GENERATION, genAtDecision),
-                )
-            }
+            pauseActiveGenerationIfNeeded(appContext, genAtDecision)
         }
     }
 
     private fun alarmManager(context: Context): AlarmManager =
         context.applicationContext.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    /**
+     * Home Wi-Fi is required for automatic resume. Retry later and pause the generation that was
+     * active when this decision was made so a concurrent start is not torn down by a stale pause.
+     */
+    private fun deferForHomeWifi(context: Context, genAtDecision: Int) {
+        scheduleRetry(context)
+        pauseActiveGenerationIfNeeded(context, genAtDecision)
+    }
+
+    private fun pauseActiveGenerationIfNeeded(context: Context, genAtDecision: Int) {
+        val appContext = context.applicationContext
+        val active = (appContext as? SolarMonitorApplication)
+            ?.container
+            ?.liveMonitoringRepository
+            ?.state
+            ?.value
+            ?.active == true
+        if (active && LiveMonitorService.currentRunGeneration() == genAtDecision) {
+            appContext.startService(
+                LiveMonitorService.pauseIntent(appContext)
+                    .putExtra(LiveMonitorService.EXTRA_RUN_GENERATION, genAtDecision),
+            )
+        }
+    }
+
+    private suspend fun homeWifiAllowed(context: Context): Boolean {
+        val app = context.applicationContext as SolarMonitorApplication
+        val settings = runCatching { app.container.settingsStore.settings.first() }.getOrNull()
+            ?: return false
+        return app.container.homeWifiChecker.isAllowed(settings)
+    }
 
     private fun pendingIntent(context: Context): PendingIntent {
         val appContext = context.applicationContext

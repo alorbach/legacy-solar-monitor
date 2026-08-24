@@ -251,6 +251,16 @@
     <string name="live_poll_window_hint">Bluetooth-Live-Abfragen laufen nur in diesem Uhrzeitfenster. Die Zeiten gelten in der Zeitzone jedes Wechselrichters. Gleicher Beginn und Ende bedeuten 24 Stunden. Über Mitternacht ist erlaubt (zum Beispiel 22:00–06:00).</string>
     <string name="live_poll_window_start">Beginn</string>
     <string name="live_poll_window_end">Ende</string>
+    <string name="home_wifi_check">Heim-WLAN-Prüfung</string>
+    <string name="home_wifi_check_hint">Automatische Bluetooth-Live-Abfragen laufen nur in einem erlaubten WLAN. Manuelle Tests sowie Live- und Historien-Sync bleiben verfügbar.</string>
+    <string name="home_wifi_current">Aktuelles WLAN: %1$s</string>
+    <string name="home_wifi_unavailable">Kein identifizierbares WLAN verbunden</string>
+    <string name="home_wifi_ssid">SSID des Heim-WLANs</string>
+    <string name="home_wifi_add_current">Aktuelles WLAN hinzufügen</string>
+    <string name="home_wifi_empty">Mindestens eine Heim-WLAN-SSID hinzufügen oder diese Prüfung ausschalten.</string>
+    <string name="home_wifi_not_allowed">Automatische Überwachung pausiert: Kein erlaubtes Heim-WLAN.</string>
+    <string name="add">Hinzufügen</string>
+    <string name="remove">Entfernen</string>
     <string name="expand_device">Gerätedetails anzeigen</string>
     <string name="collapse_device">Gerätedetails ausblenden</string>
     <string name="import_in_progress">Import läuft…</string>

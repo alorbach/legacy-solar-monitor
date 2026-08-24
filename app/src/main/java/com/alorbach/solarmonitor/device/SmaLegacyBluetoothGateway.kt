@@ -69,6 +69,23 @@ data class SmaGatewayResult<T>(
     val inverterSerial: Long? = null,
 )
 
+internal data class SmaDayArchiveWindow(
+    val startEpochSeconds: Long,
+    val endEpochSeconds: Long,
+)
+
+internal fun smaDayArchiveWindow(date: LocalDate, zoneId: ZoneId): SmaDayArchiveWindow {
+    val startOfDay = date.atStartOfDay(zoneId)
+    val endOfDay = date.plusDays(1).atStartOfDay(zoneId)
+    // The five-minute baseline before midnight lets the first sample produce a delta while the
+    // end remains the inverter's last regular sample of the requested local day. Using the next
+    // local midnight rather than +24h also handles DST transition days correctly.
+    return SmaDayArchiveWindow(
+        startEpochSeconds = startOfDay.toEpochSecond() - 300,
+        endEpochSeconds = endOfDay.toEpochSecond() - 300,
+    )
+}
+
 private class SessionTrace(
     private val mac: String?,
 ) {
@@ -645,11 +662,13 @@ private class SmaBluetoothSession(
 
     fun readDayArchive(deviceId: Long, date: LocalDate): DayArchiveParse? {
         trace.record("phase:reading-day-archive $date")
-        val startOfDay = date.atStartOfDay(zoneId).toEpochSecond()
-        val requestStart = startOfDay - 300
-        val requestEnd = startOfDay + 86100
+        val window = smaDayArchiveWindow(date, zoneId)
 
-        val packets = sendArchiveRequest(0x70000200, requestStart, requestEnd)
+        val packets = sendArchiveRequest(
+            command = 0x70000200,
+            startTime = window.startEpochSeconds,
+            endTime = window.endEpochSeconds,
+        )
         var previousTimestamp = 0L
         var previousTotalWh = 0L
         var firstTotalWh: Long? = null

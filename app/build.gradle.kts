@@ -26,8 +26,8 @@ android {
         targetSdk = 36
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1022
-        versionName = "1.0.0"
+        versionCode = 1024
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
