@@ -9,6 +9,14 @@ import java.util.Locale
  * connected network cannot be identified. Those values must never match a user allowlist entry.
  */
 object HomeWifiPolicy {
+    enum class Status {
+        DISABLED,
+        UNRESTRICTED,
+        ALLOWED,
+        NO_WIFI,
+        WRONG_WIFI,
+    }
+
     private val unavailableSsids = setOf(
         "",
         "<unknown ssid>",
@@ -26,17 +34,32 @@ object HomeWifiPolicy {
     fun normalizedAllowlist(values: Iterable<String>): Set<String> =
         values.mapNotNull { normalizeSsid(it).takeIf(String::isNotEmpty) }.toSet()
 
+    fun status(
+        checkEnabled: Boolean,
+        currentSsid: String?,
+        allowedSsids: Iterable<String>,
+    ): Status {
+        if (!checkEnabled) return Status.DISABLED
+
+        val allowlist = normalizedAllowlist(allowedSsids)
+        if (allowlist.isEmpty()) return Status.UNRESTRICTED
+
+        val current = normalizeSsid(currentSsid)
+        if (current.isEmpty()) return Status.NO_WIFI
+        return if (current in allowlist) Status.ALLOWED else Status.WRONG_WIFI
+    }
+
     fun isAllowed(
         checkEnabled: Boolean,
         currentSsid: String?,
         allowedSsids: Iterable<String>,
-    ): Boolean {
-        if (!checkEnabled) return true
-        // Empty allowlist = not configured yet: allow any network so updates do not pause
-        // automatic monitoring until the user adds specific home SSIDs.
-        val allowlist = normalizedAllowlist(allowedSsids)
-        if (allowlist.isEmpty()) return true
-        val current = normalizeSsid(currentSsid)
-        return current.isNotEmpty() && current in allowlist
+    ): Boolean = when (status(checkEnabled, currentSsid, allowedSsids)) {
+        Status.DISABLED,
+        Status.UNRESTRICTED,
+        Status.ALLOWED,
+        -> true
+        Status.NO_WIFI,
+        Status.WRONG_WIFI,
+        -> false
     }
 }

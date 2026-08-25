@@ -262,6 +262,11 @@
     <string name="home_wifi_add_current">Add current Wi-Fi</string>
     <string name="home_wifi_empty">No home SSIDs yet — automatic monitoring is allowed on any Wi-Fi. Add SSIDs to restrict it to home networks.</string>
     <string name="home_wifi_not_allowed">Automatic monitoring paused: not on an allowed home Wi-Fi.</string>
+    <string name="home_wifi_status_disabled">Wi-Fi check disabled: automatic monitoring is allowed on any Wi-Fi.</string>
+    <string name="home_wifi_status_unrestricted">Wi-Fi check enabled, but no home SSID is listed: automatic monitoring is allowed on any Wi-Fi.</string>
+    <string name="home_wifi_status_allowed">Wi-Fi check enabled: connected to the correct home Wi-Fi; automatic monitoring is allowed.</string>
+    <string name="home_wifi_status_no_wifi">Wi-Fi check enabled: not connected to Wi-Fi. Automatic monitoring is paused.</string>
+    <string name="home_wifi_status_wrong_wifi">Wi-Fi check enabled: not connected to an allowed home Wi-Fi. Automatic monitoring is paused.</string>
     <string name="add">Add</string>
     <string name="remove">Remove</string>
     <string name="expand_device">Show device details</string>

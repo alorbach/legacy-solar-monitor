@@ -277,6 +277,7 @@ fun StatsBarChart(
     visibleBars: Int = StatsSeriesFill.VISIBLE_PERIOD_BARS,
     selectedBucketKey: String? = null,
     barAccent: ChartBarAccent = ChartBarAccent.GOLD,
+    scrollToEnd: Boolean = false,
     onBarClick: ((String) -> Unit)? = null,
     onBarDoubleClick: ((String) -> Unit)? = null,
     height: Dp = 280.dp,
@@ -364,8 +365,8 @@ fun StatsBarChart(
                 } else {
                     Modifier
                 }
-                val structureKey = remember(points) {
-                    points.joinToString("\u0000") { it.bucketKey }
+                val structureKey = remember(points, scrollToEnd) {
+                    "$scrollToEnd\u0001" + points.joinToString("\u0000") { it.bucketKey }
                 }
                 var scrolledStructure by remember { mutableStateOf<String?>(null) }
                 LaunchedEffect(structureKey, contentWidth, barViewport, scrollState.maxValue) {
@@ -377,12 +378,16 @@ fun StatsBarChart(
                     val maxScroll = scrollState.maxValue
                     if (maxScroll <= 0) return@LaunchedEffect
                     if (scrolledStructure == structureKey) return@LaunchedEffect
-                    val firstProd = points.indexOfFirst { it.yieldWh > 0 || it.eventCount > 0 }.coerceAtLeast(0)
                     val slotPx = with(density) { contentWidth.toPx() } / points.size.coerceAtLeast(1)
-                    val viewportPx = with(density) { barViewport.toPx() }
-                    val target = (firstProd * slotPx - viewportPx * 0.08f)
-                        .roundToInt()
-                        .coerceIn(0, maxScroll)
+                    val target = if (scrollToEnd) {
+                        maxScroll
+                    } else {
+                        val firstProd = points.indexOfFirst { it.yieldWh > 0 || it.eventCount > 0 }.coerceAtLeast(0)
+                        val viewportPx = with(density) { barViewport.toPx() }
+                        (firstProd * slotPx - viewportPx * 0.08f)
+                            .roundToInt()
+                            .coerceIn(0, maxScroll)
+                    }
                     scrollState.scrollTo(target)
                     scrolledStructure = structureKey
                 }

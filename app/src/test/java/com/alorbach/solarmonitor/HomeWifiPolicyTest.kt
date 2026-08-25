@@ -35,6 +35,22 @@ class HomeWifiPolicyTest {
     }
 
     @Test
+    fun statusExplainsWhyAutomaticMonitoringIsPaused() {
+        assertEquals(
+            HomeWifiPolicy.Status.NO_WIFI,
+            HomeWifiPolicy.status(true, null, setOf("HomeNet")),
+        )
+        assertEquals(
+            HomeWifiPolicy.Status.WRONG_WIFI,
+            HomeWifiPolicy.status(true, "AwayNet", setOf("HomeNet")),
+        )
+        assertEquals(
+            HomeWifiPolicy.Status.ALLOWED,
+            HomeWifiPolicy.status(true, "HomeNet", setOf("HomeNet")),
+        )
+    }
+
+    @Test
     fun allowlistNormalizationRemovesDuplicatesAndPlaceholders() {
         assertEquals(
             setOf("HomeNet"),

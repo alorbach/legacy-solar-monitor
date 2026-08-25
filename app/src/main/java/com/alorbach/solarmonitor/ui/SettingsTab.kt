@@ -146,6 +146,15 @@ fun SettingsTab(
     val signedIn = CloudBackupPolicy.isAccountConfigured(settings.googleAccountEmail)
     val googleClientReady = container.googleDriveAuth.isClientConfigured()
     val playServicesReady = container.googleDriveAuth.isPlayServicesAvailable()
+    val currentSsid by produceState<String?>(
+        initialValue = container.homeWifiChecker.currentSsid(),
+        container.homeWifiChecker,
+    ) {
+        while (true) {
+            delay(2_000L)
+            value = container.homeWifiChecker.currentSsid()
+        }
+    }
     val backupRunning by produceState(initialValue = false, context) {
         val liveData = WorkManager.getInstance(context)
             .getWorkInfosForUniqueWorkLiveData(CloudBackupPolicy.UNIQUE_WORK_NAME)
@@ -381,7 +390,7 @@ fun SettingsTab(
         item {
             HomeWifiSettingsCard(
                 settings = settings,
-                currentSsid = container.homeWifiChecker.currentSsid(),
+                currentSsid = currentSsid,
                 onUpdate = { transform ->
                     scope.launch {
                         container.settingsStore.update(transform)
@@ -847,6 +856,27 @@ private fun HomeWifiSettingsCard(
     var homeWifiSsid by rememberSaveable { mutableStateOf("") }
     val colors = MaterialTheme.colorScheme
     val unavailableLabel = stringResource(R.string.home_wifi_unavailable)
+    val wifiStatus = HomeWifiPolicy.status(
+        checkEnabled = settings.homeWifiCheckEnabled,
+        currentSsid = currentSsid,
+        allowedSsids = settings.allowedHomeWifiSsids,
+    )
+    val wifiStatusResource = when (wifiStatus) {
+        HomeWifiPolicy.Status.DISABLED -> R.string.home_wifi_status_disabled
+        HomeWifiPolicy.Status.UNRESTRICTED -> R.string.home_wifi_status_unrestricted
+        HomeWifiPolicy.Status.ALLOWED -> R.string.home_wifi_status_allowed
+        HomeWifiPolicy.Status.NO_WIFI -> R.string.home_wifi_status_no_wifi
+        HomeWifiPolicy.Status.WRONG_WIFI -> R.string.home_wifi_status_wrong_wifi
+    }
+    val wifiStatusColor = when (wifiStatus) {
+        HomeWifiPolicy.Status.NO_WIFI,
+        HomeWifiPolicy.Status.WRONG_WIFI,
+        -> colors.error
+        HomeWifiPolicy.Status.ALLOWED -> colors.primary
+        HomeWifiPolicy.Status.DISABLED,
+        HomeWifiPolicy.Status.UNRESTRICTED,
+        -> colors.onSurfaceVariant
+    }
 
     ElevatedCard(
         colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
@@ -885,6 +915,11 @@ private fun HomeWifiSettingsCard(
                     currentSsid ?: unavailableLabel,
                 ),
                 color = colors.onSurfaceVariant,
+            )
+            Text(
+                stringResource(wifiStatusResource),
+                color = wifiStatusColor,
+                style = MaterialTheme.typography.bodySmall,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),

@@ -259,6 +259,11 @@
     <string name="home_wifi_add_current">Aktuelles WLAN hinzufügen</string>
     <string name="home_wifi_empty">Noch keine Heim-SSIDs — automatische Überwachung ist in jedem WLAN erlaubt. SSIDs hinzufügen, um auf Heimnetzwerke zu beschränken.</string>
     <string name="home_wifi_not_allowed">Automatische Überwachung pausiert: Kein erlaubtes Heim-WLAN.</string>
+    <string name="home_wifi_status_disabled">WLAN-Prüfung deaktiviert: Automatische Überwachung ist in jedem WLAN erlaubt.</string>
+    <string name="home_wifi_status_unrestricted">WLAN-Prüfung aktiv, aber keine Heim-SSID eingetragen: Automatische Überwachung ist in jedem WLAN erlaubt.</string>
+    <string name="home_wifi_status_allowed">WLAN-Prüfung aktiv: Richtiges Heim-WLAN verbunden; automatische Überwachung ist erlaubt.</string>
+    <string name="home_wifi_status_no_wifi">WLAN-Prüfung aktiv: Kein WLAN verbunden. Automatische Überwachung pausiert.</string>
+    <string name="home_wifi_status_wrong_wifi">WLAN-Prüfung aktiv: Nicht mit einem erlaubten Heim-WLAN verbunden. Automatische Überwachung pausiert.</string>
     <string name="add">Hinzufügen</string>
     <string name="remove">Entfernen</string>
     <string name="expand_device">Gerätedetails anzeigen</string>

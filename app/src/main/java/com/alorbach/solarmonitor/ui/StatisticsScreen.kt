@@ -204,7 +204,7 @@ fun StatisticsScreen(
     val peakPower = points.mapNotNull { it.peakPowerW }.maxOrNull()
     val totalEarnings = points.sumOf { it.earnings }
 
-    val today = remember(zoneId) { LocalDate.now(zoneId) }
+    val today = LocalDate.now(zoneId)
     val canGoPrevious = granularity != StatsGranularity.YEAR
     val canGoNext = when (granularity) {
         StatsGranularity.HOUR -> anchorDate.isBefore(today)
@@ -366,6 +366,8 @@ fun StatisticsScreen(
                             visibleBars = StatsSeriesFill.visibleBars(granularity),
                             selectedBucketKey = selectedBucketKey,
                             barAccent = settings.chartBarAccent,
+                            scrollToEnd = granularity == StatsGranularity.DAY &&
+                                YearMonth.from(anchorDate) == YearMonth.from(today),
                             onBarClick = { key ->
                                 selectedBucketKey = if (selectedBucketKey == key) null else key
                             },
