@@ -57,14 +57,12 @@ google-services.json
 **/secrets.*
 **/credentials.*
 
-# Local inverter config with credentials (use .example instead)
-_legacy/SBFspot.cfg
-
-# Nested upstream SBFspot clone (has its own .git history)
-_legacy/SBFspot/
-
 # Historical plant CSV/SQLite dumps (not source; keep local only)
 _legacy/smadata/
+
+# Optional local SBFspot checkout and configuration; never commit either
+_legacy/SBFspot.cfg
+_legacy/SBFspot/
 
 # Local Gradle distribution downloads (wrapper fetches these)
 gradle-8.*/

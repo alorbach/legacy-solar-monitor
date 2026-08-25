@@ -14,7 +14,7 @@ import org.junit.Test
 class SbfspotCsvParserTest {
     private val parser = SbfspotCsvParser(ZoneId.of("Europe/Berlin"))
     private val repoRoot: File = generateSequence(File(System.getProperty("user.dir") ?: ".").absoluteFile) { it.parentFile }
-        .firstOrNull { File(it, "_legacy").exists() }
+        .firstOrNull { File(it, "settings.gradle.kts").isFile }
         ?: error("Unable to locate repo root from ${System.getProperty("user.dir")}")
 
     @Test

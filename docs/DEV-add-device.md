@@ -7,6 +7,7 @@ SMA / Sunny Boy names below describe hardware and protocol only. Do not put them
 Related:
 
 - [USER-GUIDE.md](USER-GUIDE.md) — scan, PIN, Test, Live, Sync
+- [SUPPORTED-DEVICES.md](SUPPORTED-DEVICES.md) — SBFspot catalog and current app compatibility
 - [ARCHITECTURE.md](ARCHITECTURE.md) — `AppContainer`, Room, live service
 - [DEV-google-drive.md](DEV-google-drive.md) — publisher OAuth for Drive backup, not device onboarding
 

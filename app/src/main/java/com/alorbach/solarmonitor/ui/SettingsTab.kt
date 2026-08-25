@@ -340,6 +340,23 @@ fun SettingsTab(
                         },
                     )
                     Text(
+                        text = stringResource(R.string.about_supported_devices),
+                        color = colors.primary,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                        ),
+                        modifier = Modifier.clickable {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(context.getString(R.string.about_supported_devices_url)),
+                                    ),
+                                )
+                            }
+                        },
+                    )
+                    Text(
                         stringResource(R.string.app_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                         color = colors.onSurfaceVariant,
                     )

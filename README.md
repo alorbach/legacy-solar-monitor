@@ -29,7 +29,9 @@ Classic Bluetooth SMA Sunny Boy–class inverters (SBFspot-compatible protocol).
 
 Package name (do not change): `com.alorbach.solarmonitor`
 
-`_legacy/sbfspot.3` is upstream SBFspot C++ reference material. It is not part of the Android build.
+The original [SBFspot project](https://github.com/SBFspot/SBFspot) is the
+historical protocol reference. Its source is not vendored here and is not part
+of the Android build.
 
 ## Requirements
 
@@ -42,6 +44,7 @@ Package name (do not change): `com.alorbach.solarmonitor`
 
 - [User guide (EN)](docs/USER-GUIDE.md) — permissions, devices, live, import, widgets, backup
 - [Benutzerhandbuch (DE)](docs/USER-GUIDE-DE.md) — deutsche Anleitung
+- [Supported devices](docs/SUPPORTED-DEVICES.md) — SBFspot reference catalog versus current app compatibility
 - [Privacy policy](docs/PRIVACY.md) — Play Store URL; EN + DE
 - [Play listing copy](docs/PLAY-LISTING.md) — store text, screenshots, publisher checklist
 - [Play Data Safety](docs/PLAY-DATA-SAFETY.md) — Console form answers from the code

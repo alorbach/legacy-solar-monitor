@@ -59,7 +59,7 @@ Glance widgets in `widget/SolarWidgets.kt`: compact, medium, top-devices.
 ## Do not
 
 - Change the applicationId/package.
-- Treat `_legacy/sbfspot.3` as an Android dependency (C++ reference only).
+- Do not vendor SBFspot source into this repository; use the [original SBFspot project](https://github.com/SBFspot/SBFspot) as the protocol reference only.
 - Commit `local.properties`, credentials, or `google.web.client.id`.
 - Add a vendor/protocol picker unless explicitly asked; every device uses the SMA legacy Bluetooth stack.
 

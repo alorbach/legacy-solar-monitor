@@ -6,6 +6,10 @@ German users: see [USER-GUIDE-DE.md](USER-GUIDE-DE.md).
 
 This project is not affiliated with SMA Solar Technology AG. SMA and Sunny Boy names describe compatible hardware only.
 
+See [SUPPORTED-DEVICES.md](SUPPORTED-DEVICES.md) for the historical SBFspot
+device catalog and the distinction between that catalog and this app's live
+Bluetooth support.
+
 ## What you need
 
 - An inverter that speaks the **SBFspot-compatible SMA Bluetooth** protocol. There is no vendor or protocol picker; every device uses that stack.

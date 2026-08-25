@@ -6,6 +6,10 @@ Englische Fassung: [USER-GUIDE.md](USER-GUIDE.md).
 
 Dieses Projekt ist nicht mit SMA Solar Technology AG verbunden. SMA- und Sunny-Boy-Namen beschreiben nur kompatible Hardware.
 
+Eine Übersicht der historischen SBFspot-Geräte und der Unterschied zwischen
+diesem Katalog und der Live-Bluetooth-Unterstützung der App steht in
+[SUPPORTED-DEVICES.md](SUPPORTED-DEVICES.md).
+
 ## Was Sie brauchen
 
 - Einen Wechselrichter mit dem **SBFspot-kompatiblen SMA-Bluetooth**-Protokoll. Es gibt keinen Hersteller- oder Protokollwähler; jedes Gerät nutzt diesen Stack.

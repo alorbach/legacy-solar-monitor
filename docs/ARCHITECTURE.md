@@ -18,7 +18,7 @@ Single Gradle module `:app` (`settings.gradle.kts` → `rootProject.name` `legac
 | Unit tests | `app/src/test/` |
 | Instrumented | `app/src/androidTest/` |
 | Room schemas | `app/schemas/com.alorbach.solarmonitor.data.local.SolarMonitorDatabase/` |
-| SBFspot C++ reference | `_legacy/sbfspot.3/` — **not** an Android dependency |
+| SBFspot reference | [Original SBFspot project](https://github.com/SBFspot/SBFspot) — not vendored or used as an Android dependency |
 
 Package / `applicationId`: `com.alorbach.solarmonitor` — **do not change** (Play listing and OAuth SHA-1 clients).
 
