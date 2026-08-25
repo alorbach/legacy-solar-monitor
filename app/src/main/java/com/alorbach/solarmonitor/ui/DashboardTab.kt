@@ -96,6 +96,7 @@ import com.alorbach.solarmonitor.data.model.StatsPoint
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
+import com.alorbach.solarmonitor.device.SmaStatusLabels
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
@@ -605,7 +606,13 @@ fun DashboardTab(
                                 StatusBadge(stringResource(R.string.live_monitor_active), active = true)
                             }
                         }
-                        Text(summary?.status ?: device.lastConnectionStatus ?: stringResource(R.string.idle), color = colors.onSurfaceVariant)
+                        Text(
+                            SmaStatusLabels.displayStatus(
+                                context,
+                                summary?.status ?: device.lastConnectionStatus,
+                            ) ?: stringResource(R.string.idle),
+                            color = colors.onSurfaceVariant,
+                        )
                         Text(
                             stringResource(
                                 R.string.device_now_today,
@@ -625,6 +632,7 @@ fun DashboardTab(
 @Composable
 private fun LiveElectricalDetails(summary: DeviceDashboardSummary?) {
     if (summary == null) return
+    val context = LocalContext.current
     val parts = mutableListOf<String>()
     val pdc1 = summary.pdc1
     if (pdc1 != null) parts += stringResource(R.string.live_dc1, YieldFormatting.wattsLabel(pdc1))
@@ -638,7 +646,7 @@ private fun LiveElectricalDetails(summary: DeviceDashboardSummary?) {
     if (pac3 != null) parts += stringResource(R.string.live_ac3, YieldFormatting.wattsLabel(pac3))
     summary.temperatureC?.let { parts += String.format(Locale.getDefault(), "%.1f °C", it) }
     summary.frequencyHz?.let { parts += String.format(Locale.getDefault(), "%.2f Hz", it) }
-    summary.gridRelay?.let { parts += it }
+    SmaStatusLabels.displayRelay(context, summary.gridRelay)?.let { parts += it }
     val bt = summary.btSignalPercent
     if (bt != null) {
         parts += stringResource(

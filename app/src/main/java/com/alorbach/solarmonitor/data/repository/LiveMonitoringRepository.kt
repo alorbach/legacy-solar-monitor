@@ -7,6 +7,7 @@ import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
+import com.alorbach.solarmonitor.device.SmaStatusLabels
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -183,7 +184,8 @@ class LiveMonitoringRepository(
                 publishDevice(
                     deviceId = deviceId,
                     active = continuousDeviceIds.contains(deviceId),
-                    message = snapshot.status ?: appContext.getString(R.string.live_connected),
+                    message = SmaStatusLabels.displayStatus(appContext, snapshot.status)
+                        ?: appContext.getString(R.string.live_connected),
                     latest = snapshot,
                     connected = true,
                 )

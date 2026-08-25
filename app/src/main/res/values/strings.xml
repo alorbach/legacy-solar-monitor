@@ -448,6 +448,16 @@
     <string name="live_ac3">AC3 %1$s</string>
     <string name="live_bt_signal">BT %1$s%%</string>
     <string name="live_serial">SN %1$s</string>
+    <string name="live_health_ok">OK</string>
+    <string name="live_health_warning">Warning</string>
+    <string name="live_health_fault">Fault</string>
+    <string name="live_health_off">Off</string>
+    <string name="live_health_waiting_dc">Waiting for DC start</string>
+    <string name="live_health_waiting_grid">Waiting for grid</string>
+    <string name="live_health_unknown">Health %1$s</string>
+    <string name="live_relay_closed">Closed</string>
+    <string name="live_relay_open">Open</string>
+    <string name="live_relay_unknown">Relay %1$s</string>
     <string name="import_show_history">Show history (%1$d)</string>
     <string name="import_hide_history">Hide history</string>
     <string name="widget_no_devices">Add a device to see stats here.</string>

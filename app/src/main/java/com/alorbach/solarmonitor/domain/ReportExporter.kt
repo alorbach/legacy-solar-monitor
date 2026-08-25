@@ -10,6 +10,7 @@ import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DeviceDashboardSummary
 import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.StatsPoint
+import com.alorbach.solarmonitor.device.SmaStatusLabels
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -95,7 +96,7 @@ class ReportExporter(
                         summary.yearlyYieldWh ?: "",
                         summary.estimatedEarnings,
                         summary.currency ?: "",
-                        summary.status ?: "",
+                        SmaStatusLabels.displayStatus(context, summary.status) ?: "",
                         summary.lastUpdateEpochSeconds ?: "",
                     ).joinToString(",") { SeriesReportFormat.csvEscape(it.toString()) }
                 )
@@ -148,7 +149,10 @@ class ReportExporter(
             body,
         )
         canvas.drawText(
-            context.getString(R.string.report_status, summary.status ?: "--"),
+            context.getString(
+                R.string.report_status,
+                SmaStatusLabels.displayStatus(context, summary.status) ?: "--",
+            ),
             40f,
             290f,
             body,

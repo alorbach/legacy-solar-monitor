@@ -648,8 +648,8 @@ private class SmaBluetoothSession(
             eTotalWh = liveValues[Lri.METERING_TOT_WH_OUT],
             frequencyHz = liveValues[Lri.GRID_MS_HZ]?.div(100.0),
             temperatureC = liveValues[Lri.COOLSYS_TMP_NOM]?.div(100.0),
-            status = statusValues[Lri.OPERATION_HEALTH]?.let { "Health 0x${it.toString(16)}" },
-            gridRelay = statusValues[Lri.OPERATION_GRI_SW_STT]?.let { "Relay 0x${it.toString(16)}" },
+            status = statusValues[Lri.OPERATION_HEALTH]?.let { SmaStatusLabels.encodeHealth(it) },
+            gridRelay = statusValues[Lri.OPERATION_GRI_SW_STT]?.let { SmaStatusLabels.encodeRelay(it) },
             btSignalPercent = signal,
             sourceType = "bluetooth_live",
         )

@@ -103,6 +103,7 @@ import com.alorbach.solarmonitor.data.model.PortfolioSummary
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
 import com.alorbach.solarmonitor.data.settings.AppSettings
 import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
+import com.alorbach.solarmonitor.device.SmaStatusLabels
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
 import com.alorbach.solarmonitor.service.LivePollScheduler
@@ -405,7 +406,11 @@ internal fun DeviceEditorCard(
                     )
                 }
                 Text(
-                    stringResource(R.string.status_label, device.lastConnectionStatus ?: stringResource(R.string.idle)),
+                    stringResource(
+                        R.string.status_label,
+                        SmaStatusLabels.displayStatus(context, device.lastConnectionStatus)
+                            ?: stringResource(R.string.idle),
+                    ),
                     color = colors.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -511,7 +516,14 @@ internal fun DeviceEditorCard(
             Text(stringResource(R.string.last_live_read, device.lastLiveReadAtEpochSeconds?.let { formatEpochSeconds(it, deviceZone) } ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.last_history_sync, device.lastArchiveSyncAtEpochSeconds?.let { formatEpochSeconds(it, deviceZone) } ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             Text(stringResource(R.string.socket_strategy, device.lastSuccessfulSocketStrategy ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text(stringResource(R.string.status_label, device.lastConnectionStatus ?: "--"), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(
+                stringResource(
+                    R.string.status_label,
+                    SmaStatusLabels.displayStatus(context, device.lastConnectionStatus) ?: "--",
+                ),
+                color = colors.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
             operationLabel?.let {
                 Text(text = it, color = colors.onBackground, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             }
@@ -576,7 +588,8 @@ internal fun DeviceEditorCard(
                                 container.liveMonitoringRepository.start(saved.id).also { result ->
                                     result.onSuccess {
                                         testSuccess = true
-                                        testMessage = it.status ?: liveOkLabel
+                                        testMessage = SmaStatusLabels.displayStatus(context, it.status)
+                                            ?: liveOkLabel
                                         onDataChanged()
                                     }.onFailure {
                                         testSuccess = false

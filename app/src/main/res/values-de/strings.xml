@@ -444,6 +444,16 @@
     <string name="live_ac3">AC3 %1$s</string>
     <string name="live_bt_signal">BT %1$s%%</string>
     <string name="live_serial">SN %1$s</string>
+    <string name="live_health_ok">OK</string>
+    <string name="live_health_warning">Warnung</string>
+    <string name="live_health_fault">Fehler</string>
+    <string name="live_health_off">Aus</string>
+    <string name="live_health_waiting_dc">Warten auf DC-Start</string>
+    <string name="live_health_waiting_grid">Warten auf Netz</string>
+    <string name="live_health_unknown">Status %1$s</string>
+    <string name="live_relay_closed">Geschlossen</string>
+    <string name="live_relay_open">Offen</string>
+    <string name="live_relay_unknown">Netzrelais %1$s</string>
     <string name="import_show_history">Verlauf zeigen (%1$d)</string>
     <string name="import_hide_history">Verlauf ausblenden</string>
     <string name="widget_no_devices">Gerät hinzufügen, um hier Werte zu sehen.</string>
