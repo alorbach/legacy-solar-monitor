@@ -86,6 +86,13 @@ internal fun smaDayArchiveWindow(date: LocalDate, zoneId: ZoneId): SmaDayArchive
     )
 }
 
+internal fun dayYieldFromCumulativeTotals(totals: List<Long>): Long {
+    val positiveTotals = totals.filter { it > 0L }
+    val first = positiveTotals.firstOrNull() ?: return 0L
+    val last = positiveTotals.last()
+    return (last - first).coerceAtLeast(0L)
+}
+
 private class SessionTrace(
     private val mac: String?,
 ) {
@@ -671,8 +678,8 @@ private class SmaBluetoothSession(
         )
         var previousTimestamp = 0L
         var previousTotalWh = 0L
-        var firstTotalWh: Long? = null
-        var lastTotalWh = 0L
+        var sawValidTotal = false
+        val cumulativeTotals = mutableListOf<Long>()
         var maxPower = 0
         val spotSamples = mutableListOf<SpotSampleEntity>()
 
@@ -682,8 +689,8 @@ private class SmaBluetoothSession(
                 val timestamp = uint32(packet.payload, offset)
                 val totalWh = uint64(packet.payload, offset + 4)
                 if (totalWh != U64_NAN && totalWh >= 0) {
-                    if (firstTotalWh == null) firstTotalWh = totalWh
-                    lastTotalWh = totalWh
+                    sawValidTotal = true
+                    cumulativeTotals += totalWh
                     var watts: Int? = null
                     if (previousTotalWh > 0L && timestamp > previousTimestamp) {
                         val deltaWh = totalWh - previousTotalWh
@@ -709,15 +716,11 @@ private class SmaBluetoothSession(
             }
         }
 
-        val dayYield = if (firstTotalWh != null && lastTotalWh >= firstTotalWh) {
-            lastTotalWh - firstTotalWh
-        } else {
-            0L
-        }
+        val dayYield = dayYieldFromCumulativeTotals(cumulativeTotals)
 
         // totalYieldWh is the yield of this day, never the lifetime meter reading: a day without
         // production is a real zero-yield record, not the inverter's cumulative total.
-        return if (firstTotalWh != null) {
+        return if (sawValidTotal) {
             DayArchiveParse(
                 dayAggregate = DayAggregateEntity(
                     deviceId = deviceId,

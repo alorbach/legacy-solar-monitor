@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.WorkManager
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
+import com.alorbach.solarmonitor.data.local.SpotSampleMerger
 import com.alorbach.solarmonitor.data.importing.ImportCopyStore
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
@@ -25,6 +26,7 @@ import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.domain.DashboardMetrics
 import com.alorbach.solarmonitor.domain.EarningsCalculator
 import com.alorbach.solarmonitor.domain.EventAlertPolicy
+import com.alorbach.solarmonitor.domain.CurrentHourArchiveCoverage
 import com.alorbach.solarmonitor.domain.StatisticsAggregator
 import com.alorbach.solarmonitor.domain.StatsSeriesFill
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
@@ -39,6 +41,9 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -56,6 +61,8 @@ class SolarRepository(
         const val HOUR_AGGREGATES_SCHEMA_VERSION = 2
     }
     private val dao = db.dao()
+    private val _dataRevision = MutableStateFlow(0L)
+    val dataRevision: StateFlow<Long> = _dataRevision.asStateFlow()
     private val hourRecomputeMutexes = ConcurrentHashMap<Long, Mutex>()
     private val importCopyStore = ImportCopyStore(appContext) { deviceId ->
         dao.getDeviceById(deviceId) != null
@@ -225,7 +232,13 @@ class SolarRepository(
     }
 
     suspend fun saveLiveSample(deviceId: Long, sample: SpotSampleEntity, status: String) {
-        saveSpotSamples(listOf(sample))
+        val prior = dao.getSpotSamplesInRange(
+            deviceId = deviceId,
+            fromEpochSeconds = sample.timestampEpochSeconds,
+            toEpochSeconds = sample.timestampEpochSeconds,
+        ).firstOrNull()
+        val merged = prior?.let { SpotSampleMerger.merge(it, sample) } ?: sample
+        saveSpotSamples(listOf(merged))
         updateDeviceStatus(
             deviceId = deviceId,
             status = status,
@@ -244,6 +257,54 @@ class SolarRepository(
         if (items.isNotEmpty()) dao.upsertMonthAggregates(items)
     }
 
+    suspend fun hasCurrentHourDayArchive(
+        deviceId: Long,
+        nowEpochSeconds: Long = Instant.now().epochSecond,
+    ): Boolean {
+        val zoneId = deviceZone(deviceId)
+        val now = Instant.ofEpochSecond(nowEpochSeconds).atZone(zoneId)
+        val startOfDay = now.toLocalDate().atStartOfDay(zoneId).toEpochSecond()
+        val latest = dao.getLatestBluetoothDayArchiveTimestamp(
+            deviceId = deviceId,
+            fromEpochSeconds = startOfDay,
+            toEpochSeconds = nowEpochSeconds,
+        )
+        return CurrentHourArchiveCoverage.isCovered(latest, nowEpochSeconds, zoneId)
+    }
+
+    suspend fun saveDayArchive(
+        deviceId: Long,
+        dayItems: List<DayAggregateEntity>,
+        spotSamples: List<SpotSampleEntity> = emptyList(),
+    ) {
+        val mergedSpotSamples = if (spotSamples.isEmpty()) {
+            emptyList()
+        } else {
+            val existing = dao.getSpotSamplesInRange(
+                deviceId = deviceId,
+                fromEpochSeconds = spotSamples.minOf { it.timestampEpochSeconds },
+                toEpochSeconds = spotSamples.maxOf { it.timestampEpochSeconds },
+            ).associateBy { it.timestampEpochSeconds }
+            spotSamples.map { incoming ->
+                existing[incoming.timestampEpochSeconds]?.let { prior ->
+                    SpotSampleMerger.merge(prior, incoming)
+                } ?: incoming
+            }
+        }
+        if (mergedSpotSamples.isNotEmpty()) dao.upsertSpotSamples(mergedSpotSamples)
+        if (dayItems.isNotEmpty()) dao.mergeDayAggregates(dayItems)
+        if (mergedSpotSamples.isNotEmpty()) {
+            recomputeHourAggregates(
+                deviceId = deviceId,
+                fromEpochSeconds = mergedSpotSamples.minOf { it.timestampEpochSeconds },
+                toEpochSeconds = mergedSpotSamples.maxOf { it.timestampEpochSeconds },
+            )
+        }
+        if (dayItems.isNotEmpty() || mergedSpotSamples.isNotEmpty()) {
+            _dataRevision.value += 1L
+        }
+    }
+
     suspend fun saveArchiveSync(
         deviceId: Long,
         dayItems: List<DayAggregateEntity>,
@@ -251,14 +312,12 @@ class SolarRepository(
         spotSamples: List<SpotSampleEntity> = emptyList(),
         status: String,
     ) {
-        if (spotSamples.isNotEmpty()) dao.upsertSpotSamples(spotSamples)
-        if (dayItems.isNotEmpty()) dao.mergeDayAggregates(dayItems)
+        saveDayArchive(
+            deviceId = deviceId,
+            dayItems = dayItems,
+            spotSamples = spotSamples,
+        )
         if (monthItems.isNotEmpty()) dao.upsertMonthAggregates(monthItems)
-        if (spotSamples.isNotEmpty()) {
-            val from = spotSamples.minOf { it.timestampEpochSeconds }
-            val to = spotSamples.maxOf { it.timestampEpochSeconds }
-            recomputeHourAggregates(deviceId, from, to)
-        }
         updateDeviceStatus(
             deviceId = deviceId,
             status = status,

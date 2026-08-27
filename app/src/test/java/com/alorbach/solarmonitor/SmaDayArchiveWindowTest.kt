@@ -1,5 +1,6 @@
 package com.alorbach.solarmonitor
 
+import com.alorbach.solarmonitor.device.dayYieldFromCumulativeTotals
 import com.alorbach.solarmonitor.device.smaDayArchiveWindow
 import java.time.Duration
 import java.time.LocalDate
@@ -37,5 +38,26 @@ class SmaDayArchiveWindowTest {
         val window = smaDayArchiveWindow(LocalDate.of(2026, 10, 25), berlin)
 
         assertEquals(Duration.ofHours(25).seconds, window.endEpochSeconds - window.startEpochSeconds)
+    }
+
+    @Test
+    fun leadingZeroDoesNotTurnLifetimeMeterIntoDailyYield() {
+        assertEquals(
+            20_000L,
+            dayYieldFromCumulativeTotals(listOf(0L, 138_393_515L, 138_413_515L)),
+        )
+    }
+
+    @Test
+    fun allZeroTotalsRemainZeroYield() {
+        assertEquals(0L, dayYieldFromCumulativeTotals(listOf(0L, 0L)))
+    }
+
+    @Test
+    fun positiveCumulativeTotalsUseLastMinusFirst() {
+        assertEquals(
+            39_295L,
+            dayYieldFromCumulativeTotals(listOf(29_933L, 50_000L, 69_228L)),
+        )
     }
 }

@@ -359,6 +359,7 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
     val bluetoothDevices by container.bluetoothGateway.discoveredDevices.collectAsStateWithLifecycle()
     val isScanning by container.bluetoothGateway.isDiscovering.collectAsStateWithLifecycle()
     val settings by container.settingsStore.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+    val repositoryDataRevision by container.repository.dataRevision.collectAsStateWithLifecycle()
     var localDataEpoch by remember { mutableStateOf(0L) }
 
     LaunchedEffect(Unit) {
@@ -373,12 +374,13 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
             "${job.id}:${job.status}:${job.completedAtEpochSeconds ?: job.createdAtEpochSeconds}"
         }
     }
-    val dataRevision = remember(localDataEpoch, importJobsFingerprint) {
-        localDataEpoch + importJobsFingerprint.hashCode().toLong()
+    val dataRevision = remember(localDataEpoch, importJobsFingerprint, repositoryDataRevision) {
+        localDataEpoch + importJobsFingerprint.hashCode().toLong() + repositoryDataRevision
     }
-    val portfolioRefreshKey = remember(devices, importJobsFingerprint, localDataEpoch) {
+    val portfolioRefreshKey = remember(devices, importJobsFingerprint, localDataEpoch, repositoryDataRevision) {
         buildString {
             append(localDataEpoch)
+            append('|').append(repositoryDataRevision)
             append('|')
             append(importJobsFingerprint)
             append('|')

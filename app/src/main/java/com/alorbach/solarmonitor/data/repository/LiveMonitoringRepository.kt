@@ -4,11 +4,13 @@ import android.content.Context
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.cloud.BackupTrigger
 import com.alorbach.solarmonitor.data.cloud.CloudBackupCoordinator
+import com.alorbach.solarmonitor.data.model.DayArchiveResult
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
 import com.alorbach.solarmonitor.device.SmaStatusLabels
 import java.time.LocalDate
+import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
@@ -191,6 +193,24 @@ class LiveMonitoringRepository(
                 )
             }
             runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
+            if (continuous && device != null) {
+                try {
+                    refreshCurrentDayArchiveIfNeeded(device, continuous = true)
+                        .getOrNull()
+                        ?.let { archive ->
+                            repository.saveDayArchive(
+                                deviceId = device.id,
+                                dayItems = archive.dayAggregates,
+                                spotSamples = archive.spotSamples,
+                            )
+                            runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
+                        }
+                } catch (error: kotlinx.coroutines.CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    // The current-day archive is supplemental; retain the successful live read.
+                }
+            }
         }.onFailure {
             // Aborting closes the socket, so the read fails with a socket error that would
             // otherwise be shown instead of the cancellation the user asked for.
@@ -214,6 +234,32 @@ class LiveMonitoringRepository(
         } finally {
             inFlightWork.decrementAndGet()
         }
+    }
+
+    private suspend fun refreshCurrentDayArchiveIfNeeded(
+        device: DeviceProfileEntity,
+        continuous: Boolean,
+    ): Result<DayArchiveResult?> {
+        val nowEpochSeconds = Instant.now().epochSecond
+        if (repository.hasCurrentHourDayArchive(device.id, nowEpochSeconds)) {
+            return Result.success(null)
+        }
+        val zoneId = runCatching {
+            ZoneId.of(device.timezone.takeIf { it.isNotBlank() } ?: ZoneId.systemDefault().id)
+        }.getOrDefault(ZoneId.systemDefault())
+        var aborted = false
+        val result = withOperation(device.btMac, continuous) { op ->
+            bluetoothGateway.syncDayArchive(
+                repository.withResolvedPin(device),
+                LocalDate.now(zoneId),
+            ).also { aborted = op.aborted }
+        }
+        return result
+            .cancelledIfAborted(
+                aborted,
+                appContext.getString(R.string.archive_sync_cancelled),
+            )
+            .map { it.value }
     }
 
     /**
@@ -285,7 +331,37 @@ class LiveMonitoringRepository(
         val monthGatewayResult = monthResult.getOrNull()
         // Day and month archives use separate Bluetooth sessions, so one can fail on a flaky link
         // while the other returns usable records. Keep whatever arrived instead of discarding both.
-        if (dayGatewayResult == null && monthGatewayResult == null) {
+        if (dayGatewayResult == null && monthGatewayResult == null && !aborted) {
+            val currentDayRetry = refreshCurrentDayArchiveIfNeeded(device, continuous = false)
+            if (currentDayRetry.exceptionOrNull()?.message ==
+                appContext.getString(R.string.archive_sync_cancelled)
+            ) {
+                aborted = true
+            }
+            val currentDayArchive = currentDayRetry.getOrNull()
+            if (currentDayArchive != null) {
+                return runCatching {
+                    repository.saveDayArchive(
+                        deviceId = device.id,
+                        dayItems = currentDayArchive.dayAggregates,
+                        spotSamples = currentDayArchive.spotSamples,
+                    )
+                    val retryStatus = appContext.getString(
+                        R.string.archive_sync_partial,
+                        "month",
+                        monthResult.exceptionOrNull()?.message
+                            ?: appContext.getString(R.string.archive_sync_failed),
+                    )
+                    repository.updateDeviceStatus(
+                        deviceId = device.id,
+                        status = retryStatus,
+                        archiveAtEpochSeconds = System.currentTimeMillis() / 1000,
+                    )
+                    cloudBackupCoordinator.enqueue(BackupTrigger.Auto)
+                    runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
+                    "$retryStatus: ${currentDayArchive.dayAggregates.size} current-day records"
+                }.map { message -> message }
+            }
             val error = dayResult.exceptionOrNull()
                 ?: monthResult.exceptionOrNull()
                 ?: IllegalStateException(appContext.getString(R.string.archive_sync_failed))
@@ -323,9 +399,38 @@ class LiveMonitoringRepository(
                 spotSamples = spotSamples,
                 status = status,
             )
+            val currentDayResult = if (!aborted) {
+                refreshCurrentDayArchiveIfNeeded(device, continuous = false)
+            } else {
+                Result.success(null)
+            }
+            if (currentDayResult.exceptionOrNull()?.message ==
+                appContext.getString(R.string.archive_sync_cancelled)
+            ) {
+                aborted = true
+            }
+            val currentDayArchive = currentDayResult.getOrNull()
+            if (currentDayArchive != null) {
+                repository.saveDayArchive(
+                    deviceId = device.id,
+                    dayItems = currentDayArchive.dayAggregates,
+                    spotSamples = currentDayArchive.spotSamples,
+                )
+            }
+            val finalStatus = when {
+                aborted -> appContext.getString(R.string.archive_sync_cancelled)
+                status == appContext.getString(R.string.archive_sync_ok) && currentDayResult.isFailure ->
+                    appContext.getString(
+                        R.string.archive_sync_partial,
+                        "day",
+                        currentDayResult.exceptionOrNull()?.message
+                            ?: appContext.getString(R.string.archive_sync_failed),
+                    )
+                else -> status
+            }
             repository.updateDeviceStatus(
                 deviceId = device.id,
-                status = status,
+                status = finalStatus,
                 archiveAtEpochSeconds = System.currentTimeMillis() / 1000,
                 socketStrategy = monthGatewayResult?.socketStrategy?.ifBlank { null }
                     ?: dayGatewayResult?.socketStrategy.orEmpty(),
@@ -334,7 +439,8 @@ class LiveMonitoringRepository(
                     .joinToString("\n---\n"),
                 serial = monthGatewayResult?.inverterSerial ?: dayGatewayResult?.inverterSerial,
             )
-            "$status: ${dayItems.size} day records, ${monthItems.size} month records, ${spotSamples.size} samples"
+            "$finalStatus: ${dayItems.size} day records, ${monthItems.size} month records, ${spotSamples.size} samples" +
+                if (currentDayArchive == null) "" else ", ${currentDayArchive.dayAggregates.size} current-day records"
         }.onFailure {
             repository.updateDeviceStatus(device.id, it.message ?: appContext.getString(R.string.archive_sync_failed))
         }.let { saved ->

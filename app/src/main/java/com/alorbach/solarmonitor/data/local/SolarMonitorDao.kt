@@ -139,6 +139,18 @@ interface SolarMonitorDao {
         toEpochSeconds: Long,
     ): List<SpotSampleEntity>
 
+    @Query(
+        "SELECT MAX(timestampEpochSeconds) FROM spot_samples " +
+            "WHERE deviceId = :deviceId " +
+            "AND sourceType = 'bluetooth_day_archive' " +
+            "AND timestampEpochSeconds BETWEEN :fromEpochSeconds AND :toEpochSeconds",
+    )
+    suspend fun getLatestBluetoothDayArchiveTimestamp(
+        deviceId: Long,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+    ): Long?
+
     @Query("SELECT * FROM spot_samples WHERE deviceId = :deviceId ORDER BY timestampEpochSeconds")
     suspend fun getAllSpotSamples(deviceId: Long): List<SpotSampleEntity>
 

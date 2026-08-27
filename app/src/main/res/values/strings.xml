@@ -245,7 +245,7 @@
     <string name="about_not_affiliated">Not affiliated with SMA Solar Technology AG.</string>
     <string name="about_github">Source on GitHub</string>
     <string name="about_github_url" translatable="false">https://github.com/alorbach/legacy-solar-monitor</string>
-    <string name="about_supported_devices">Supported devices</string>
+    <string name="about_supported_devices">Supported Solar Inverters</string>
     <string name="about_supported_devices_url" translatable="false">https://github.com/alorbach/legacy-solar-monitor/blob/main/docs/SUPPORTED-DEVICES.md</string>
     <string name="about_privacy">Privacy policy</string>
     <string name="about_privacy_url" translatable="false">https://github.com/alorbach/legacy-solar-monitor/blob/main/docs/PRIVACY.md</string>
