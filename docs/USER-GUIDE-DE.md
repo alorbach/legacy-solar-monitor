@@ -60,7 +60,7 @@ Das gelbe Banner oben öffnet App-, Standort- oder Bluetooth-Einstellungen, wenn
 3. Ungepaarte Geräte erscheinen während der Suche; bereits gebundene ebenfalls. Namen mit `SMA` stehen oben.
 4. Auf ein Ergebnis tippen, um ein Profil anzulegen (Bluetooth-Name, MAC, Modell `Legacy SMA`, PIN-Startwert `0000`). Neue Profile erhalten auch einen Standard-EUR-Tarif.
 5. Oder **+** tippen. Das füllt vom besten Gerät in der Nähe/gebunden, sonst ein leeres Profil. Die MAC kann später eingetragen werden.
-6. Name, Anlagenbetreiber, PIN, MAC, Seriennummer und Modell bearbeiten. PIN: Ziffern, max. 12. Nur **Benutzer**-Login (oft `0000`). Eine Installateur-PIN funktioniert nicht.
+6. Name, Anlagenbetreiber, PIN, MAC, Seriennummer und Modell bearbeiten. Die PIN darf bis zu 12 Buchstaben (A–Z, a–z) und Ziffern enthalten. Nur **Benutzer**-Login (oft `0000`). Eine Installateur-PIN funktioniert nicht.
 7. **Speichern**, dann **Test**. Danach **Live** (Einzellese) und **Sync** (Archiv).
 
 Ein Profil pro MAC. Doppelte MACs werden abgelehnt.
