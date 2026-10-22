@@ -61,7 +61,7 @@ The yellow banner at the top of the app opens App, Location, or Bluetooth settin
 3. Unpaired devices show while the scan runs; already-bonded ones are listed too. Names containing `SMA` sort first.
 4. Tap a result to create a profile (Bluetooth name, MAC, model `Legacy SMA`, PIN seed `0000`). A new profile also gets a default EUR tariff.
 5. Or tap **+**. That seeds from the best nearby/bonded device, or a blank profile if nothing is in range. You can type the MAC later.
-6. Edit name, owner (plant operator), PIN, MAC, serial, and model. PIN is digits, max 12. Login is **user-level** only (seed `0000` on many inverters). An installer PIN will not work.
+6. Edit name, owner (plant operator), PIN, MAC, serial, and model. The PIN can contain up to 12 letters (A–Z, a–z) and digits. Login is **user-level** only (seed `0000` on many inverters). An installer PIN will not work.
 7. Tap **Save**, then **Test**. When that succeeds, use **Live** (one-shot read) and **Sync** (archive).
 
 One profile per MAC. Duplicate MACs are rejected.

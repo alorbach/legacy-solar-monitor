@@ -75,6 +75,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -420,11 +422,16 @@ internal fun DeviceEditorCard(
             OutlinedTextField(value = owner, onValueChange = { owner = it }, modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.owner)) }, singleLine = true)
             OutlinedTextField(
                 value = smaPin,
-                onValueChange = { smaPin = it.filter(Char::isDigit).take(12) },
+                onValueChange = {
+                    smaPin = it.filter { char ->
+                        char in 'a'..'z' || char in 'A'..'Z' || char in '0'..'9'
+                    }.take(12)
+                },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text(stringResource(R.string.sma_pin)) },
                 supportingText = { Text(stringResource(R.string.sma_pin_default_hint)) },
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 visualTransformation = if (showPin) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showPin = !showPin }) {
