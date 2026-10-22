@@ -1,0 +1,28 @@
+app/src/main/java/com/alorbach/solarmonitor/ui/DevicesTab.kt
+  s_55aa4d0faf60e7::t_e5bd2f803d2223 78
+  s_55aa4d0faf60e7::t_2f0012d8ab52ba 79,425-429,434
+app/build.gradle.kts
+  s_55aa4d0faf60e7::t_8440ecb1f02b58 29-30
+docs/USER-GUIDE-DE.md
+  s_55aa4d0faf60e7::t_2f0012d8ab52ba 63
+.github/workflows/ci.yml
+  s_55aa4d0faf60e7::t_8440ecb1f02b58 1-38
+docs/USER-GUIDE.md
+  s_55aa4d0faf60e7::t_2f0012d8ab52ba 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1c1208aef5ec043f06626a399ce91c1889db0f29",
+  "prompts": {},
+  "sessions": {
+    "s_55aa4d0faf60e7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16546-1a9d-71c2-a2fb-c56f53b12968",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
