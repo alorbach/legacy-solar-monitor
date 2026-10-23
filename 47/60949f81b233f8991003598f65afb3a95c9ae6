@@ -1,0 +1,26 @@
+app/build.gradle.kts
+  s_c28ca11d9bdf42::t_398d94df35126e 20
+  s_c28ca11d9bdf42::t_723a57e9711e19 104-110,113
+.github/workflows/release.yml
+  s_c28ca11d9bdf42::t_71639937516534 141-145
+docs/DEV-github-release.md
+  s_c28ca11d9bdf42::t_8c7e3b6fc64cd0 85-86,91
+  s_c28ca11d9bdf42::t_c083fbec978416 64-68
+  s_c28ca11d9bdf42::t_dac23beb1f6718 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4760949f81b233f8991003598f65afb3a95c9ae6",
+  "prompts": {},
+  "sessions": {
+    "s_c28ca11d9bdf42": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "85f24a03-a848-45f3-8e6a-ee91a54463b0",
+        "model": "default"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}

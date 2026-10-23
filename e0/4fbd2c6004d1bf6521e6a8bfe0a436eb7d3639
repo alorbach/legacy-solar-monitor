@@ -1,0 +1,50 @@
+app/build.gradle.kts
+  s_ea0c9fcc742315::t_a468cd3e83b2d8 29
+app/src/main/java/com/alorbach/solarmonitor/domain/ReportExporter.kt
+  s_ea0c9fcc742315::t_e60163ebe3b256 99
+  s_ea0c9fcc742315::t_bf5c702883be4b 152-155
+  s_ea0c9fcc742315::t_8a149fe3e7a4ff 13
+app/src/test/java/com/alorbach/solarmonitor/SmaStatusLabelsTest.kt
+  s_ea0c9fcc742315::t_91e580761f9cb2 26-41
+  s_ea0c9fcc742315::t_9ae3aa8adfd5f1 1-25,42-47
+app/src/main/res/values-de/strings.xml
+  s_ea0c9fcc742315::t_51d05faa6628ed 447-456
+app/src/main/res/values/strings.xml
+  s_ea0c9fcc742315::t_75e48521c30659 451-460
+app/src/main/java/com/alorbach/solarmonitor/device/SmaStatusLabels.kt
+  s_ea0c9fcc742315::t_ea8abe4b932216 1-6,23-47,66,68
+  s_ea0c9fcc742315::t_282414cb4443c9 7-22,48-65,67
+app/src/main/java/com/alorbach/solarmonitor/device/SmaLegacyBluetoothGateway.kt
+  s_ea0c9fcc742315::t_4385517e4bb859 651-652
+app/src/main/java/com/alorbach/solarmonitor/data/repository/LiveMonitoringRepository.kt
+  s_ea0c9fcc742315::t_06acd594116dd6 187-188
+  s_ea0c9fcc742315::t_6e899fad721688 10
+app/src/main/java/com/alorbach/solarmonitor/ui/DashboardTab.kt
+  s_3e53788aa56bf1::t_46bed1e4f590fa 99,609-615,635,649
+app/src/main/java/com/alorbach/solarmonitor/ui/DevicesTab.kt
+  s_3e53788aa56bf1::t_8e74fbf4e7cdf9 106,409-413,519-526,591-592
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e04fbd2c6004d1bf6521e6a8bfe0a436eb7d3639",
+  "prompts": {},
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_ea0c9fcc742315": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a6e44cc9-0b66-4602-a0cc-bb8f6f76776e",
+        "model": "default"
+      },
+      "human_author": null
+    }
+  }
+}

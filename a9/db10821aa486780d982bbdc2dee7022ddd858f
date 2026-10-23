@@ -1,0 +1,121 @@
+app/schemas/com.alorbach.solarmonitor.data.local.SolarMonitorDatabase/5.json
+  s_8c301e5526e560::t_63425f122e7a72 1-897
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleCloudStorageBackupRepository.kt
+  s_8c301e5526e560::t_72f451d40b2809 153,157,162
+  s_8c301e5526e560::t_9d0bda80ecaf7e 244-245
+  s_8c301e5526e560::t_4a215dbd218e05 246-252
+  s_8c301e5526e560::t_51de88f5e51969 66,75,78,80,97-98,100
+  s_8c301e5526e560::t_79748adc4324a6 236-240,242-243
+app/src/main/java/com/alorbach/solarmonitor/data/AppContainer.kt
+  s_8c301e5526e560::t_fce36f69543d46 35
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDatabase.kt
+  s_8c301e5526e560::t_e8f26f4d865ef7 31,84-90,97
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_8c301e5526e560::t_e04010e66a192d 323
+  s_8c301e5526e560::t_f3124095c59852 530,557-563
+  s_8c301e5526e560::t_3fbebfb06d8c82 544,547-549
+  s_8c301e5526e560::t_87294415f307ee 4,25
+  s_8c301e5526e560::t_9967395a25410d 516-524,545-546
+  s_8c301e5526e560::t_4217ba16da66cd 338,341-349
+  s_8c301e5526e560::t_28138cda0a2e72 575,577
+  s_8c301e5526e560::t_ee4ebcf0c6fc4e 45
+  s_8c301e5526e560::t_e8773be4b7f808 514,525-529,531-543,550-554,564
+  s_8c301e5526e560::t_d12f0986e19ed2 583,588
+  s_8c301e5526e560::t_99787c836f1c82 22
+  s_8c301e5526e560::t_1ec5d99d795d80 262-265
+  s_8c301e5526e560::t_bd1501d0b9129a 287-322
+app/src/test/java/com/alorbach/solarmonitor/CloudBackupPolicyTest.kt
+  s_8c301e5526e560::t_cf170fe2efa862 155-166
+  s_8c301e5526e560::t_2c319c7111c8f0 188-199
+  s_8c301e5526e560::t_708114c3f07ea0 154,167,187
+  s_8c301e5526e560::t_adc513b5a0084d 168-186
+app/src/main/res/values/strings.xml
+  s_8c301e5526e560::t_4a862c57154339 101
+  s_8c301e5526e560::t_43442b0701d1a8 147
+  s_8c301e5526e560::t_2ab9b3474160ee 146
+  s_8c301e5526e560::t_77e8617347864b 138,150-153
+  s_8c301e5526e560::t_d175b08bb4f56a 139-145,148-149
+app/src/main/java/com/alorbach/solarmonitor/ui/StatisticsScreen.kt
+  s_8c301e5526e560::t_09aed21557bded 94-95
+app/src/main/java/com/alorbach/solarmonitor/work/ScheduledImportWorker.kt
+  s_8c301e5526e560::t_c184b77ce7538f 84-85
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDao.kt
+  s_4897d842cd8d67::t_aa507f582663f9 209
+  s_8c301e5526e560::t_56880a40f9eb4f 210-222
+  s_8c301e5526e560::t_d282d2b243d718 186-193
+  s_8c301e5526e560::t_ab41b230debe06 185
+  s_8c301e5526e560::t_a39c63cf591bd3 172-176
+  s_8c301e5526e560::t_1d2b1e8c738ec1 12
+  s_8c301e5526e560::t_07d77b9e5460c2 180-184
+  s_8c301e5526e560::t_59e0a0310c6001 177-179
+  s_8c301e5526e560::t_241006e192e718 207-208
+app/src/main/java/com/alorbach/solarmonitor/data/importing/ImportManager.kt
+  s_8c301e5526e560::t_1224bc90deb847 32,43-44,47,52-53,67-69
+  s_8c301e5526e560::t_bcd006a852761d 56-58,65-66
+  s_8c301e5526e560::t_978d1a98ff4e62 350-370,381-389
+  s_8c301e5526e560::t_b1824c01cd6e09 371-380
+  s_8c301e5526e560::t_a5a52093800556 345-349
+  s_8c301e5526e560::t_ff6ace70ac7686 33-42,59-64
+  s_8c301e5526e560::t_d2be698cf485fd 276
+app/src/main/java/com/alorbach/solarmonitor/data/importing/ImportReplay.kt
+  s_8c301e5526e560::t_5e603b9d1ce992 9-10
+  s_8c301e5526e560::t_195851f5c6c285 36-40,45,57
+  s_8c301e5526e560::t_44b490362d4913 1-8,11-35,41-44,46-56,58-74,84-186
+  s_8c301e5526e560::t_2b0f1d711e27e1 75-83
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt
+  s_8c301e5526e560::t_5a6bd17280934c 84-85,87
+  s_8c301e5526e560::t_debb2123ab10e9 86,90-91,102-109
+  s_8c301e5526e560::t_13ccfa1899e6d4 89
+  s_8c301e5526e560::t_aa37ee78680c71 92-101
+  s_8c301e5526e560::t_f742752fa73ef6 88
+app/src/main/res/values-de/strings.xml
+  s_8c301e5526e560::t_33f7d9d06275bd 147
+  s_8c301e5526e560::t_60452cfebdffe4 139-145,148-149
+  s_8c301e5526e560::t_c17a89b81a7002 138,150-153
+  s_8c301e5526e560::t_86bcdbc7051c1c 146
+  s_8c301e5526e560::t_8eb2be0dd57415 101
+app/src/main/java/com/alorbach/solarmonitor/data/model/Models.kt
+  s_8c301e5526e560::t_e999230ca3c348 273-276
+  s_8c301e5526e560::t_6b83bbc0572f85 217-224
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_8c301e5526e560::t_559b51efcf0453 179-180,187
+  s_8c301e5526e560::t_a93a2fb097b83d 269
+  s_8c301e5526e560::t_dc76fd80d5605e 22
+  s_8c301e5526e560::t_cca9451685ce6f 186,194-195,198
+  s_8c301e5526e560::t_847e0232d2a6a6 7,9-10,15-16
+  s_8c301e5526e560::t_394f0723ab8a97 157,159-161,173-177,181-183,201-205,207,210,220-226,228-236,239-242,244-246,248-253,256-264,266-268,270-307,310-312,319-321,323-324,327-332
+  s_8c301e5526e560::t_ec5e0f1c48e352 227,237,243
+  s_8c301e5526e560::t_48c2f57af62fa6 67-68
+  s_8c301e5526e560::t_be21c127c1c84f 155-156,178,309
+  s_8c301e5526e560::t_54cc7dad939543 165
+  s_8c301e5526e560::t_c9a60db1588249 206,212
+  s_8c301e5526e560::t_8766c581ea5edb 208-209,211,213-219,238,313-316,318,322
+  s_8c301e5526e560::t_971dcb239ed173 21,32,41-42,45
+  s_8c301e5526e560::t_4115e4abb8ae77 50-54,76-125,128-129,158,184-185,188-189,191-193,196-197,199
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_8c301e5526e560::t_dee7dd2e47343d 23-24,34,54,63,67,104-105,479,511-513,517-523,541-544,557-562,568-592,615-618,1227-1231,1234-1264,1389-1402,1414-1454,1463-1571
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a9db10821aa486780d982bbdc2dee7022ddd858f",
+  "prompts": {},
+  "sessions": {
+    "s_4897d842cd8d67": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe0fb-e7f6-70a1-a48d-9d4227eaec3b",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_8c301e5526e560": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "07c5f528-6db7-402b-9f77-3a7fdd964794",
+        "model": "grok-4.5"
+      },
+      "human_author": null
+    }
+  }
+}

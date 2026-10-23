@@ -1,0 +1,50 @@
+.gitignore
+  s_212b0bcb6ac48c::t_1e6da510468c58 84
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleDriveBackupRepository.kt
+  s_212b0bcb6ac48c::t_a2f25805b759ba 239-242
+  s_212b0bcb6ac48c::t_61896338cb68bf 243,248
+AGENTS.md
+  s_212b0bcb6ac48c::t_d9e1074a729cfb 73
+app/build.gradle.kts
+  s_212b0bcb6ac48c::t_c881402e01df34 20
+  s_212b0bcb6ac48c::t_24a4954dc516c0 45-63,70,72
+  s_212b0bcb6ac48c::t_68e06d6d445f94 97-103
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_212b0bcb6ac48c::t_8cc765a4d7ee4f 88
+.github/workflows/release.yml
+  s_212b0bcb6ac48c::t_13444cc4f31f07 20-31,36-54,56
+  s_212b0bcb6ac48c::t_6b589294193fc8 121-122,129-130,142-143
+  s_212b0bcb6ac48c::t_b25a7ec76c5250 64
+  s_212b0bcb6ac48c::t_e5eaa6c685008a 1-19,32-35,55,57-63,65-120,123-128,131-141,144-165
+docs/PLAY-LISTING.md
+  s_212b0bcb6ac48c::t_1f27f710457588 87-89
+  s_212b0bcb6ac48c::t_dddbc6264b3042 101-117
+docs/ARCHITECTURE.md
+  s_212b0bcb6ac48c::t_0e95ce49781d53 3
+docs/DEV-google-drive.md
+  s_212b0bcb6ac48c::t_e5549a245dc190 62-70
+README.md
+  s_212b0bcb6ac48c::t_ba255611899e7e 57-58
+  s_212b0bcb6ac48c::t_f011ab3f144069 50
+docs/DEV-github-release.md
+  s_212b0bcb6ac48c::t_26322daa121b46 1-46,48-83
+  s_212b0bcb6ac48c::t_ca4ea9f5d9b0a1 47
+app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt
+  s_212b0bcb6ac48c::t_8daa2803c6a787 38-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "65efb83ef6840a1f5429c68a3e804caf83039b70",
+  "prompts": {},
+  "sessions": {
+    "s_212b0bcb6ac48c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "deeb1944-fb2c-45be-aa41-dc000792aa39",
+        "model": "grok-4.6"
+      },
+      "human_author": null
+    }
+  }
+}

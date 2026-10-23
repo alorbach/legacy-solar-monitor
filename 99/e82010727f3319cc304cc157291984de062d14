@@ -1,0 +1,143 @@
+app/src/main/res/values/strings.xml
+  s_6ab301dc37637c::t_bae15a32af61c0 362-392
+  s_3e816a34763772::t_fa77134da0ee70 248
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_6ab301dc37637c::t_edb4d2f40695f8 49
+  s_6ab301dc37637c::t_8bf6cefda01e3d 132
+  s_3e816a34763772::t_029627cd02548b 32-33,35-36
+  s_6ab301dc37637c::t_92f6fa5296da56 199-217,219-224,228,230-234,237-257
+  s_6ab301dc37637c::t_ce48a5e85e691d 112-118
+  s_3e816a34763772::t_6aececf7d4c91a 218,225-227,229,235,262
+  s_3e816a34763772::t_b0d9a38e09b15e 318-322,324-328,335-339
+  s_3e816a34763772::t_2885956b036a86 418
+  s_3e816a34763772::t_4322f35cb8fddc 297,303
+  s_3e816a34763772::t_2e8bdc630c8bb6 274
+  s_3e816a34763772::t_674343a42ec960 409-411
+  s_3e816a34763772::t_869548b3aba4db 440,444
+app/src/main/java/com/alorbach/solarmonitor/domain/ReportExporter.kt
+  s_6ab301dc37637c::t_1e5246380e53a4 253-255
+  s_6ab301dc37637c::t_b303b280a3d47f 9,11-12,14-79,100,162-252,256-257
+  s_6ab301dc37637c::t_cf57556f71d056 258
+app/src/main/java/com/alorbach/solarmonitor/domain/ProductionStepline.kt
+  s_6ab301dc37637c::t_5e3975bdf1858c 1-22
+app/src/main/java/com/alorbach/solarmonitor/data/settings/AppSettingsStore.kt
+  s_6ab301dc37637c::t_fbb8e9443a91df 183-184
+  s_6ab301dc37637c::t_378461a67375a7 160-162
+  s_6ab301dc37637c::t_9a377f70ad8df9 84-88
+  s_6ab301dc37637c::t_9ad42baaa028b2 43-48
+  s_6ab301dc37637c::t_5ad1d439392cd4 122-123
+app/src/main/java/com/alorbach/solarmonitor/data/security/CredentialStore.kt
+  s_6ab301dc37637c::t_906c1432cdac35 81
+app/src/test/java/com/alorbach/solarmonitor/EventAlertPolicyTest.kt
+  s_6ab301dc37637c::t_7b741ddbe0acbc 78-79
+  s_6ab301dc37637c::t_be9e6c58d0ea76 1-77,80-87
+app/src/main/java/com/alorbach/solarmonitor/domain/EventListGrouping.kt
+  s_6ab301dc37637c::t_744baa0073c523 1-81
+app/src/test/java/com/alorbach/solarmonitor/BootLiveMonitorReceiverTest.kt
+  s_6ab301dc37637c::t_f49e4cddc179e1 1-23
+app/src/main/java/com/alorbach/solarmonitor/domain/Analytics.kt
+  s_3e816a34763772::t_7066b7a6fe09a5 5
+  s_3e816a34763772::t_7ee0ba893c9c04 143-147
+app/src/test/java/com/alorbach/solarmonitor/SeriesReportFormatTest.kt
+  s_6ab301dc37637c::t_52280e26933c52 1-17,19-69
+  s_6ab301dc37637c::t_217821d09962c6 18
+app/src/main/AndroidManifest.xml
+  s_6ab301dc37637c::t_1ebe67319b2b41 18
+  s_6ab301dc37637c::t_d052ca5d11fdd2 78
+  s_6ab301dc37637c::t_1325922673d99a 79-89
+app/src/main/java/com/alorbach/solarmonitor/ui/StatisticsScreen.kt
+  s_6ab301dc37637c::t_713626661e109b 78
+  s_3e816a34763772::t_e7a81d1eef3c87 56
+  s_6ab301dc37637c::t_9d5b7d0a77db1d 10-11,31,42
+  s_6ab301dc37637c::t_1b7888a280eec7 367-413
+  s_3e816a34763772::t_6ba903a400526c 422
+  s_6ab301dc37637c::t_f40ddec02e7760 54-55
+  s_6ab301dc37637c::t_a25e44bfe7f3f5 214-219
+  s_6ab301dc37637c::t_8880085d22e528 68
+  s_6ab301dc37637c::t_41050bc5a46af7 506-518
+app/src/main/java/com/alorbach/solarmonitor/service/EventAlertNotifier.kt
+  s_6ab301dc37637c::t_b6455405053eb1 1-108
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_3e53788aa56bf1::t_aca83ded8de4b6 146-160,214,241
+  s_3e53788aa56bf1::t_62de6bf174ab1e 189-213,215,225,239-240,242-245,337-362,461-491,538-550,586,594-597,609-670
+app/src/test/java/com/alorbach/solarmonitor/CloudBackupPolicyTest.kt
+  s_6ab301dc37637c::t_e610239f04e17f 236-270
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_6ab301dc37637c::t_80b09c7cdc66d6 51
+  s_6ab301dc37637c::t_a697a06944df80 270
+  s_6ab301dc37637c::t_bfb45337d68943 285-287,289
+  s_6ab301dc37637c::t_4296e302bc5e08 283-284,288,290-292
+  s_6ab301dc37637c::t_82a541a79e343d 247-249
+app/src/test/java/com/alorbach/solarmonitor/EventListGroupingTest.kt
+  s_6ab301dc37637c::t_1b397370ab2e4b 33-34
+  s_6ab301dc37637c::t_b935745b038cd3 1-32,35-36,38-68,70-88
+  s_6ab301dc37637c::t_440fc2e5ee81ad 69
+  s_6ab301dc37637c::t_48a8770715e613 37
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt
+  s_6ab301dc37637c::t_979aa6085f7ad9 24
+  s_6ab301dc37637c::t_43bda58f1e9000 90
+  s_6ab301dc37637c::t_2d2f607a484d62 91-107
+  s_6ab301dc37637c::t_5e2641e8d9f9ba 19-23
+app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt
+  s_6ab301dc37637c::t_3a02edd14bbbf0 1-56
+app/src/test/java/com/alorbach/solarmonitor/ProductionSteplineTest.kt
+  s_6ab301dc37637c::t_33f9e13f0ddc19 1-29
+app/src/main/java/com/alorbach/solarmonitor/ui/DeviceEventsSection.kt
+  s_6ab301dc37637c::t_f758100c1a4002 287
+  s_6ab301dc37637c::t_3916d22c28946d 3-4,6,11,14,24,28,34-36,39,56,70,128,132-134,145-157,164-190,192-194,198-204,209-214,216-228,231-235,238-244,246-247,250-254,256-286,289,291-304
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/GoogleCloudStorageBackupRepository.kt
+  s_6ab301dc37637c::t_7df203d2b278c9 150-171,180-239
+  s_6ab301dc37637c::t_49139c9ac32f29 172-179
+  s_6ab301dc37637c::t_22ccf2029f83d0 387-388
+app/src/main/java/com/alorbach/solarmonitor/data/AppContainer.kt
+  s_6ab301dc37637c::t_be264efea1e958 31,37
+app/src/main/java/com/alorbach/solarmonitor/domain/EventAlertPolicy.kt
+  s_6ab301dc37637c::t_e3fd28bf9e78e1 1-57
+app/src/main/res/values-de/strings.xml
+  s_3e816a34763772::t_b4712dbd4837ca 248
+  s_6ab301dc37637c::t_7fbd514dd0c123 362-392
+app/src/test/java/com/alorbach/solarmonitor/EarningsCalculatorTest.kt
+  s_3e816a34763772::t_b8ee1719debd41 176-183
+  s_3e816a34763772::t_fb0994bbe1d3eb 5,8
+app/src/main/java/com/alorbach/solarmonitor/ui/DashboardTab.kt
+  s_3e53788aa56bf1::t_d85987285263bb 151,377-427
+app/src/main/java/com/alorbach/solarmonitor/ui/DevicesTab.kt
+  s_3e53788aa56bf1::t_308f5d09351a38 732
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "99e82010727f3319cc304cc157291984de062d14",
+  "prompts": {},
+  "humans": {
+    "h_8e93f0703d8239": {
+      "author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  },
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": null
+    },
+    "s_3e816a34763772": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c9b52af1-a491-46b4-b86e-741cb976dc51",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_6ab301dc37637c": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "eee7ca73-c152-4159-88c1-a4ef691510a5",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}

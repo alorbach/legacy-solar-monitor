@@ -1,0 +1,51 @@
+app/src/main/java/com/alorbach/solarmonitor/ui/CommonUi.kt
+  s_4b1ec068523a7b::t_9703dbc2f52a3c 6
+  s_3e53788aa56bf1::t_68fd1a65e06faf 19,27-30
+app/src/main/res/values/strings.xml
+  s_4b1ec068523a7b::t_8918141a64768c 263
+  s_4b1ec068523a7b::t_37667d1eb85058 99-100
+app/src/main/res/values-de/strings.xml
+  s_4b1ec068523a7b::t_728db09cb1f887 99-100
+  s_4b1ec068523a7b::t_d2e4fc8b39c933 261
+app/src/main/java/com/alorbach/solarmonitor/ui/DashboardTab.kt
+  s_4b1ec068523a7b::t_411eb620a01d49 95
+  s_4b1ec068523a7b::t_0bce513dffbd68 23
+  s_3e53788aa56bf1::t_9c6352c1078ec7 132,134,146,148-157,200,202-205,218-219,223-226,231-235,237-256,294-322,408,410-413,432-438,440-443,462-470,472-475,498-504,506-509,535-541
+app/build.gradle.kts
+  s_4b1ec068523a7b::t_033b75e3e45eb2 18-20
+AGENTS.md
+  s_4b1ec068523a7b::t_8d8375dc4cec4f 1-72
+app/src/main/java/com/alorbach/solarmonitor/widget/SolarWidgets.kt
+  s_4b1ec068523a7b::t_f612c6ae00cb17 9,17-18,21-22,38,40-43,61-92,94-98,102-103,105-107,109-114,119-145,150-152,154-167,176-178,180-188,190-193,195-196,198,200,205,214-216,218-223,225-228,232-240,242,250,260-272
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_4b1ec068523a7b::t_a66df2ec5be2a8 279
+  s_4b1ec068523a7b::t_58b05d18e1d121 303
+  s_4b1ec068523a7b::t_c04e0844c60d0e 44
+app/src/main/java/com/alorbach/solarmonitor/ui/StatisticsScreen.kt
+  s_4b1ec068523a7b::t_fa59fb627efff3 358-374,376-379,402-408,410-413,442-448,450-454
+  s_4b1ec068523a7b::t_1d35161b3d98dc 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "96ff08fe0c5dac383b0b74b009427b592392142e",
+  "prompts": {},
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_4b1ec068523a7b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5bbe2c4c-34ab-484d-9f35-e61c092102b0",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}

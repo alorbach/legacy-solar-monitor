@@ -1,0 +1,103 @@
+docs/USER-GUIDE.md
+  s_a4ad6a2795e9fd::t_457fce9b605ac7 59
+  s_a4ad6a2795e9fd::t_ec04498f2b63bc 34
+  s_a4ad6a2795e9fd::t_297fcd0678c444 131
+  s_a4ad6a2795e9fd::t_8b155f2f7d31f1 61
+  s_a4ad6a2795e9fd::t_0de9969a3bbbd7 23
+AGENTS.md
+  s_a4ad6a2795e9fd::t_88796a88af2d4f 47
+app/src/main/res/values/strings.xml
+  s_a4ad6a2795e9fd::t_387399f8472013 251-254
+app/src/test/java/com/alorbach/solarmonitor/BootLiveMonitorReceiverTest.kt
+  s_a4ad6a2795e9fd::t_551f796cd9f431 18-49
+  s_a4ad6a2795e9fd::t_2ea920437e7252 17
+app/src/main/java/com/alorbach/solarmonitor/widget/SolarWidgets.kt
+  s_a4ad6a2795e9fd::t_6fc2ca3fdae02c 42
+  s_a4ad6a2795e9fd::t_2a2166978ea9a0 80-84,88-92
+app/src/main/java/com/alorbach/solarmonitor/service/EventAlertNotifier.kt
+  s_a4ad6a2795e9fd::t_f0e46fea171b65 66
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_3e53788aa56bf1::t_fa791e96d12535 65-66,89,108
+  s_4327da082e5556::t_77956cf4e94954 56,111,141,403-425,446,448,466,757-831
+app/src/main/res/drawable/ic_stat_notify.xml
+  s_a4ad6a2795e9fd::t_2b59c0eadad2c4 1-29
+app/src/main/res/values-de/strings.xml
+  s_a4ad6a2795e9fd::t_7221baa258cc45 248-251
+app/src/main/java/com/alorbach/solarmonitor/data/settings/AppSettingsStore.kt
+  s_a4ad6a2795e9fd::t_33548e350a5ee0 42-45
+  s_a4ad6a2795e9fd::t_d47ea228b9ac9d 17
+  s_a4ad6a2795e9fd::t_ca54bb44d2d1f9 180-181
+  s_a4ad6a2795e9fd::t_3f5d8b2d570d28 109-112
+  s_a4ad6a2795e9fd::t_69c6f050584191 151-154
+app/src/test/java/com/alorbach/solarmonitor/LivePollWindowTest.kt
+  s_a4ad6a2795e9fd::t_133531c524a688 1-68,92-94
+docs/PLAY-DATA-SAFETY.md
+  s_a4ad6a2795e9fd::t_964dce5fde1ad0 90
+app/src/main/res/values/colors.xml
+  s_a4ad6a2795e9fd::t_21afcdfb6f900f 2-3,5-9
+app/build.gradle.kts
+  s_a4ad6a2795e9fd::t_d24617587ad4ca 20
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollWindowReceiver.kt
+  s_a4ad6a2795e9fd::t_168d715fe242d4 1-6,7-15,16-18,20-32
+app/src/main/java/com/alorbach/solarmonitor/ui/theme/SolarTheme.kt
+  s_a4ad6a2795e9fd::t_8260b2a445c1b7 1-76
+app/src/main/java/com/alorbach/solarmonitor/domain/LivePollWindow.kt
+  s_a4ad6a2795e9fd::t_42b96543f59e0e 1-5,6-46,49-50,105-106,107
+docs/PLAY-LISTING.md
+  s_a4ad6a2795e9fd::t_42324f5eb02e68 51
+  s_a4ad6a2795e9fd::t_4256cab69369c0 112
+  s_a4ad6a2795e9fd::t_7c0e7e6890cf7c 94
+app/src/main/AndroidManifest.xml
+  s_4327da082e5556::t_a8aef80de7005a 101
+  s_a4ad6a2795e9fd::t_a6d868d9ac8ff9 102-105
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_a4ad6a2795e9fd::t_f69b5e59540ab2 55,72,77-83,86-95,139-150,157-158,164-165,167-168
+  s_a4ad6a2795e9fd::t_62de9dccacc784 334-336
+  s_a4ad6a2795e9fd::t_75afd512dead76 253
+  s_a4ad6a2795e9fd::t_3c685bad49cdf7 300
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollScheduler.kt
+  s_a4ad6a2795e9fd::t_840f55b44f3149 1-6,9-11,13,15-16,44-45,47-48,50-56,65-66,72,77-79,83-89,92-93,145-151,161,171-179,187-190,191-203
+app/src/main/java/com/alorbach/solarmonitor/service/ImportNotifications.kt
+  s_a4ad6a2795e9fd::t_4bdb17ac4f3549 46
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_a4ad6a2795e9fd::t_6044b470f815fd 288-290
+app/src/main/res/values/themes.xml
+  s_a4ad6a2795e9fd::t_007bb0ea1dfd30 3
+app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt
+  s_a4ad6a2795e9fd::t_908e05cd46c766 11-15,19-20,28-29,37,46,53,69-79
+  s_4327da082e5556::t_695c7964ef5c72 80
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_4327da082e5556::t_883aa90c59cc71 130-131,211-212,220-222,240-242,244-245,247-250,454-458
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f9bfb52ab4b078d987fa0649bf32f4685e484e78",
+  "prompts": {},
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": null
+    },
+    "s_4327da082e5556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01f20-f242-7e92-b79d-2ca5c4ca5d44",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_a4ad6a2795e9fd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b27a7874-948d-4fe5-90cc-c351380757a9",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}

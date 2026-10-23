@@ -1,0 +1,79 @@
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_8ab5239d3c9cce::t_54655dd7b720cb 172-177,184-185,194
+  s_8ab5239d3c9cce::t_82b316b76a14e7 169-171,178-183,186-188
+app/src/main/java/com/alorbach/solarmonitor/data/AppContainer.kt
+  s_8ab5239d3c9cce::t_2d79187f9aa774 17,24
+app/src/test/java/com/alorbach/solarmonitor/SmaDayArchiveWindowTest.kt
+  s_8ab5239d3c9cce::t_fb158489ed9edf 1-41
+app/src/main/res/values/strings.xml
+  s_8ab5239d3c9cce::t_b0b063d1729172 264
+  s_8ab5239d3c9cce::t_984160180d867c 257-263,265-266
+app/src/main/res/values-de/strings.xml
+  s_8ab5239d3c9cce::t_d079e979e6fd5b 261
+  s_8ab5239d3c9cce::t_02b8c27e2d6cc7 254-260,262-263
+app/src/main/AndroidManifest.xml
+  s_8ab5239d3c9cce::t_c74d1f213380f6 17-18
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_3e53788aa56bf1::t_3eb0969adb111e 109
+  s_3e53788aa56bf1::t_7a8a4a3881474f 381-392,841-957
+app/src/main/java/com/alorbach/solarmonitor/domain/HomeWifiPolicy.kt
+  s_8ab5239d3c9cce::t_5fe1e77e024c12 1-2,5-22,24-38
+  s_8ab5239d3c9cce::t_880afc00a5ea4a 3-4,23
+app/src/main/java/com/alorbach/solarmonitor/service/HomeWifiChecker.kt
+  s_8ab5239d3c9cce::t_074f4a0eb9c51a 1-8,10-25,31,34-43
+  s_8ab5239d3c9cce::t_bf9da21690ede7 32-33
+  s_8ab5239d3c9cce::t_907c7e29a34bdf 9,26-30
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollScheduler.kt
+  s_4327da082e5556::t_0db0b788a4fc2c 267
+  s_a4ad6a2795e9fd::t_840f55b44f3149 260
+  s_8ab5239d3c9cce::t_d8e7db69d1fef5 141-144,153-156,200,202-203,211,213-214,261-262,265-266
+  s_8ab5239d3c9cce::t_bebaeb7658e562 201,212,229,236-259,263-264
+app/src/main/java/com/alorbach/solarmonitor/device/SmaLegacyBluetoothGateway.kt
+  s_8ab5239d3c9cce::t_4797470d3fc274 72-88,665,667-671
+app/build.gradle.kts
+  s_8ab5239d3c9cce::t_c766c48cd63b66 29-30
+app/src/main/java/com/alorbach/solarmonitor/data/settings/AppSettingsStore.kt
+  s_8ab5239d3c9cce::t_4fe9dd4bf4800e 12,18,60-63,133-134,178-181,210-211
+app/src/test/java/com/alorbach/solarmonitor/HomeWifiPolicyTest.kt
+  s_8ab5239d3c9cce::t_76b34975ebaab3 1-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "41f486b5fe9f9be8865824861817cae9cb3fd6df",
+  "prompts": {},
+  "sessions": {
+    "s_3e53788aa56bf1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6d2dbb62-17b1-4ed1-9d4d-15ecdda4793d",
+        "model": "grok-4.6"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_4327da082e5556": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01f20-f242-7e92-b79d-2ca5c4ca5d44",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_8ab5239d3c9cce": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "888d4dcf-2aa4-4448-b63b-d2f5a3cc2ac8",
+        "model": "default"
+      },
+      "human_author": null
+    },
+    "s_a4ad6a2795e9fd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b27a7874-948d-4fe5-90cc-c351380757a9",
+        "model": "default"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}

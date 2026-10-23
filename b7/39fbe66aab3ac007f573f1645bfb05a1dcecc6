@@ -1,0 +1,41 @@
+app/src/main/java/com/alorbach/solarmonitor/device/SmaLegacyBluetoothGateway.kt
+  s_0ea28a9810677f::t_db34476a0fe8b3 355
+  s_0ea28a9810677f::t_123d14c8673b6a 210-214,216-218
+  s_0ea28a9810677f::t_80ba6c2f5eabf9 332
+  s_0ea28a9810677f::t_a4e3b59eada0da 303,305
+  s_0ea28a9810677f::t_36c82f4a581dac 30
+  s_0ea28a9810677f::t_549465ac5c9429 98-100
+  s_0ea28a9810677f::t_ec7b301219544f 122-123
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_0ea28a9810677f::t_5b8bc19ad94ce8 28-29
+  s_0ea28a9810677f::t_743c862f4e808a 25-26
+  s_0ea28a9810677f::t_76117d7649c063 51-55,62-63
+  s_0ea28a9810677f::t_b85fccc7b2aae1 56-61
+  s_0ea28a9810677f::t_ba1cfd10902d52 37
+  s_0ea28a9810677f::t_eb61b8c7c56934 27
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_0ea28a9810677f::t_561bf739787fba 1447
+  s_0ea28a9810677f::t_12efb4d0d250b3 1464-1475,1477-1479
+app/src/main/java/com/alorbach/solarmonitor/data/repository/LiveMonitoringRepository.kt
+  s_0ea28a9810677f::t_6f048f4d155290 113-115
+  s_0ea28a9810677f::t_432493ef300ef5 150-151
+  s_0ea28a9810677f::t_4b11fcee185cf1 33-45
+  s_0ea28a9810677f::t_b36e6b83cdccdb 64-69
+  s_0ea28a9810677f::t_763c491f54eea9 219-221,228-229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b739fbe66aab3ac007f573f1645bfb05a1dcecc6",
+  "prompts": {},
+  "sessions": {
+    "s_0ea28a9810677f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fe3d23c3-bf01-46ca-bf7f-01ecf20e1449",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
