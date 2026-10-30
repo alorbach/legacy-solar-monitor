@@ -18,6 +18,7 @@ app/src/main/java/com/alorbach/solarmonitor/ui/TariffSection.kt
   s_08fe4b60ab8770::t_dc4b5fb4c41a05 34-46
 app/build.gradle.kts
   s_08fe4b60ab8770::t_8e8c86e9e576f5 31
+  s_08fe4b60ab8770::t_f235bb3228a227 30
 app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
   s_08fe4b60ab8770::t_eaa784cee241f7 72,100,115,117,134,137-138,315,322,327,357,373,379
 app/src/main/java/com/alorbach/solarmonitor/ui/CommonUi.kt
