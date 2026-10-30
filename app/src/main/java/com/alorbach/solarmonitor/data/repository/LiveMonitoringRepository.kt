@@ -9,6 +9,10 @@ import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.device.SmaLegacyBluetoothGateway
 import com.alorbach.solarmonitor.device.SmaStatusLabels
+import com.alorbach.solarmonitor.data.model.ArchiveSyncProgressEntity
+import com.alorbach.solarmonitor.domain.ArchiveCatchUpBatch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.Instant
 import java.time.YearMonth
@@ -82,6 +86,7 @@ class LiveMonitoringRepository(
     /** deviceId -> MAC for continuous sessions. */
     private val continuousMacByDevice = ConcurrentHashMap<Long, String>()
     private val inFlightWork = AtomicInteger(0)
+    private val archiveLocks = ConcurrentHashMap<Long, Mutex>()
 
     fun hasInFlightWork(): Boolean = inFlightWork.get() > 0
 
@@ -147,7 +152,11 @@ class LiveMonitoringRepository(
      * Per-MAC serialization lives in the Bluetooth gateway so different devices can overlap.
      * @param continuous true when called from LiveMonitorService so UI shows an active session.
      */
-    suspend fun start(deviceId: Long, continuous: Boolean = false): Result<SpotSampleEntity> {
+    suspend fun start(
+        deviceId: Long,
+        continuous: Boolean = false,
+        archiveAllowed: suspend () -> Boolean = { false },
+    ): Result<SpotSampleEntity> {
         inFlightWork.incrementAndGet()
         try {
         val device = repository.getDevice(deviceId)
@@ -195,16 +204,7 @@ class LiveMonitoringRepository(
             runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
             if (continuous && device != null) {
                 try {
-                    refreshCurrentDayArchiveIfNeeded(device, continuous = true)
-                        .getOrNull()
-                        ?.let { archive ->
-                            repository.saveDayArchive(
-                                deviceId = device.id,
-                                dayItems = archive.dayAggregates,
-                                spotSamples = archive.spotSamples,
-                            )
-                            runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
-                        }
+                    catchUpOneDay(device, archiveAllowed)
                 } catch (error: kotlinx.coroutines.CancellationException) {
                     throw error
                 } catch (_: Throwable) {
@@ -233,6 +233,50 @@ class LiveMonitoringRepository(
         return result.map { it.value }.cancelledIfAborted(aborted)
         } finally {
             inFlightWork.decrementAndGet()
+        }
+    }
+
+    /** At most today plus one historical day per poll; history also advances at hourly live intervals. */
+    private suspend fun catchUpOneDay(device: DeviceProfileEntity, allowed: suspend () -> Boolean) {
+        archiveLocks.getOrPut(device.id) { Mutex() }.withLock {
+            val zone = runCatching { ZoneId.of(device.timezone) }.getOrDefault(ZoneId.systemDefault())
+            var batchAborted = false
+            ArchiveCatchUpBatch.run(
+                zone = zone,
+                allowed = { !batchAborted && continuousDeviceIds.contains(device.id) && allowed() },
+                progress = { repository.getArchiveSyncProgress(device.id) },
+            ) { date ->
+                publishDevice(device.id, true, appContext.getString(R.string.archive_catchup_reading, date.toString()), keepLatest = true)
+                var aborted = false
+                val result = withOperation(device.btMac, continuous = true) { op ->
+                    bluetoothGateway.readDayArchive(repository.withResolvedPin(device), date).also { aborted = op.aborted }
+                }
+                coroutineContext.ensureActive()
+                if (aborted) {
+                    batchAborted = true
+                    return@run
+                }
+                val archive = result.getOrNull()?.value
+                val outcome = when {
+                    result.isFailure -> "failed"
+                    archive == null || (archive.spotSamples.isEmpty() && archive.dayAggregates.isEmpty()) -> "empty"
+                    else -> "saved"
+                }
+                repository.saveAutomaticDayArchive(
+                    ArchiveSyncProgressEntity(device.id, date.toEpochDay(), Instant.now().epochSecond, outcome),
+                    archive,
+                    LocalDate.now(zone).minusDays(30).toEpochDay(),
+                )
+                if (continuousDeviceIds.contains(device.id)) {
+                    val label = when (outcome) {
+                        "failed" -> R.string.archive_catchup_failed
+                        "empty" -> R.string.archive_catchup_empty
+                        else -> R.string.archive_catchup_saved
+                    }
+                    publishDevice(device.id, true, appContext.getString(label, date.toString()), keepLatest = true)
+                }
+                if (outcome == "saved") runCatching { com.alorbach.solarmonitor.widget.SolarWidgets.refreshAll(appContext) }
+            }
         }
     }
 

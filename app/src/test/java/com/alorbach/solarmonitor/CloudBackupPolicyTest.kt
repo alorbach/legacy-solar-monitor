@@ -119,11 +119,12 @@ class CloudBackupPolicyTest {
 
     @Test
     fun isCompatibleRoomBackup_acceptsCurrentAndMigratableOlderSchemas() {
+        assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 6)))
         assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 5)))
         assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 4)))
         assertTrue(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 3)))
         assertFalse(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 2)))
-        assertFalse(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 6)))
+        assertFalse(CloudBackupPolicy.isCompatibleRoomBackup(sqliteHeader(userVersion = 7)))
     }
 
     @Test

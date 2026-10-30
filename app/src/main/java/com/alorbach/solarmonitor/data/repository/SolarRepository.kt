@@ -2,6 +2,8 @@ package com.alorbach.solarmonitor.data.repository
 
 import android.content.Context
 import androidx.work.WorkManager
+import androidx.room.withTransaction
+import com.alorbach.solarmonitor.data.model.ArchiveSyncProgressEntity
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
 import com.alorbach.solarmonitor.data.importing.ImportCopyStore
@@ -209,11 +211,46 @@ class SolarRepository(
     /** Wipes all stored history for a device. Sync/import never call this — user must opt in. */
     suspend fun clearDeviceHistory(deviceId: Long) {
         hourRecomputeMutex(deviceId).withLock {
-            dao.clearDeviceHistory(deviceId)
+            db.withTransaction {
+                dao.clearDeviceHistory(deviceId)
+                dao.clearArchiveSyncProgress(deviceId)
+            }
         }
     }
 
     suspend fun getDevice(deviceId: Long): DeviceProfileEntity? = dao.getDeviceById(deviceId)
+
+    suspend fun getArchiveSyncProgress(deviceId: Long): List<ArchiveSyncProgressEntity> =
+        dao.getArchiveSyncProgress(deviceId)
+
+    suspend fun saveAutomaticDayArchive(
+        progress: ArchiveSyncProgressEntity,
+        archive: com.alorbach.solarmonitor.data.model.DayArchiveResult?,
+        oldestDay: Long,
+    ) {
+        // Match history clearing's lock order: per-device mutex, then Room transaction. The marker
+        // and its data must commit together so a concurrent clear cannot leave a marker alone.
+        hourRecomputeMutex(progress.deviceId).withLock {
+            db.withTransaction {
+                if (archive != null) {
+                    if (archive.spotSamples.isNotEmpty()) dao.mergeSpotSamples(archive.spotSamples)
+                    if (archive.dayAggregates.isNotEmpty()) dao.mergeDayAggregates(archive.dayAggregates)
+                    if (archive.spotSamples.isNotEmpty()) {
+                        recomputeHourAggregatesWindowLocked(
+                            progress.deviceId,
+                            archive.spotSamples.minOf { it.timestampEpochSeconds },
+                            archive.spotSamples.maxOf { it.timestampEpochSeconds },
+                        )
+                    }
+                }
+                dao.saveArchiveSyncProgress(progress)
+                dao.pruneArchiveSyncProgress(progress.deviceId, oldestDay)
+            }
+        }
+        if (archive != null && (archive.spotSamples.isNotEmpty() || archive.dayAggregates.isNotEmpty())) {
+            _dataRevision.value += 1L
+        }
+    }
 
     suspend fun getDeviceByMac(mac: String): DeviceProfileEntity? = dao.getDeviceByMac(mac)
 
@@ -373,22 +410,31 @@ class SolarRepository(
         toEpochSeconds: Long,
     ) {
         hourRecomputeMutex(deviceId).withLock {
-            val zoneId = deviceZone(deviceId)
-            val fromHour = StatisticsAggregator.hourStartEpochSeconds(fromEpochSeconds, zoneId)
-            val toHour = StatisticsAggregator.hourStartEpochSeconds(toEpochSeconds, zoneId)
-            // Short live windows keep a 1h baseline; multi-day folder chunks keep a week
-            // so cumulative eTotalWh survives gaps at chunk boundaries.
-            val spanSeconds = (toEpochSeconds - fromEpochSeconds).coerceAtLeast(0L)
-            val lookbackPad = if (spanSeconds <= 6L * 3600L) 3600L else 7L * 24L * 3600L
-            val lookback = fromHour - lookbackPad
-            val samples = dao.getSpotSamplesInRange(deviceId, lookback, toHour + 3599)
-            val aggregates = StatisticsAggregator.hourAggregatesFromSamples(
-                deviceId = deviceId,
-                samples = samples,
-                zoneId = zoneId,
-            ).filter { it.hourEpochSeconds in lookback..toHour }
-            dao.replaceHourAggregatesInRange(deviceId, lookback, toHour, aggregates)
+            recomputeHourAggregatesWindowLocked(deviceId, fromEpochSeconds, toEpochSeconds)
         }
+    }
+
+    /** Caller owns [hourRecomputeMutex]; safe inside an existing Room transaction. */
+    private suspend fun recomputeHourAggregatesWindowLocked(
+        deviceId: Long,
+        fromEpochSeconds: Long,
+        toEpochSeconds: Long,
+    ) {
+        val zoneId = deviceZone(deviceId)
+        val fromHour = StatisticsAggregator.hourStartEpochSeconds(fromEpochSeconds, zoneId)
+        val toHour = StatisticsAggregator.hourStartEpochSeconds(toEpochSeconds, zoneId)
+        // Short live windows keep a 1h baseline; multi-day folder chunks keep a week
+        // so cumulative eTotalWh survives gaps at chunk boundaries.
+        val spanSeconds = (toEpochSeconds - fromEpochSeconds).coerceAtLeast(0L)
+        val lookbackPad = if (spanSeconds <= 6L * 3600L) 3600L else 7L * 24L * 3600L
+        val lookback = fromHour - lookbackPad
+        val samples = dao.getSpotSamplesInRange(deviceId, lookback, toHour + 3599)
+        val aggregates = StatisticsAggregator.hourAggregatesFromSamples(
+            deviceId = deviceId,
+            samples = samples,
+            zoneId = zoneId,
+        ).filter { it.hourEpochSeconds in lookback..toHour }
+        dao.replaceHourAggregatesInRange(deviceId, lookback, toHour, aggregates)
     }
 
     suspend fun backfillHourAggregatesIfNeeded() {

@@ -132,6 +132,7 @@ interface SmaLegacyBluetoothGateway {
     suspend fun testConnection(device: DeviceProfileEntity?): Result<SmaGatewayResult<SmaConnectionTestResult>>
     suspend fun connectAndReadLive(device: DeviceProfileEntity?): Result<SmaGatewayResult<SpotSampleEntity>>
     suspend fun syncDayArchive(device: DeviceProfileEntity?, fromDate: LocalDate): Result<SmaGatewayResult<DayArchiveResult>>
+    suspend fun readDayArchive(device: DeviceProfileEntity?, date: LocalDate): Result<SmaGatewayResult<DayArchiveResult>>
     suspend fun syncMonthArchive(device: DeviceProfileEntity?, fromMonth: YearMonth): Result<SmaGatewayResult<List<MonthAggregateEntity>>>
 }
 
@@ -286,6 +287,21 @@ class SmaLegacyBluetoothGatewayImpl(
                     status = snapshot.status ?: appContext.getString(R.string.live_read_ok),
                     sourceType = "bluetooth_live",
                 ),
+                socketStrategy = socketStrategy,
+                diagnostics = trace.render(),
+                inverterSerial = session.inverterSerial.takeIf { it > 0L },
+            )
+        }
+    }
+
+    override suspend fun readDayArchive(
+        device: DeviceProfileEntity?,
+        date: LocalDate,
+    ): Result<SmaGatewayResult<DayArchiveResult>> = runCatching {
+        withSession(device) { session, socketStrategy, trace ->
+            val parsed = session.readDayArchive(device!!.id, date)
+            SmaGatewayResult(
+                value = DayArchiveResult(parsed?.let { listOf(it.dayAggregate) }.orEmpty(), parsed?.spotSamples.orEmpty()),
                 socketStrategy = socketStrategy,
                 diagnostics = trace.render(),
                 inverterSerial = session.inverterSerial.takeIf { it > 0L },

@@ -17,6 +17,7 @@ fun localOrEnv(propertyKey: String, envKey: String): String =
     (localProperties.getProperty(propertyKey) ?: System.getenv(envKey) ?: "").trim()
 
 android {
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     namespace = "com.alorbach.solarmonitor"
     compileSdk = 36
 
@@ -26,7 +27,7 @@ android {
         targetSdk = 36
         // Monotonic Play/install integer. Start 1010. Increment by 1 on every NEW git commit
         // that ships app changes; do not bump again when amending the same unpushed commit.
-        versionCode = 1032
+        versionCode = 1033
         versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

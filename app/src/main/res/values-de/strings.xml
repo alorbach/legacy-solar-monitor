@@ -226,6 +226,10 @@
     <string name="live_stopped">Gestoppt</string>
     <string name="live_read_failed">Live-Abruf fehlgeschlagen</string>
     <string name="archive_sync_ok">Archiv-Sync OK</string>
+    <string name="archive_catchup_reading">Archiv für %1$s wird abgerufen…</string>
+    <string name="archive_catchup_saved">Archiv für %1$s abgerufen</string>
+    <string name="archive_catchup_empty">Keine Archivdaten für %1$s erhalten</string>
+    <string name="archive_catchup_failed">Archivabruf für %1$s fehlgeschlagen</string>
     <string name="archive_sync_cancelled">Archiv-Sync abgebrochen</string>
     <string name="archive_sync_failed">Archiv-Sync fehlgeschlagen</string>
     <string name="archive_sync_partial">Archiv-Sync teilweise (%1$s: %2$s)</string>

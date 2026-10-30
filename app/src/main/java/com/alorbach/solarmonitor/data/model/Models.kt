@@ -10,6 +10,19 @@ enum class DeviceTransport {
     SPEEDWIRE_FUTURE,
 }
 
+@Entity(
+    tableName = "archive_sync_progress",
+    primaryKeys = ["deviceId", "dateEpochDay"],
+    foreignKeys = [ForeignKey(entity = DeviceProfileEntity::class, parentColumns = ["id"],
+        childColumns = ["deviceId"], onDelete = ForeignKey.CASCADE)],
+)
+data class ArchiveSyncProgressEntity(
+    val deviceId: Long,
+    val dateEpochDay: Long,
+    val attemptedAtEpochSeconds: Long,
+    val outcome: String,
+)
+
 enum class LegacyBluetoothCompatibilityMode {
     SINGLE_INVERTER_LEGACY,
 }

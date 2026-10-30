@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.alorbach.solarmonitor.data.model.ArchiveSyncProgressEntity
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
 import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
@@ -20,6 +21,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SolarMonitorDao {
+    @Query("SELECT * FROM archive_sync_progress WHERE deviceId = :deviceId")
+    suspend fun getArchiveSyncProgress(deviceId: Long): List<ArchiveSyncProgressEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveArchiveSyncProgress(progress: ArchiveSyncProgressEntity)
+
+    @Query("DELETE FROM archive_sync_progress WHERE deviceId = :deviceId")
+    suspend fun clearArchiveSyncProgress(deviceId: Long)
+
+    @Query("DELETE FROM archive_sync_progress WHERE deviceId = :deviceId AND dateEpochDay < :beforeDay")
+    suspend fun pruneArchiveSyncProgress(deviceId: Long, beforeDay: Long)
     @Query("SELECT * FROM device_profiles ORDER BY name")
     fun observeDevices(): Flow<List<DeviceProfileEntity>>
 

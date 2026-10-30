@@ -81,13 +81,15 @@ Auf **Start**:
 
 Während Live läuft gibt es eine dauerhafte **Live-Monitor**-Benachrichtigung. Intervall: **Einstellungen → Live-Abfrageintervall** (15–3600 s, Standard 60). **Live-Abfragefenster** (Standard **06:00–22:00**) gilt in der Zeitzone jedes Wechselrichters; gleicher Beginn und Ende bedeuten 24 Stunden. Außerhalb stoppt der Dienst. Zum nächsten Beginn zeigt ein ungenauer Alarm bei Hintergrundbetrieb eine Fortsetzungsbenachrichtigung; darauf tippen, um Live zu starten. Bei sichtbarer App kann direkt fortgesetzt werden. Nach Neustart startet Live automatisch, sofern nicht **Stopp** gedrückt wurde und das Fenster offen ist; der Boot-Empfang ist dafür eine Android-Ausnahme.
 
+Nach einer erfolgreichen Live-Abfrage ruft der automatische Archiv-Nachzug ungefähr einmal pro Stunde das gesamte Tagesarchiv von heute ab und arbeitet die vorherigen 30 Kalendertage einzeln ab. Unversuchte Vortage haben Vorrang und werden vom ältesten zum jüngsten abgerufen, damit ältere Tage auch bei wenigen erfolgreichen Live-Abfragen nicht zurückgestellt werden. Danach folgen fällige Wiederholungen vom jüngsten zum ältesten Tag. Fehlgeschlagene Tage werden später erneut versucht; bei einer leeren Antwort wird heute nach etwa einer Stunde und für Vortage frühestens am nächsten Tag erneut abgefragt. Unterbrochene Arbeit wird bei einer späteren Live-Abfrage fortgesetzt. Gelieferte Archivdaten werden mit vorhandenen Live- und Importdaten zusammengeführt. Der Wechselrichter kann keine oder nur teilweise Daten für einen Tag liefern; ein Abrufversuch belegt daher keine Vollständigkeit. Der Nachzug läuft nur, wenn der Monitor tatsächlich ausgeführt werden kann. Android-Hintergrundstarts, WLAN-Regeln, Bluetooth-Verfügbarkeit und Akku-Einstellungen können ihn verzögern oder unterbrechen.
+
 **Uneingeschränkten Akku** erlauben, wenn das Telefon den Dienst nachts beendet.
 
 Auf **Start** zeigt der Überwachungsstatus, wann zuletzt erfolgreich abgefragt wurde und ob die App auf das Abfragefenster, das Heim-WLAN oder eine Aktion wartet. Eine gespeicherte Zeit allein bedeutet nicht, dass die Überwachung gerade läuft. Prüfe auf Samsung-Geräten auch, ob die App unter den schlafenden oder tief schlafenden Apps geführt wird. Android und Hersteller-Einstellungen können die Hintergrundarbeit verzögern oder beenden.
 
 ## Archiv, Tarife, Ereignisse
 
-- **Sync** holt etwa die letzten **30 Tage** Tagesarchiv und **12 Monate** Monatsarchiv. Ereignisse werden per Bluetooth **nicht** geladen.
+- **Sync** holt etwa die letzten **30 Tage** Tagesarchiv und **12 Monate** Monatsarchiv. Ereignisse werden per Bluetooth **nicht** geladen. Während Live läuft, aktualisiert der automatische Nachzug außerdem das ganze heutige Tagesarchiv stündlich und prüft Vortage einzeln; die Grenzen stehen oben.
 - **Historie löschen** entfernt Spot-Samples, Aggregate und Events. Das Profil bleibt. Lokale Import-*Dateikopien* bleiben erhalten.
 - **Löschen** entfernt Profil, Room-Historie, Events, PIN, geplante Importe und lokale Importkopien unter `imports/device-<id>/`. Bereits in Google Drive liegende Dateien bleiben, bis Sie sie dort löschen.
 - **Einspeisetarife** — datierte €/kWh-Zeiträume. Erlöse sind **Schätzungen** (Ertrag × Tarif), keine Abrechnung.

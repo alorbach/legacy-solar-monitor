@@ -196,7 +196,12 @@ class LiveMonitorService : Service() {
                                 delay((intervalSeconds * 1000L).coerceAtLeast(1_000L))
                                 continue
                             }
-                            val result = container.liveMonitoringRepository.start(deviceId, continuous = true)
+                            val result = container.liveMonitoringRepository.start(deviceId, continuous = true) {
+                                isActive && loadPersistedDeviceIds().contains(deviceId) && policy.isOpen(deviceId) &&
+                                    runCatching {
+                                        container.homeWifiChecker.isAllowed(container.settingsStore.settings.first())
+                                    }.getOrDefault(false)
+                            }
                             if (result.isSuccess) {
                                 LiveMonitoringStatusStore.recordSuccessfulPoll(this@LiveMonitorService)
                             }

@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
+import com.alorbach.solarmonitor.data.model.ArchiveSyncProgressEntity
 import com.alorbach.solarmonitor.data.model.DeviceEventEntity
 import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.HourAggregateEntity
@@ -27,14 +28,29 @@ import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
         HourAggregateEntity::class,
         DeviceEventEntity::class,
         ImportJobEntity::class,
+        ArchiveSyncProgressEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class SolarMonitorDatabase : RoomDatabase() {
     abstract fun dao(): SolarMonitorDao
 
     companion object {
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `archive_sync_progress` (
+                        `deviceId` INTEGER NOT NULL,
+                        `dateEpochDay` INTEGER NOT NULL,
+                        `attemptedAtEpochSeconds` INTEGER NOT NULL,
+                        `outcome` TEXT NOT NULL,
+                        PRIMARY KEY(`deviceId`, `dateEpochDay`),
+                        FOREIGN KEY(`deviceId`) REFERENCES `device_profiles`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+            }
+        }
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL(
@@ -94,7 +110,7 @@ abstract class SolarMonitorDatabase : RoomDatabase() {
                 SolarMonitorDatabase::class.java,
                 "solar-monitor.db",
             )
-                .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 // Pre-v3 installs used destructive upgrades with unknown intermediate schemas.
                 // Wipe those once; all future bumps must ship real Migration objects from v3 onward.
                 .fallbackToDestructiveMigrationFrom(1, 2)

@@ -9,6 +9,8 @@ import com.alorbach.solarmonitor.data.model.DeviceProfileEntity
 import com.alorbach.solarmonitor.data.model.DeviceTransport
 import com.alorbach.solarmonitor.data.model.SpotSampleEntity
 import com.alorbach.solarmonitor.data.model.TariffPeriodEntity
+import com.alorbach.solarmonitor.data.model.ArchiveSyncProgressEntity
+import com.alorbach.solarmonitor.data.model.DayArchiveResult
 import com.alorbach.solarmonitor.data.repository.SolarRepository
 import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.data.settings.AppSettingsStore
@@ -19,6 +21,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -105,6 +108,43 @@ class SpotSamplePersistenceTest {
 
         assertEquals(1, db.dao().getAllSpotSamples(deviceId).size)
         assertMerged(stored())
+    }
+
+    @Test
+    fun concurrentHistoryClearCannotLeaveArchiveProgressWithoutData() = runBlocking {
+        val marker = ArchiveSyncProgressEntity(deviceId, 19675, 1_700_000_000L, "saved")
+        val archive = DayArchiveResult(emptyList(), listOf(csv().copy(sourceType = "bluetooth_day_archive")))
+        repeat(30) {
+            listOf(
+                async(Dispatchers.Default) { repository.saveAutomaticDayArchive(marker, archive, 19645) },
+                async(Dispatchers.Default) { repository.clearDeviceHistory(deviceId) },
+            ).awaitAll()
+            val hasMarker = db.dao().getArchiveSyncProgress(deviceId).isNotEmpty()
+            val hasData = db.dao().getAllSpotSamples(deviceId).isNotEmpty()
+            assertEquals("Clear and archive must serialize as complete operations", hasMarker, hasData)
+        }
+    }
+
+    @Test
+    fun archiveMarkerFailureRollsBackSamplesAndHours() = runBlocking {
+        db.openHelper.writableDatabase.execSQL("""
+            CREATE TRIGGER reject_archive_marker BEFORE INSERT ON archive_sync_progress
+            BEGIN SELECT RAISE(ABORT, 'Test marker write failed'); END
+        """.trimIndent())
+        var failed = false
+        try {
+            repository.saveAutomaticDayArchive(
+                ArchiveSyncProgressEntity(deviceId, 19675, 1_700_000_000L, "saved"),
+                DayArchiveResult(emptyList(), listOf(csv().copy(sourceType = "bluetooth_day_archive"))),
+                19645,
+            )
+        } catch (_: android.database.sqlite.SQLiteException) {
+            failed = true
+        }
+        assertTrue(failed)
+        assertTrue(db.dao().getArchiveSyncProgress(deviceId).isEmpty())
+        assertTrue(db.dao().getAllSpotSamples(deviceId).isEmpty())
+        assertTrue(db.dao().getHourRange(listOf(deviceId), 0, Long.MAX_VALUE).isEmpty())
     }
 
     private suspend fun importCsv() {
