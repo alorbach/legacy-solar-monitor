@@ -1,0 +1,114 @@
+app/src/main/java/com/alorbach/solarmonitor/ui/StatisticsScreen.kt
+  s_c7459ea0535de4::t_1a4a161239057a 97,170
+  s_c7459ea0535de4::t_c482d22c7dfe9b 340,381,385,418
+  s_c7459ea0535de4::t_4e2f2331701aa5 378
+  s_c7459ea0535de4::t_5ba75b5b184619 359-361,397
+  s_51250b847be4b5::t_8d6cb5b80bd90b 10,16,69
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitoringStatusStore.kt
+  s_c7459ea0535de4::t_7054b3a5c4c9c0 1-75
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_c7459ea0535de4::t_7ec24d3745bb08 57-58,85-87,126-127,184-187,200-206,338
+  s_c7459ea0535de4::t_34963fc1f23fd1 357
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDao.kt
+  s_c7459ea0535de4::t_21fda51227af21 80-101,386
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_c7459ea0535de4::t_21fda51227af21 231,235,274,276,279-280,283
+  s_c7459ea0535de4::t_0e59bc7cff15b5 520-521,543,569
+  s_c7459ea0535de4::t_39d01aa391c7d0 27,562,570,864
+app/src/main/java/com/alorbach/solarmonitor/service/BootLiveMonitorReceiver.kt
+  s_c7459ea0535de4::t_34963fc1f23fd1 46
+app/src/main/java/com/alorbach/solarmonitor/domain/Analytics.kt
+  s_c7459ea0535de4::t_0e59bc7cff15b5 120-121
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollScheduler.kt
+  s_c7459ea0535de4::t_34963fc1f23fd1 119-126
+  s_c7459ea0535de4::t_7ec24d3745bb08 109-111,149-153,157,170,180-181,192-193,209-229,264-265,281,297-298
+app/src/test/java/com/alorbach/solarmonitor/BlockingIoDeadlineTest.kt
+  s_c7459ea0535de4::t_5b32719d7c1e49 1-31
+app/src/main/java/com/alorbach/solarmonitor/domain/ReportExporter.kt
+  s_c7459ea0535de4::t_3217f23d948345 28-30
+  s_c7459ea0535de4::t_f096b8bcc3082b 24-27,31-33,35,49-50,55,68,70-74,101,107-108,110
+  s_c7459ea0535de4::t_5ba75b5b184619 43,53,106,180,183,233,239
+app/src/test/java/com/alorbach/solarmonitor/SeriesReportFormatTest.kt
+  s_c7459ea0535de4::t_f096b8bcc3082b 13,29-57
+  s_c7459ea0535de4::t_3217f23d948345 14-22
+app/src/main/res/values-de/strings.xml
+  s_c7459ea0535de4::t_2935d58c0828d7 184
+  s_c7459ea0535de4::t_ea27d95362a81f 187-196
+  s_c7459ea0535de4::t_97525471a67744 180-183,185-186
+  s_c7459ea0535de4::t_5ba75b5b184619 3
+app/src/main/java/com/alorbach/solarmonitor/device/BlockingIoDeadline.kt
+  s_c7459ea0535de4::t_5b32719d7c1e49 1-5,7-9,13-16,18-20,24-25,27-30
+  s_c7459ea0535de4::t_3439a8e4cda291 6,10-12,17,21-23,26
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_c7459ea0535de4::t_999f9792e5c72d 11,23,29,47,95,277-280,282-287,321,357,496,530-537,632-635,641-685
+  s_c7459ea0535de4::t_a89695cca6c551 281,636-640
+docs/USER-GUIDE.md
+  s_c7459ea0535de4::t_439db35dd2de36 53
+  s_c7459ea0535de4::t_24f06d67f397e7 89-90
+  s_c7459ea0535de4::t_f096b8bcc3082b 125-126
+  s_c7459ea0535de4::t_049de99d2a8b47 127-128
+app/src/main/java/com/alorbach/solarmonitor/ui/DashboardTab.kt
+  s_c7459ea0535de4::t_c482d22c7dfe9b 211,215,257,261,280,295,395,407,463,467,495,521,525,558
+  s_c7459ea0535de4::t_ea27d95362a81f 7,16,104-105,184-185,227-256
+  s_c7459ea0535de4::t_1a4a161239057a 122,125,175,208-210,371,404,448,537,571
+app/src/main/java/com/alorbach/solarmonitor/data/model/Models.kt
+  s_c7459ea0535de4::t_0e59bc7cff15b5 288
+  s_c7459ea0535de4::t_39d01aa391c7d0 310
+app/src/main/res/values/strings.xml
+  s_c7459ea0535de4::t_97525471a67744 180-183,185-186
+  s_c7459ea0535de4::t_824b29c42a0327 184
+  s_c7459ea0535de4::t_5ba75b5b184619 3
+  s_c7459ea0535de4::t_ea27d95362a81f 187-196
+app/src/main/java/com/alorbach/solarmonitor/device/SmaLegacyBluetoothGateway.kt
+  s_c7459ea0535de4::t_5b32719d7c1e49 390-392
+app/src/main/java/com/alorbach/solarmonitor/service/LivePollWindowReceiver.kt
+  s_c7459ea0535de4::t_98e70c55ac9439 27
+app/src/main/java/com/alorbach/solarmonitor/service/LiveResumeNotifier.kt
+  s_c7459ea0535de4::t_7ec24d3745bb08 19-22
+docs/USER-GUIDE-DE.md
+  s_c7459ea0535de4::t_e788f2b9f00b08 104-105
+  s_c7459ea0535de4::t_439db35dd2de36 54
+  s_c7459ea0535de4::t_24f06d67f397e7 86-87
+  s_c7459ea0535de4::t_f096b8bcc3082b 102-103
+app/src/androidTest/java/com/alorbach/solarmonitor/SpotSamplePersistenceTest.kt
+  s_c7459ea0535de4::t_78b41d8a0ffe98 1-10,12-20,22-49,69-136
+  s_c7459ea0535de4::t_3217f23d948345 11,21,50-68
+app/src/test/java/com/alorbach/solarmonitor/LiveResumePolicyTest.kt
+  s_c7459ea0535de4::t_5b32719d7c1e49 1-25
+app/src/test/java/com/alorbach/solarmonitor/ReportCurrencyTest.kt
+  s_c7459ea0535de4::t_3217f23d948345 1-28
+app/src/main/java/com/alorbach/solarmonitor/domain/ReportCurrency.kt
+  s_c7459ea0535de4::t_39d01aa391c7d0 1-11
+app/build.gradle.kts
+  s_c7459ea0535de4::t_c921a6024c25c5 29
+app/src/main/java/com/alorbach/solarmonitor/service/LiveResumeReceiver.kt
+  s_c7459ea0535de4::t_0f397e9be8ab52 26
+app/src/main/java/com/alorbach/solarmonitor/ui/CommonUi.kt
+  s_c7459ea0535de4::t_97525471a67744 51
+  s_c7459ea0535de4::t_1b7022b60ed794 6-9,21,37-39,41-42,44-50
+  s_c7459ea0535de4::t_5ca1e0e4375133 10,40,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "06a9ec4d25c1d2a5f96383b8d495aa2347038b87",
+  "prompts": {},
+  "sessions": {
+    "s_51250b847be4b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1825f-414b-7941-bbb9-6c4d9c92e07e",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_c7459ea0535de4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18b44-59b2-7751-9c0e-fed93ef91b88",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
