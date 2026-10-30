@@ -69,6 +69,7 @@ fun ProductionChart(
     onPointClick: ((DailyPoint) -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    val chartScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
     val maxYield = (points.maxOfOrNull { it.yieldWh } ?: 1L).coerceAtLeast(1L).toFloat()
     val midYield = (maxYield / 2f).toLong()
     val axisLabelColor = colors.onSurfaceVariant.toArgb()
@@ -96,7 +97,7 @@ fun ProductionChart(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (points.isEmpty()) 72.dp else 220.dp)
+            .height((if (points.isEmpty()) 72.dp else 220.dp) * chartScale)
             .padding(vertical = 4.dp)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
@@ -111,9 +112,9 @@ fun ProductionChart(
                         if (onPointClick == null) {
                             Modifier
                         } else {
-                            Modifier.pointerInput(points) {
+                            Modifier.pointerInput(points, chartScale) {
                                 detectTapGestures { offset ->
-                                    val yAxis = 44.dp.toPx()
+                                    val yAxis = (44.dp * chartScale).toPx()
                                     val chartLeft = yAxis
                                     val chartRight = size.width
                                     val chartWidth = (chartRight - chartLeft).coerceAtLeast(1f)
@@ -130,11 +131,11 @@ fun ProductionChart(
                         },
                     ),
             ) {
-                val yAxisWidth = 44.dp.toPx()
+                val yAxisWidth = (44.dp * chartScale).toPx()
                 val chartLeft = yAxisWidth
                 val chartRight = size.width
-                val chartTop = 18.dp.toPx()
-                val chartBottom = size.height - 28.dp.toPx()
+                val chartTop = (18.dp * chartScale).toPx()
+                val chartBottom = size.height - (28.dp * chartScale).toPx()
                 val chartHeight = (chartBottom - chartTop).coerceAtLeast(1f)
                 val chartWidth = (chartRight - chartLeft).coerceAtLeast(1f)
                 val step = ProductionStepline.step(chartWidth, points.size)
@@ -311,18 +312,19 @@ fun StatsBarChart(
     val insideLabelColor = barColors.onBar.toArgb()
     val scrollState = rememberScrollState()
     val density = LocalDensity.current
+    val chartScale = density.fontScale.coerceAtLeast(1f)
     val emptyHint = stringResource(R.string.chart_empty_hint)
     val chartDescription = stringResource(
         R.string.chart_description,
         points.size,
         YieldFormatting.whToKwhLabel(points.maxOfOrNull { it.yieldWh }),
     )
-    val yAxisWidth = 40.dp
+    val yAxisWidth = 40.dp * chartScale
     Column {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(height)
+            .height(height * chartScale)
             .background(colors.surface, RoundedCornerShape(22.dp))
             .padding(horizontal = 8.dp, vertical = 10.dp)
             .semantics {
@@ -352,7 +354,7 @@ fun StatsBarChart(
                 val hasEventMarkers = points.any { it.eventCount > 0 }
                 val slotPx = with(density) { slotWidth.toPx() }
                 val tickLabels = points.map { StatsAxisLabels.tick(it.label, compactHourTicks) }
-                val axisProbe = remember(tickLabels, isScrolling) {
+                val axisProbe = remember(tickLabels, isScrolling, density.density, density.fontScale) {
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                         textSize = with(density) { 11.sp.toPx() }
                     }
@@ -368,13 +370,13 @@ fun StatsBarChart(
                 )
                 val chartTopPx = with(density) {
                     val base = if (manyBars) 8.dp else 28.dp
-                    (if (hasEventMarkers) base + 10.dp else base).toPx()
+                    ((if (hasEventMarkers) base + 10.dp else base) * chartScale).toPx()
                 }
                 val chartBottomPx = with(density) {
                     if (verticalAxisLabels) {
                         (longestAxisWidth + 16f).coerceAtLeast(48.dp.toPx())
                     } else {
-                        28.dp.toPx()
+                        (28.dp * chartScale).toPx()
                     }
                 }
                 val scrollModifier = if (isScrolling) {

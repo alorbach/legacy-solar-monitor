@@ -12,6 +12,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -421,7 +423,7 @@ fun SettingsTab(
                 colors = CardDefaults.elevatedCardColors(containerColor = colors.surface),
                 shape = RoundedCornerShape(28.dp),
             ) {
-                Column(modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
                         stringResource(R.string.chart_bar_color),
                         style = MaterialTheme.typography.titleLarge,
@@ -477,6 +479,7 @@ fun SettingsTab(
                         onValueChange = { pollSeconds = it.filter(Char::isDigit).take(4) },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text(stringResource(R.string.live_poll_interval)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                     )
                     Button(onClick = {
@@ -595,7 +598,7 @@ fun SettingsTab(
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.tab_settings))
+                        Icon(Icons.Rounded.Settings, contentDescription = null)
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.cloud_backup), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }

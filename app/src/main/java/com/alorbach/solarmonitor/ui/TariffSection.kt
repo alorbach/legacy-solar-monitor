@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Delete
@@ -16,6 +18,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -31,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.AppContainer
@@ -85,61 +89,70 @@ fun TariffSection(
             Text(stringResource(R.string.tariff_empty), color = colors.onSurfaceVariant)
         }
         rows.forEachIndexed { index, row ->
-            OutlinedTextField(
-                value = row.from,
-                onValueChange = {},
-                readOnly = true,
+            Surface(
+                color = colors.surfaceVariant,
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.tariff_from)) },
-                trailingIcon = {
-                    IconButton(onClick = { picking = index to true }) {
-                        Icon(Icons.Rounded.DateRange, contentDescription = stringResource(R.string.tariff_from))
-                    }
-                },
-                singleLine = true,
-            )
-            OutlinedTextField(
-                value = row.to,
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.tariff_to)) },
-                placeholder = {
-                    if (row.to.isBlank()) {
-                        Text(stringResource(R.string.tariff_open_ended))
-                    }
-                },
-                trailingIcon = {
-                    IconButton(onClick = { picking = index to false }) {
-                        Icon(Icons.Rounded.DateRange, contentDescription = stringResource(R.string.tariff_to))
-                    }
-                },
-                singleLine = true,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                OutlinedTextField(
-                    value = row.price,
-                    onValueChange = { value -> rows = rows.toMutableList().also { it[index] = row.copy(price = value) } },
-                    modifier = Modifier.weight(1f),
-                    label = { Text(stringResource(R.string.tariff_price)) },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = row.currency,
-                    onValueChange = { value -> rows = rows.toMutableList().also { it[index] = row.copy(currency = value) } },
-                    modifier = Modifier.weight(1f),
-                    label = { Text(stringResource(R.string.tariff_currency)) },
-                    singleLine = true,
-                )
-                IconButton(onClick = { rows = rows.toMutableList().also { it.removeAt(index) } }) {
-                    Icon(
-                        Icons.Rounded.Delete,
-                        contentDescription = stringResource(R.string.tariff_delete),
-                        tint = colors.error,
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = row.from,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.tariff_from)) },
+                        trailingIcon = {
+                            IconButton(onClick = { picking = index to true }) {
+                                Icon(Icons.Rounded.DateRange, contentDescription = stringResource(R.string.tariff_from))
+                            }
+                        },
+                        singleLine = true,
                     )
+                    OutlinedTextField(
+                        value = row.to,
+                        onValueChange = {},
+                        readOnly = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.tariff_to)) },
+                        placeholder = {
+                            if (row.to.isBlank()) {
+                                Text(stringResource(R.string.tariff_open_ended))
+                            }
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { picking = index to false }) {
+                                Icon(Icons.Rounded.DateRange, contentDescription = stringResource(R.string.tariff_to))
+                            }
+                        },
+                        singleLine = true,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = row.price,
+                            onValueChange = { value -> rows = rows.toMutableList().also { it[index] = row.copy(price = value) } },
+                            modifier = Modifier.weight(1f),
+                            label = { Text(stringResource(R.string.tariff_price)) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                        )
+                        OutlinedTextField(
+                            value = row.currency,
+                            onValueChange = { value -> rows = rows.toMutableList().also { it[index] = row.copy(currency = value) } },
+                            modifier = Modifier.weight(1f),
+                            label = { Text(stringResource(R.string.tariff_currency)) },
+                            singleLine = true,
+                        )
+                        IconButton(onClick = { rows = rows.toMutableList().also { it.removeAt(index) } }) {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                contentDescription = stringResource(R.string.tariff_delete),
+                                tint = colors.error,
+                            )
+                        }
+                    }
                 }
             }
         }

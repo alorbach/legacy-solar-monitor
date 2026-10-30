@@ -42,6 +42,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -292,6 +299,11 @@ fun StatisticsScreen(
                             )
                         }
                     }
+                    Text(
+                        periodLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -318,11 +330,7 @@ fun StatisticsScreen(
                         ) {
                             Text(stringResource(R.string.stats_now))
                         }
-                        Text(
-                            periodLabel,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.weight(1f),
-                        )
+                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                         IconButton(
                             onClick = {
                                 anchorDate = when (granularity) {
@@ -478,13 +486,30 @@ fun StatisticsScreen(
         }
         if (!seriesLoading) {
         items(points, key = { it.bucketKey }) { point ->
+            val openPeriodLabel = stringResource(R.string.chart_open_period, point.label)
             ElevatedCard(
-                colors = CardDefaults.elevatedCardColors(containerColor = colors.surfaceVariant),
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = if (selectedBucketKey == point.bucketKey) colors.tertiaryContainer else colors.surfaceVariant,
+                ),
                 shape = RoundedCornerShape(20.dp),
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .semantics(mergeDescendants = true) {
+                            role = Role.Button
+                            selected = selectedBucketKey == point.bucketKey
+                            onClick {
+                                selectedBucketKey = if (selectedBucketKey == point.bucketKey) null else point.bucketKey
+                                true
+                            }
+                            if (granularity != StatsGranularity.HOUR) {
+                                customActions = listOf(CustomAccessibilityAction(openPeriodLabel) {
+                                    drillInto(point.bucketKey)
+                                    true
+                                })
+                            }
+                        }
                         .pointerInput(point.bucketKey, granularity) {
                             detectTapGestures(
                                 onTap = {
