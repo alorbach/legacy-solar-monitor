@@ -208,9 +208,10 @@ fun DashboardTab(
                     if (portfolio.currency == null) {
                         Text(stringResource(R.string.earnings_mixed_currencies), style = MaterialTheme.typography.bodyMedium)
                     }
+                    StatusBadge(liveMessage, active = liveActive)
                     AdaptivePairRow() {
-                        MetricTile(Modifier.weight(1f), stringResource(R.string.metric_power), YieldFormatting.wattsLabel(portfolio.currentPowerW))
-                        MetricTile(Modifier.weight(1f), stringResource(R.string.metric_today), YieldFormatting.whToKwhLabel(portfolio.todayYieldWh))
+                        DashboardPrimaryMetric(Modifier.weight(1f), stringResource(R.string.metric_power), YieldFormatting.wattsLabel(portfolio.currentPowerW), liveActive)
+                        DashboardPrimaryMetric(Modifier.weight(1f), stringResource(R.string.metric_today), YieldFormatting.whToKwhLabel(portfolio.todayYieldWh), false)
                     }
                     AdaptivePairRow() {
                         MetricTile(Modifier.weight(1f), stringResource(R.string.metric_month), YieldFormatting.whToKwhLabel(portfolio.monthYieldWh))
@@ -223,7 +224,6 @@ fun DashboardTab(
                         ),
                         color = colors.onSurfaceVariant,
                     )
-                    StatusBadge(liveMessage, active = liveActive)
                     if (!liveActive && monitoringStatus.reason != LiveMonitoringPauseReason.STOPPED) {
                         val statusText = when (monitoringStatus.reason) {
                             LiveMonitoringPauseReason.RESUME_PENDING -> R.string.live_resume_pending
@@ -653,6 +653,23 @@ fun DashboardTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DashboardPrimaryMetric(modifier: Modifier, label: String, value: String, live: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        modifier = modifier
+            .background(
+                if (live) colors.tertiaryContainer else colors.secondary.copy(alpha = 0.16f),
+                RoundedCornerShape(18.dp),
+            )
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(label, color = colors.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
+        Text(value, color = colors.onSurface, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
     }
 }
 

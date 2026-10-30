@@ -44,7 +44,6 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -72,7 +71,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.text.KeyboardOptions
@@ -120,6 +120,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.cancellation.CancellationException
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DevicesTab(
     modifier: Modifier,
@@ -173,7 +174,7 @@ fun DevicesTab(
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Bluetooth, contentDescription = stringResource(R.string.scan_bluetooth), tint = colors.onBackground)
+                        Icon(Icons.Rounded.Bluetooth, contentDescription = null, tint = colors.onBackground)
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.bluetooth_discovery), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     }
@@ -181,13 +182,13 @@ fun DevicesTab(
                     if (!bluetoothEnabled) {
                         Text(stringResource(R.string.bluetooth_disabled), color = colors.error)
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = onRefreshBluetooth, enabled = bluetoothEnabled) {
-                            Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.scan_bluetooth))
+                            Icon(Icons.Rounded.Search, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(if (isScanning) stringResource(R.string.scanning) else stringResource(R.string.scan_bluetooth))
                         }
-                        Button(onClick = onStopBluetooth, enabled = isScanning) {
+                        OutlinedButton(onClick = onStopBluetooth, enabled = isScanning) {
                             Text(stringResource(R.string.stop))
                         }
                     }
@@ -375,9 +376,10 @@ internal fun DeviceEditorCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .clickable(onClick = onToggleExpanded)
+                    .fillMaxWidth()
+                    .clickable(role = Role.Button, onClick = onToggleExpanded)
                     .semantics {
-                        contentDescription = if (expanded) {
+                        stateDescription = if (expanded) {
                             collapseDeviceLabel
                         } else {
                             expandDeviceLabel
@@ -392,10 +394,10 @@ internal fun DeviceEditorCard(
                     )
                     Text(device.model ?: stringResource(R.string.legacy_sma_profile), color = colors.onSurfaceVariant)
                 }
-                AssistChip(
-                    onClick = onToggleExpanded,
-                    enabled = true,
-                    label = { Text(if (mac.isBlank()) stringResource(R.string.unassigned) else mac) },
+                Text(
+                    text = if (mac.isBlank()) stringResource(R.string.unassigned) else mac,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colors.onSurfaceVariant,
                 )
             }
             if (!expanded) {

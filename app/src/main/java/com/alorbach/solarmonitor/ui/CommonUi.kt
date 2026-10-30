@@ -30,7 +30,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 
-val CompactButtonHeight: Dp = 40.dp
+val CompactButtonHeight: Dp = 48.dp
 
 val CompactButtonContentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
 
@@ -66,7 +66,7 @@ fun MetricTile(modifier: Modifier = Modifier, label: String, value: String) {
         Text(
             value,
             fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
         )
     }
 }

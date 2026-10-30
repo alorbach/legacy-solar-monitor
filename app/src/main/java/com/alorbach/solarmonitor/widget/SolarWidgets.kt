@@ -84,7 +84,7 @@ private fun widgetPalette(night: Boolean, accent: ChartBarAccent): WidgetPalette
         WidgetPalette(
             background = SolarPalette.Navy,
             onBackground = SolarPalette.Cream,
-            onBackgroundMuted = SolarPalette.Cream.copy(alpha = 0.70f),
+            onBackgroundMuted = SolarPalette.Cream.copy(alpha = 0.90f),
             bar = colors.bar.copy(alpha = 0.28f),
             barNow = colors.selected.copy(alpha = 0.45f),
         )
@@ -92,7 +92,7 @@ private fun widgetPalette(night: Boolean, accent: ChartBarAccent): WidgetPalette
         WidgetPalette(
             background = SolarPalette.Cream,
             onBackground = SolarPalette.Ink,
-            onBackgroundMuted = SolarPalette.Ink.copy(alpha = 0.70f),
+            onBackgroundMuted = SolarPalette.Ink.copy(alpha = 0.80f),
             bar = colors.bar.copy(alpha = 0.22f),
             barNow = colors.selected.copy(alpha = 0.38f),
         )

@@ -3,6 +3,8 @@ package com.alorbach.solarmonitor.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -780,6 +782,7 @@ private fun ConnectionStep(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BrowseStep(
     currentPath: String,
@@ -804,7 +807,7 @@ private fun BrowseStep(
         )
         Text(currentPath, color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (RemoteBrowseHelpers.parentPath(currentPath) != null) {
                 OutlinedButton(onClick = onOpenParent, enabled = !busy) {
                     Text(stringResource(R.string.remote_import_parent_folder))

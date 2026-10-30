@@ -220,7 +220,7 @@ fun ImportTab(
     Box(modifier = modifier.fillMaxSize()) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 88.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
@@ -256,15 +256,15 @@ fun ImportTab(
                                 )
                             },
                         ) {
-                            Icon(Icons.Rounded.FileDownload, contentDescription = stringResource(R.string.import_from_file))
+                            Icon(Icons.Rounded.FileDownload, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.import_from_file))
                         }
-                        Button(
+                        OutlinedButton(
                             enabled = !importRunning,
                             onClick = { showRemoteWizard = true },
                         ) {
-                            Icon(Icons.Rounded.Folder, contentDescription = stringResource(R.string.import_from_remote))
+                            Icon(Icons.Rounded.Folder, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.import_from_remote))
                         }
@@ -293,7 +293,7 @@ fun ImportTab(
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(R.string.import_running))
                             } else {
-                                Icon(Icons.Rounded.CloudUpload, contentDescription = stringResource(R.string.import_from_url))
+                                Icon(Icons.Rounded.CloudUpload, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
                                 Text(stringResource(R.string.import_from_url))
                             }

@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -68,6 +69,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -88,6 +91,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -349,6 +353,34 @@ private sealed class PendingPermissionWork {
 
 private enum class AppTab { DASHBOARD, STATISTICS, DEVICES, IMPORT, SETTINGS }
 
+private val AppTab.icon: ImageVector
+    get() = when (this) {
+        AppTab.DASHBOARD -> Icons.Rounded.Dashboard
+        AppTab.STATISTICS -> Icons.Rounded.BarChart
+        AppTab.DEVICES -> Icons.Rounded.Devices
+        AppTab.IMPORT -> Icons.Rounded.FileDownload
+        AppTab.SETTINGS -> Icons.Rounded.Settings
+    }
+
+private val AppTab.labelRes: Int
+    get() = when (this) {
+        AppTab.DASHBOARD -> R.string.tab_dashboard
+        AppTab.STATISTICS -> R.string.tab_statistics
+        AppTab.DEVICES -> R.string.tab_devices
+        AppTab.IMPORT -> R.string.tab_import
+        AppTab.SETTINGS -> R.string.tab_settings
+    }
+
+@Composable
+private fun AppTabLabel(tab: AppTab) {
+    Text(
+        stringResource(tab.labelRes),
+        style = MaterialTheme.typography.labelSmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
 @Composable
 private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
     val scope = rememberCoroutineScope()
@@ -410,6 +442,8 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
         modifier = Modifier.fillMaxSize(),
         color = colors.background,
     ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val useNavigationRail = maxWidth >= 600.dp
         Scaffold(
             containerColor = colors.background,
             topBar = {
@@ -425,24 +459,10 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                         .padding(horizontal = 20.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        stringResource(R.string.app_name),
+                        stringResource(currentTab.labelRes),
                         style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Bold,
                         color = colors.onBackground,
-                        maxLines = 1,
-                    )
-                    Text(
-                        when (currentTab) {
-                            AppTab.DASHBOARD -> stringResource(R.string.tab_dashboard)
-                            AppTab.STATISTICS -> stringResource(R.string.tab_statistics)
-                            AppTab.DEVICES -> stringResource(R.string.tab_devices)
-                            AppTab.IMPORT -> stringResource(R.string.tab_import)
-                            AppTab.SETTINGS -> stringResource(R.string.tab_settings)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                     permissionMessage?.let { message ->
                         Spacer(Modifier.height(8.dp))
@@ -474,36 +494,16 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                 }
             },
             bottomBar = {
-                NavigationBar(containerColor = colors.surface) {
-                    AppTab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = currentTab == tab,
-                            onClick = { currentTab = tab },
-                            alwaysShowLabel = false,
-                            icon = {
-                                when (tab) {
-                                    AppTab.DASHBOARD -> Icon(Icons.Rounded.Dashboard, contentDescription = null)
-                                    AppTab.STATISTICS -> Icon(Icons.Rounded.BarChart, contentDescription = null)
-                                    AppTab.DEVICES -> Icon(Icons.Rounded.Devices, contentDescription = null)
-                                    AppTab.IMPORT -> Icon(Icons.Rounded.FileDownload, contentDescription = null)
-                                    AppTab.SETTINGS -> Icon(Icons.Rounded.Settings, contentDescription = null)
-                                }
-                            },
-                            label = {
-                                Text(
-                                    when (tab) {
-                                        AppTab.DASHBOARD -> stringResource(R.string.tab_dashboard)
-                                        AppTab.STATISTICS -> stringResource(R.string.tab_statistics)
-                                        AppTab.DEVICES -> stringResource(R.string.tab_devices)
-                                        AppTab.IMPORT -> stringResource(R.string.tab_import)
-                                        AppTab.SETTINGS -> stringResource(R.string.tab_settings)
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    style = MaterialTheme.typography.labelSmall,
-                                )
-                            },
-                        )
+                if (!useNavigationRail) {
+                    NavigationBar(containerColor = colors.surface) {
+                        AppTab.entries.forEach { tab ->
+                            NavigationBarItem(
+                                selected = currentTab == tab,
+                                onClick = { currentTab = tab },
+                                icon = { Icon(tab.icon, contentDescription = null) },
+                                label = { AppTabLabel(tab) },
+                            )
+                        }
                     }
                 }
             },
@@ -534,8 +534,22 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                 }
             },
         ) { padding ->
-            val tabModifier = Modifier.padding(padding).imePadding()
-            when (currentTab) {
+            Row(Modifier.fillMaxSize().padding(padding)) {
+                if (useNavigationRail) {
+                    NavigationRail(containerColor = colors.surface) {
+                        AppTab.entries.forEach { tab ->
+                            NavigationRailItem(
+                                selected = currentTab == tab,
+                                onClick = { currentTab = tab },
+                                icon = { Icon(tab.icon, contentDescription = null) },
+                                label = { AppTabLabel(tab) },
+                                alwaysShowLabel = true,
+                            )
+                        }
+                    }
+                }
+                val tabModifier = Modifier.weight(1f).imePadding()
+                when (currentTab) {
                 AppTab.DASHBOARD -> DashboardTab(
                     modifier = tabModifier,
                     portfolio = portfolio,
@@ -621,7 +635,9 @@ private fun SolarMonitorApp(container: AppContainer, activity: MainActivity) {
                     settings = settings,
                     devices = devices,
                 )
+                }
             }
+        }
         }
     }
 }
