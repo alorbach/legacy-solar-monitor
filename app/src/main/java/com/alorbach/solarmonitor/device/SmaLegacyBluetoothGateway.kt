@@ -387,7 +387,9 @@ class SmaLegacyBluetoothGatewayImpl(
                     socket = strategy.open(btDevice)
                     activeSockets[macKey] = socket
                     withTimeout(CONNECT_TIMEOUT_MS) {
-                        socket.connect()
+                        withBlockingIoDeadline(CONNECT_TIMEOUT_MS, abort = { socket.close() }) {
+                            socket.connect()
+                        }
                     }
                     delay(150)
                     linkEstablished = true

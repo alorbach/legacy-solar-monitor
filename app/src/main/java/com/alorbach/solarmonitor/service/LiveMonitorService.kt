@@ -54,6 +54,8 @@ class LiveMonitorService : Service() {
         if (intent?.action == ACTION_STOP) {
             LivePollScheduler.cancel(this)
             clearPersistedDeviceIds()
+            LiveMonitoringStatusStore.update(this, LiveMonitoringPauseReason.STOPPED)
+            LiveResumeNotifier.cancel(this)
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             val stopGen = runGeneration.get()
             val stopStartId = startId
@@ -80,7 +82,9 @@ class LiveMonitorService : Service() {
             (application as? SolarMonitorApplication)?.container?.liveMonitoringRepository?.stopAll()
             stopJob = scope.launch {
                 val ids = loadPersistedDeviceIds()
-                LivePollScheduler.scheduleResume(this@LiveMonitorService, ids)
+                if (!intent.getBooleanExtra(EXTRA_PRESERVE_RESUME_ALARM, false)) {
+                    LivePollScheduler.scheduleResume(this@LiveMonitorService, ids)
+                }
                 teardownSessions(USER_STOP_JOIN_TIMEOUT_MS, pauseGen.takeIf { it >= 0 } ?: runGeneration.get())
                 if (pauseGen < 0 || runGeneration.get() == pauseGen) {
                     ServiceCompat.stopForeground(
@@ -119,6 +123,8 @@ class LiveMonitorService : Service() {
             },
         )
         persistDeviceIds(deviceIds)
+        LiveMonitoringStatusStore.update(this, LiveMonitoringPauseReason.RESUME_PENDING)
+        LiveResumeNotifier.cancel(this)
 
         val container = (application as SolarMonitorApplication).container
         coordinatorJob?.cancel()
@@ -175,6 +181,10 @@ class LiveMonitorService : Service() {
                             val wifiAllowed = settings != null &&
                                 container.homeWifiChecker.isAllowed(settings)
                             if (!wifiAllowed) {
+                                LiveMonitoringStatusStore.update(
+                                    this@LiveMonitorService,
+                                    LiveMonitoringPauseReason.WAITING_FOR_WIFI,
+                                )
                                 container.liveMonitoringRepository.stopDevice(deviceId)
                                 val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                                 manager.notify(
@@ -187,6 +197,13 @@ class LiveMonitorService : Service() {
                                 continue
                             }
                             val result = container.liveMonitoringRepository.start(deviceId, continuous = true)
+                            if (result.isSuccess) {
+                                LiveMonitoringStatusStore.recordSuccessfulPoll(this@LiveMonitorService)
+                            }
+                            LiveMonitoringStatusStore.update(
+                                this@LiveMonitorService,
+                                LiveMonitoringPauseReason.RESUME_PENDING,
+                            )
                             val aggregate = container.liveMonitoringRepository.state.value.message
                             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                             manager.notify(NOTIFICATION_ID, buildNotification(aggregate))
@@ -318,6 +335,7 @@ class LiveMonitorService : Service() {
         const val ACTION_PAUSE = "com.alorbach.solarmonitor.action.PAUSE_LIVE_MONITOR"
         const val ACTION_RESUME = "com.alorbach.solarmonitor.action.RESUME_LIVE_MONITOR"
         const val EXTRA_RUN_GENERATION = "run_generation"
+        const val EXTRA_PRESERVE_RESUME_ALARM = "preserve_resume_alarm"
         private const val CHANNEL_ID = "live_monitor"
         private const val NOTIFICATION_ID = 4001
         private const val POLL_INTERVAL_MS = 60_000L
@@ -336,6 +354,7 @@ class LiveMonitorService : Service() {
                 .mapNotNull { it.toLongOrNull()?.takeIf { id -> id > 0 } }
                 .toLongArray()
 
+        @Synchronized
         fun persistDeviceIds(context: Context, ids: LongArray) {
             val prefs = context.applicationContext.getSharedPreferences(PREFS, MODE_PRIVATE).edit()
             if (ids.isEmpty()) {

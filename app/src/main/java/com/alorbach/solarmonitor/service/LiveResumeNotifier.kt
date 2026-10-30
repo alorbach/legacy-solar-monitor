@@ -16,6 +16,10 @@ object LiveResumeNotifier {
     private const val NOTIFICATION_ID = 4004
     private const val PENDING_INTENT_REQUEST = 5002
 
+    fun cancel(context: Context) {
+        NotificationManagerCompat.from(context.applicationContext).cancel(NOTIFICATION_ID)
+    }
+
     fun post(context: Context): Boolean {
         val appContext = context.applicationContext
         val manager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

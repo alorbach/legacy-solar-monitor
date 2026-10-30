@@ -24,6 +24,7 @@ class LivePollWindowReceiver : BroadcastReceiver() {
                 )
             } catch (error: RuntimeException) {
                 Log.w(TAG, "Live poll window resume failed", error)
+                LivePollScheduler.recoverAfterResumeFailure(appContext)
             } finally {
                 pending.finish()
             }

@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.work.WorkManager
 import com.alorbach.solarmonitor.R
 import com.alorbach.solarmonitor.data.local.SolarMonitorDatabase
-import com.alorbach.solarmonitor.data.local.SpotSampleMerger
 import com.alorbach.solarmonitor.data.importing.ImportCopyStore
 import com.alorbach.solarmonitor.data.model.DailyPoint
 import com.alorbach.solarmonitor.data.model.DayAggregateEntity
@@ -25,6 +24,7 @@ import com.alorbach.solarmonitor.data.settings.AppSettingsStore
 import com.alorbach.solarmonitor.data.security.CredentialStore
 import com.alorbach.solarmonitor.domain.DashboardMetrics
 import com.alorbach.solarmonitor.domain.EarningsCalculator
+import com.alorbach.solarmonitor.domain.ReportCurrency
 import com.alorbach.solarmonitor.domain.EventAlertPolicy
 import com.alorbach.solarmonitor.domain.CurrentHourArchiveCoverage
 import com.alorbach.solarmonitor.domain.StatisticsAggregator
@@ -228,17 +228,11 @@ class SolarRepository(
     suspend fun getImportSources(deviceId: Long): List<ImportSourceEntity> = dao.getImportSources(deviceId)
 
     suspend fun saveSpotSamples(samples: List<SpotSampleEntity>) {
-        if (samples.isNotEmpty()) dao.upsertSpotSamples(samples)
+        if (samples.isNotEmpty()) dao.mergeSpotSamples(samples)
     }
 
     suspend fun saveLiveSample(deviceId: Long, sample: SpotSampleEntity, status: String) {
-        val prior = dao.getSpotSamplesInRange(
-            deviceId = deviceId,
-            fromEpochSeconds = sample.timestampEpochSeconds,
-            toEpochSeconds = sample.timestampEpochSeconds,
-        ).firstOrNull()
-        val merged = prior?.let { SpotSampleMerger.merge(it, sample) } ?: sample
-        saveSpotSamples(listOf(merged))
+        saveSpotSamples(listOf(sample))
         updateDeviceStatus(
             deviceId = deviceId,
             status = status,
@@ -277,30 +271,16 @@ class SolarRepository(
         dayItems: List<DayAggregateEntity>,
         spotSamples: List<SpotSampleEntity> = emptyList(),
     ) {
-        val mergedSpotSamples = if (spotSamples.isEmpty()) {
-            emptyList()
-        } else {
-            val existing = dao.getSpotSamplesInRange(
+        if (spotSamples.isNotEmpty()) dao.mergeSpotSamples(spotSamples)
+        if (dayItems.isNotEmpty()) dao.mergeDayAggregates(dayItems)
+        if (spotSamples.isNotEmpty()) {
+            recomputeHourAggregates(
                 deviceId = deviceId,
                 fromEpochSeconds = spotSamples.minOf { it.timestampEpochSeconds },
                 toEpochSeconds = spotSamples.maxOf { it.timestampEpochSeconds },
-            ).associateBy { it.timestampEpochSeconds }
-            spotSamples.map { incoming ->
-                existing[incoming.timestampEpochSeconds]?.let { prior ->
-                    SpotSampleMerger.merge(prior, incoming)
-                } ?: incoming
-            }
-        }
-        if (mergedSpotSamples.isNotEmpty()) dao.upsertSpotSamples(mergedSpotSamples)
-        if (dayItems.isNotEmpty()) dao.mergeDayAggregates(dayItems)
-        if (mergedSpotSamples.isNotEmpty()) {
-            recomputeHourAggregates(
-                deviceId = deviceId,
-                fromEpochSeconds = mergedSpotSamples.minOf { it.timestampEpochSeconds },
-                toEpochSeconds = mergedSpotSamples.maxOf { it.timestampEpochSeconds },
             )
         }
-        if (dayItems.isNotEmpty() || mergedSpotSamples.isNotEmpty()) {
+        if (dayItems.isNotEmpty() || spotSamples.isNotEmpty()) {
             _dataRevision.value += 1L
         }
     }
@@ -537,7 +517,8 @@ class SolarRepository(
             monthYearYield > 0L -> monthYearYield
             else -> null
         }
-        val earnings = days.sumOf { EarningsCalculator.earningsForDay(it, tariffs) }
+        val currency = ReportCurrency.commonCurrency(tariffs.map { it.currency })
+        val earnings = currency?.let { days.sumOf { EarningsCalculator.earningsForDay(it, tariffs) } }
 
         return DeviceDashboardSummary(
             deviceId = device.id,
@@ -559,7 +540,7 @@ class SolarRepository(
             monthYieldWh = monthYield,
             yearlyYieldWh = yearYield,
             estimatedEarnings = earnings,
-            currency = tariffs.firstOrNull()?.currency,
+            currency = currency,
             status = device.lastConnectionStatus ?: latest?.status,
             lastUpdateEpochSeconds = device.lastLiveReadAtEpochSeconds ?: latest?.timestampEpochSeconds,
             temperatureC = latest?.temperatureC,
@@ -578,14 +559,15 @@ class SolarRepository(
     suspend fun getPortfolioSummary(): PortfolioSummary {
         val devices = dao.getAllDevices()
         val summaries = devices.mapNotNull { getDeviceDashboard(it.id) }
+        val currency = currencyForDevices(devices.map { it.id })
         return PortfolioSummary(
             deviceCount = summaries.size,
             currentPowerW = summaries.mapNotNull { it.currentPowerW }.takeIf { it.isNotEmpty() }?.sum(),
             todayYieldWh = summaries.sumOf { it.todayYieldWh ?: 0 },
             monthYieldWh = summaries.sumOf { it.monthYieldWh ?: 0 },
             yearYieldWh = summaries.sumOf { it.yearlyYieldWh ?: 0 },
-            estimatedEarnings = summaries.sumOf { it.estimatedEarnings },
-            currency = summaries.firstOrNull()?.currency,
+            estimatedEarnings = currency?.let { summaries.sumOf { it.estimatedEarnings ?: 0.0 } },
+            currency = currency,
         )
     }
 
@@ -879,8 +861,7 @@ class SolarRepository(
     }
 
     suspend fun currencyForDevices(deviceIds: List<Long>): String? {
-        if (deviceIds.isEmpty()) return null
-        return dao.getTariffsForDevices(deviceIds).firstOrNull()?.currency
+        return ReportCurrency.commonCurrency(dao.getTariffsForDevices(deviceIds).map { it.currency })
     }
 
     private suspend fun eventYearsForDevices(deviceIds: List<Long>): Set<String> {

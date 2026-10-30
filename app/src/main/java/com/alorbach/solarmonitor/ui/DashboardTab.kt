@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -12,6 +13,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -99,6 +101,8 @@ import com.alorbach.solarmonitor.device.BluetoothDeviceDescriptor
 import com.alorbach.solarmonitor.device.SmaStatusLabels
 import com.alorbach.solarmonitor.domain.YieldFormatting
 import com.alorbach.solarmonitor.i18n.LocaleController
+import com.alorbach.solarmonitor.service.LiveMonitoringPauseReason
+import com.alorbach.solarmonitor.service.LiveMonitoringStatusStore
 import com.alorbach.solarmonitor.work.ScheduledImportWorker
 import java.time.Instant
 import java.time.LocalDate
@@ -115,8 +119,10 @@ private data class DashboardChartLoad(
     val timezone: String? = null,
     val daily: List<DailyPoint>? = null,
     val hourly: List<StatsPoint>? = null,
+    val currency: String? = null,
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DashboardTab(
     modifier: Modifier,
@@ -166,6 +172,7 @@ fun DashboardTab(
                 timezone = timezone,
                 daily = container.repository.getDailyChart(deviceId),
                 hourly = container.repository.getHourlySeriesToday(listOf(deviceId)),
+                currency = container.repository.currencyForDevices(listOf(deviceId)),
             )
         }
     }
@@ -174,6 +181,8 @@ fun DashboardTab(
     val colors = MaterialTheme.colorScheme
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val monitoringStatus by remember(context) { LiveMonitoringStatusStore.observe(context) }
+        .collectAsStateWithLifecycle()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -196,11 +205,14 @@ fun DashboardTab(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(stringResource(R.string.portfolio), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (portfolio.currency == null) {
+                        Text(stringResource(R.string.earnings_mixed_currencies), style = MaterialTheme.typography.bodyMedium)
+                    }
+                    AdaptivePairRow() {
                         MetricTile(Modifier.weight(1f), stringResource(R.string.metric_power), YieldFormatting.wattsLabel(portfolio.currentPowerW))
                         MetricTile(Modifier.weight(1f), stringResource(R.string.metric_today), YieldFormatting.whToKwhLabel(portfolio.todayYieldWh))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AdaptivePairRow() {
                         MetricTile(Modifier.weight(1f), stringResource(R.string.metric_month), YieldFormatting.whToKwhLabel(portfolio.monthYieldWh))
                         MetricTile(Modifier.weight(1f), stringResource(R.string.metric_year), YieldFormatting.whToKwhLabel(portfolio.yearYieldWh))
                     }
@@ -212,11 +224,41 @@ fun DashboardTab(
                         color = colors.onSurfaceVariant,
                     )
                     StatusBadge(liveMessage, active = liveActive)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (!liveActive && monitoringStatus.reason != LiveMonitoringPauseReason.STOPPED) {
+                        val statusText = when (monitoringStatus.reason) {
+                            LiveMonitoringPauseReason.RESUME_PENDING -> R.string.live_resume_pending
+                            LiveMonitoringPauseReason.WAITING_FOR_WINDOW -> R.string.live_waiting_window
+                            LiveMonitoringPauseReason.WAITING_FOR_WIFI -> R.string.live_waiting_wifi
+                            LiveMonitoringPauseReason.NEEDS_RESUME -> R.string.live_needs_resume
+                            LiveMonitoringPauseReason.NOTIFICATIONS_DISABLED -> R.string.live_notifications_disabled
+                            LiveMonitoringPauseReason.BLUETOOTH_PERMISSION_REQUIRED -> R.string.live_bluetooth_permission_required
+                            LiveMonitoringPauseReason.START_FAILED -> R.string.live_start_failed
+                            LiveMonitoringPauseReason.STOPPED -> R.string.live_resume_pending
+                        }
+                        Text(stringResource(statusText), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                        if (monitoringStatus.reason == LiveMonitoringPauseReason.WAITING_FOR_WINDOW ||
+                            monitoringStatus.reason == LiveMonitoringPauseReason.WAITING_FOR_WIFI
+                        ) {
+                            monitoringStatus.nextAttemptAtMillis?.let {
+                                Text(stringResource(R.string.live_next_attempt, formatEpochSeconds(it / 1000)), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        if (monitoringStatus.reason == LiveMonitoringPauseReason.NOTIFICATIONS_DISABLED) {
+                            TextButton(onClick = {
+                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                runCatching { context.startActivity(intent) }
+                            }) { Text(stringResource(R.string.live_notification_settings)) }
+                        }
+                    }
+                    monitoringStatus.lastSuccessfulPollAtMillis?.let {
+                        Text(stringResource(R.string.live_last_success, formatEpochSeconds(it / 1000)), color = colors.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                    AdaptivePairRow() {
                         Button(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(CompactButtonHeight),
+                                .heightIn(min = CompactButtonHeight),
                             contentPadding = CompactButtonContentPadding,
                             enabled = selectedDeviceId != null &&
                                 selectedDeviceId !in liveActiveDeviceIds,
@@ -230,14 +272,12 @@ fun DashboardTab(
                                 stringResource(
                                     if (liveActive) R.string.start_live_add_selected else R.string.start_live_selected,
                                 ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         Button(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(CompactButtonHeight),
+                                .heightIn(min = CompactButtonHeight),
                             contentPadding = CompactButtonContentPadding,
                             enabled = devices.isNotEmpty() &&
                                 devices.any { it.id !in liveActiveDeviceIds },
@@ -245,8 +285,6 @@ fun DashboardTab(
                         ) {
                             Text(
                                 stringResource(R.string.start_all_live_monitors),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -254,7 +292,7 @@ fun DashboardTab(
                         Button(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(CompactButtonHeight),
+                                .heightIn(min = CompactButtonHeight),
                             contentPadding = CompactButtonContentPadding,
                             onClick = onStopLive,
                         ) {
@@ -266,8 +304,6 @@ fun DashboardTab(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 stringResource(R.string.stop_live_monitoring),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
@@ -332,7 +368,7 @@ fun DashboardTab(
                                     R.string.hourly_selected,
                                     selected.label,
                                     YieldFormatting.whToKwhLabel(selected.yieldWh),
-                                    YieldFormatting.earningsLabel(selected.earnings, portfolio.currency),
+                                    YieldFormatting.earningsLabel(selected.earnings, chartLoad.currency),
                                 ),
                                 color = colors.onSurface,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -356,7 +392,7 @@ fun DashboardTab(
                         val peak = loadedChart.maxByOrNull { it.yieldWh }
                         val avgWh = if (loadedChart.isEmpty()) 0L else periodTotal / loadedChart.size
                         val productionDays = loadedChart.count { it.yieldWh > 0L }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AdaptivePairRow() {
                             MetricTile(
                                 Modifier.weight(1f),
                                 stringResource(R.string.stats_total_yield),
@@ -365,10 +401,10 @@ fun DashboardTab(
                             MetricTile(
                                 Modifier.weight(1f),
                                 stringResource(R.string.stats_earnings_short),
-                                YieldFormatting.earningsLabel(periodEarnings, portfolio.currency),
+                                YieldFormatting.earningsLabel(periodEarnings, chartLoad.currency),
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AdaptivePairRow() {
                             MetricTile(
                                 Modifier.weight(1f),
                                 stringResource(R.string.daily_average),
@@ -409,7 +445,7 @@ fun DashboardTab(
                                     R.string.daily_selected,
                                     dateLabel,
                                     YieldFormatting.whToKwhLabel(selected.yieldWh),
-                                    YieldFormatting.earningsLabel(selected.earnings, portfolio.currency),
+                                    YieldFormatting.earningsLabel(selected.earnings, chartLoad.currency),
                                 ),
                                 color = colors.onSurface,
                                 style = MaterialTheme.typography.bodyMedium,
@@ -424,11 +460,11 @@ fun DashboardTab(
                         )
                     }
                     if (selectedDeviceId != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AdaptivePairRow() {
                             OutlinedButton(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(CompactButtonHeight),
+                                    .heightIn(min = CompactButtonHeight),
                                 contentPadding = CompactButtonContentPadding,
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
@@ -451,14 +487,12 @@ fun DashboardTab(
                             ) {
                                 Text(
                                     stringResource(R.string.export_csv),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                             OutlinedButton(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(CompactButtonHeight),
+                                    .heightIn(min = CompactButtonHeight),
                                 contentPadding = CompactButtonContentPadding,
                                 onClick = {
                                     val id = selectedDeviceId ?: return@OutlinedButton
@@ -481,16 +515,14 @@ fun DashboardTab(
                             ) {
                                 Text(
                                     stringResource(R.string.export_pdf),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AdaptivePairRow() {
                             OutlinedButton(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(CompactButtonHeight),
+                                    .heightIn(min = CompactButtonHeight),
                                 contentPadding = CompactButtonContentPadding,
                                 enabled = loadedChart != null,
                                 onClick = {
@@ -502,6 +534,7 @@ fun DashboardTab(
                                                 container.reportExporter.exportSeriesCsv(
                                                     fileStem = "device-$id-daily",
                                                     points = com.alorbach.solarmonitor.domain.SeriesReportFormat.dailyPointsToStats(series),
+                                                    includeEarnings = chartLoad.currency != null,
                                                 ),
                                                 "text/csv",
                                             )
@@ -517,14 +550,12 @@ fun DashboardTab(
                             ) {
                                 Text(
                                     stringResource(R.string.export_period_csv),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                             OutlinedButton(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(CompactButtonHeight),
+                                    .heightIn(min = CompactButtonHeight),
                                 contentPadding = CompactButtonContentPadding,
                                 enabled = loadedChart != null,
                                 onClick = {
@@ -537,7 +568,7 @@ fun DashboardTab(
                                                     fileStem = "device-$id-daily",
                                                     deviceLabel = selectedDevice?.name ?: "",
                                                     periodLabel = context.getString(R.string.production_chart_subtitle),
-                                                    currency = portfolio.currency,
+                                                    currency = chartLoad.currency,
                                                     points = com.alorbach.solarmonitor.domain.SeriesReportFormat.dailyPointsToStats(series),
                                                 ),
                                                 "application/pdf",
@@ -554,8 +585,6 @@ fun DashboardTab(
                             ) {
                                 Text(
                                     stringResource(R.string.export_period_pdf),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -598,8 +627,6 @@ fun DashboardTab(
                             Text(
                                 device.name,
                                 fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
                             if (device.id in liveActiveDeviceIds) {

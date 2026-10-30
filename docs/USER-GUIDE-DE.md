@@ -51,7 +51,7 @@ Bluetooth-Unterstützung.
 
 Das gelbe Banner oben öffnet App-, Standort- oder Bluetooth-Einstellungen, wenn etwas fehlt.
 
-**Hinweis:** Das Live-Abfragefenster nutzt einen *ungenauen* Alarm. Wenn die App beim Fensterbeginn im Hintergrund ist, darf Android den Vordergrunddienst für verbundene Geräte durch diesen Alarm nicht starten; stattdessen zeigt die App die Benachrichtigung **Live-Monitor bereit**. Zum Fortsetzen darauf tippen (oder die App öffnen). Android / OEM-Akkustrategien können die Benachrichtigung um einige Minuten verzögern. Eine Sonderberechtigung für genaue Alarme wird absichtlich nicht angefordert.
+**Hinweis:** Das Live-Abfragefenster nutzt einen *ungenauen* Alarm. Ab Android 12 kann dieser Alarm den Vordergrunddienst im Hintergrund grundsätzlich nicht starten; stattdessen zeigt die App die Benachrichtigung **Live-Monitor bereit**. Zum Fortsetzen darauf tippen oder die App öffnen. Auf älteren Android-Versionen versucht die App die automatische Wiederaufnahme. Android und Hersteller-Akkustrategien können die Ausführung verzögern. Eine Sonderberechtigung für genaue Alarme wird nicht angefordert.
 
 ## Gerät hinzufügen
 
@@ -83,6 +83,8 @@ Während Live läuft gibt es eine dauerhafte **Live-Monitor**-Benachrichtigung. 
 
 **Uneingeschränkten Akku** erlauben, wenn das Telefon den Dienst nachts beendet.
 
+Auf **Start** zeigt der Überwachungsstatus, wann zuletzt erfolgreich abgefragt wurde und ob die App auf das Abfragefenster, das Heim-WLAN oder eine Aktion wartet. Eine gespeicherte Zeit allein bedeutet nicht, dass die Überwachung gerade läuft. Prüfe auf Samsung-Geräten auch, ob die App unter den schlafenden oder tief schlafenden Apps geführt wird. Android und Hersteller-Einstellungen können die Hintergrundarbeit verzögern oder beenden.
+
 ## Archiv, Tarife, Ereignisse
 
 - **Sync** holt etwa die letzten **30 Tage** Tagesarchiv und **12 Monate** Monatsarchiv. Ereignisse werden per Bluetooth **nicht** geladen.
@@ -96,6 +98,10 @@ Während Live läuft gibt es eine dauerhafte **Live-Monitor**-Benachrichtigung. 
 **Start** zeigt Leistung, Heute/Monat/Jahr und Erlös aus den letzten ~32 gespeicherten Produktionstagen. **Statistik**: Stunde/Tag/Monat/Jahr, Gerät oder Alle, Diagramm und Ereignisliste.
 
 **Berichte:** Zeitraum-**CSV** ist vollständig. Zeitraum-**PDF** kürzt Serie und Ereignisse auf die ersten **40** Einträge.
+
+CSV-Berichte stellen möglicherweise ausführbarem Text (etwa einem Gerätenamen mit `=` am Anfang) zum Schutz in Tabellenkalkulationen ein Apostroph voran. Dieses Zeichen bleibt im CSV-Rohtext enthalten; numerische Messwertspalten bleiben Zahlen.
+
+Verwenden die ausgewählten Geräte oder deren Tarifverläufe unterschiedliche Währungen, wird die Vergütung ausgeblendet statt umgerechnet oder zusammengezählt. CSV-Vergütungsfelder bleiben leer; Energie- und Leistungswerte bleiben verfügbar. Wähle ein Gerät mit einer einheitlichen Tarifwährung, um dessen Vergütung zu sehen.
 
 ## SBFspot-Daten importieren
 

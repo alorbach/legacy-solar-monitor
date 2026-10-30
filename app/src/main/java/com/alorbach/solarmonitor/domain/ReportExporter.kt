@@ -21,10 +21,18 @@ object SeriesReportFormat {
     const val MAX_PDF_ROWS = 40
 
     fun csvEscape(value: String): String {
-        return if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-            "\"${value.replace("\"", "\"\"")}\""
+        // CSV quoting does not stop spreadsheet formula evaluation. Prefix text that
+        // could be interpreted as a formula, including after leading whitespace.
+        // Numeric columns bypass this text helper so negative measurements stay numeric.
+        val firstContent = value.firstOrNull { !it.isWhitespace() && !it.isISOControl() && it != '\uFEFF' }
+        val leading = value.firstOrNull()
+        val safe = if ((firstContent != null && firstContent in "=+-@") ||
+            (leading != null && leading in "\t\r\n")
+        ) "'$value" else value
+        return if (safe.contains(',') || safe.contains('"') || safe.contains('\n') || safe.contains('\r')) {
+            "\"${safe.replace("\"", "\"\"")}\""
         } else {
-            value
+            safe
         }
     }
 
@@ -32,18 +40,19 @@ object SeriesReportFormat {
         points: List<StatsPoint>,
         events: List<DeviceEventEntity>,
         eventZone: ZoneId = ZoneId.systemDefault(),
+        includeEarnings: Boolean = true,
     ): String = buildString {
         appendLine("label,bucket,yieldWh,peakW,earnings,eventCount")
         points.forEach { point ->
             appendLine(
                 listOf(
-                    point.label,
-                    point.bucketKey,
+                    csvEscape(point.label),
+                    csvEscape(point.bucketKey),
                     point.yieldWh.toString(),
                     point.peakPowerW?.toString().orEmpty(),
-                    point.earnings.toString(),
+                    if (includeEarnings) point.earnings.toString() else "",
                     point.eventCount.toString(),
-                ).joinToString(",") { csvEscape(it) },
+                ).joinToString(","),
             )
         }
         if (events.isNotEmpty()) {
@@ -56,13 +65,13 @@ object SeriesReportFormat {
                     .format(formatter)
                 appendLine(
                     listOf(
-                        whenLabel,
+                        csvEscape(whenLabel),
                         event.eventCode.toString(),
-                        event.category,
-                        event.tag,
-                        event.oldValue.orEmpty(),
-                        event.newValue.orEmpty(),
-                    ).joinToString(",") { csvEscape(it) },
+                        csvEscape(event.category),
+                        csvEscape(event.tag),
+                        csvEscape(event.oldValue.orEmpty()),
+                        csvEscape(event.newValue.orEmpty()),
+                    ).joinToString(","),
                 )
             }
         }
@@ -89,16 +98,16 @@ class ReportExporter(
                 appendLine("device,currentPowerW,todayYieldWh,monthYieldWh,yearlyYieldWh,earnings,currency,status,lastUpdate")
                 appendLine(
                     listOf(
-                        summary.deviceName,
+                        SeriesReportFormat.csvEscape(summary.deviceName),
                         summary.currentPowerW ?: "",
                         summary.todayYieldWh ?: "",
                         summary.monthYieldWh ?: "",
                         summary.yearlyYieldWh ?: "",
-                        summary.estimatedEarnings,
-                        summary.currency ?: "",
-                        SmaStatusLabels.displayStatus(context, summary.status) ?: "",
+                        summary.estimatedEarnings ?: "",
+                        SeriesReportFormat.csvEscape(summary.currency.orEmpty()),
+                        SeriesReportFormat.csvEscape(SmaStatusLabels.displayStatus(context, summary.status).orEmpty()),
                         summary.lastUpdateEpochSeconds ?: "",
-                    ).joinToString(",") { SeriesReportFormat.csvEscape(it.toString()) }
+                    ).joinToString(",")
                 )
             }
         )
@@ -168,9 +177,10 @@ class ReportExporter(
         points: List<StatsPoint>,
         events: List<DeviceEventEntity> = emptyList(),
         eventZone: ZoneId = ZoneId.systemDefault(),
+        includeEarnings: Boolean = true,
     ): File {
         val file = reportFile("$fileStem-series.csv")
-        file.writeText(SeriesReportFormat.csvBody(points, events, eventZone))
+        file.writeText(SeriesReportFormat.csvBody(points, events, eventZone, includeEarnings))
         return file
     }
 
@@ -220,12 +230,13 @@ class ReportExporter(
         drawWrapped(context.getString(R.string.report_device, deviceLabel), body)
         drawWrapped(context.getString(R.string.report_period, periodLabel), body)
         val totalYield = points.sumOf { it.yieldWh }
-        val totalEarnings = points.sumOf { it.earnings }
+        val totalEarnings = currency?.let { points.sumOf { it.earnings } }
         drawWrapped(context.getString(R.string.report_today, YieldFormatting.whToKwhLabel(totalYield)), body)
         drawWrapped(
             context.getString(R.string.report_earnings, YieldFormatting.earningsLabel(totalEarnings, currency)),
             body,
         )
+        if (currency == null) drawWrapped(context.getString(R.string.earnings_mixed_currencies), body)
         y += 8f
         val shown = points.take(SeriesReportFormat.MAX_PDF_ROWS)
         if (points.size > shown.size) {

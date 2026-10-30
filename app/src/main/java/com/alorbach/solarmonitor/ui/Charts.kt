@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,11 +20,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +44,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -88,6 +92,7 @@ fun ProductionChart(
             YieldFormatting.whToKwhLabel(points.maxOfOrNull { it.yieldWh }),
         )
     }
+    Column {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -269,6 +274,17 @@ fun ProductionChart(
             }
         }
     }
+    if (points.isNotEmpty()) {
+        ChartValues(points.map { point ->
+            ChartValue(
+                label = LocalDate.ofEpochDay(point.dateEpochDay).format(DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)),
+                value = YieldFormatting.whToKwhLabel(point.yieldWh),
+                selected = point.dateEpochDay == selectedEpochDay,
+                onSelect = onPointClick?.let { click -> { click(point) } },
+            )
+        })
+    }
+    }
 }
 
 @Composable
@@ -302,6 +318,7 @@ fun StatsBarChart(
         YieldFormatting.whToKwhLabel(points.maxOfOrNull { it.yieldWh }),
     )
     val yAxisWidth = 40.dp
+    Column {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -337,7 +354,7 @@ fun StatsBarChart(
                 val tickLabels = points.map { StatsAxisLabels.tick(it.label, compactHourTicks) }
                 val axisProbe = remember(tickLabels, isScrolling) {
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        textSize = with(density) { if (isScrolling) 11.sp.toPx() else 10.sp.toPx() }
+                        textSize = with(density) { 11.sp.toPx() }
                     }
                 }
                 val longestAxisWidth = tickLabels.maxOf { axisProbe.measureText(it) }
@@ -476,7 +493,7 @@ fun StatsBarChart(
                         textAlign = Paint.Align.CENTER
                         typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
                         textSize = when {
-                            compactHourTicks -> min(barWidth * 0.72f, 10.sp.toPx()).coerceIn(8.sp.toPx(), 10.sp.toPx())
+                            compactHourTicks -> 11.sp.toPx()
                             isScrolling -> min(barWidth * 0.7f, 12.sp.toPx()).coerceIn(minSp, 13.sp.toPx())
                             verticalAxisLabels -> min(barWidth * 0.95f, 12.sp.toPx()).coerceIn(minSp, 12.sp.toPx())
                             else -> min(barWidth * 0.55f, 13.sp.toPx()).coerceIn(minSp, 14.sp.toPx())
@@ -510,6 +527,14 @@ fun StatsBarChart(
                             topLeft = Offset(left, top),
                             size = Size(barWidth, height.coerceAtLeast(0f)),
                         )
+                        if (point.bucketKey == selectedBucketKey) {
+                            drawLine(
+                                color = colors.onSurface,
+                                start = Offset(left + barWidth / 2f, chartTop),
+                                end = Offset(left + barWidth / 2f, axisY),
+                                strokeWidth = 2.dp.toPx(),
+                            )
+                        }
                         if (point.eventCount > 0) {
                             val markerRadius = 5.dp.toPx()
                             drawCircle(
@@ -600,6 +625,60 @@ fun StatsBarChart(
                         }
                     }
                 }
+                }
+            }
+        }
+    }
+    if (points.isNotEmpty()) {
+        ChartValues(points.map { point ->
+            ChartValue(
+                label = point.label,
+                value = if (point.eventCount > 0) {
+                    stringResource(R.string.chart_value_with_events, YieldFormatting.whToKwhLabel(point.yieldWh), point.eventCount)
+                } else {
+                    YieldFormatting.whToKwhLabel(point.yieldWh)
+                },
+                selected = point.bucketKey == selectedBucketKey,
+                onSelect = onBarClick?.let { click -> { click(point.bucketKey) } },
+                onOpen = onBarDoubleClick?.let { click -> { click(point.bucketKey) } },
+            )
+        })
+    }
+    }
+}
+
+private data class ChartValue(
+    val label: String,
+    val value: String,
+    val selected: Boolean,
+    val onSelect: (() -> Unit)?,
+    val onOpen: (() -> Unit)? = null,
+)
+
+@Composable
+private fun ChartValues(entries: List<ChartValue>) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    TextButton(onClick = { expanded = !expanded }) {
+        Text(stringResource(if (expanded) R.string.chart_hide_values else R.string.chart_show_values))
+    }
+    if (expanded) {
+        Column(Modifier.fillMaxWidth()) {
+            entries.forEach { entry ->
+                val label = stringResource(R.string.chart_value, entry.label, entry.value)
+                if (entry.onSelect != null) {
+                    TextButton(
+                        onClick = entry.onSelect,
+                        modifier = Modifier.fillMaxWidth().semantics { selected = entry.selected },
+                    ) {
+                        Text(if (entry.selected) stringResource(R.string.chart_selected_value, label) else label)
+                    }
+                } else {
+                    Text(label, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                }
+                if (entry.selected && entry.onOpen != null) {
+                    TextButton(onClick = entry.onOpen) {
+                        Text(stringResource(R.string.chart_open_period, entry.label))
+                    }
                 }
             }
         }

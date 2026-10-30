@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="earnings_mixed_currencies">Earnings are hidden because the tariffs use different currencies. No currency conversion is applied.</string>
     <string name="app_name">Legacy Solar Monitor</string>
     <string name="widget_compact_name">Solar Compact Stats</string>
     <string name="widget_medium_name">Solar Device Summary</string>
@@ -176,7 +177,23 @@
     <string name="language_english">English</string>
     <string name="language_restart_hint">On older Android versions, restart the app after changing language.</string>
     <string name="chart_no_data">No production data</string>
-    <string name="chart_description">Production chart with %1$d days, peak %2$s</string>
+    <string name="chart_description">Production chart with %1$d values, peak %2$s</string>
+    <string name="chart_show_values">Show chart values</string>
+    <string name="chart_hide_values">Hide chart values</string>
+    <string name="chart_value">%1$s: %2$s</string>
+    <string name="chart_value_with_events">%1$s, events: %2$d</string>
+    <string name="chart_selected_value">Selected: %1$s</string>
+    <string name="chart_open_period">Open %1$s</string>
+    <string name="live_resume_pending">Waiting to resume monitoring. Open the app to start it if it does not resume.</string>
+    <string name="live_waiting_window">Monitoring is paused outside the configured time window.</string>
+    <string name="live_waiting_wifi">Monitoring is waiting for an allowed Wi-Fi network. Check the Wi-Fi and location permissions if needed.</string>
+    <string name="live_needs_resume">Android requires you to resume monitoring. Use Start below or tap the notification.</string>
+    <string name="live_notifications_disabled">Monitoring needs to be resumed, but notifications are disabled. Start below or enable notifications.</string>
+    <string name="live_bluetooth_permission_required">Bluetooth permission is needed to resume monitoring. Check the app permissions.</string>
+    <string name="live_start_failed">Monitoring could not start. Check Bluetooth and start it again below.</string>
+    <string name="live_next_attempt">Next attempt, approximately: %1$s</string>
+    <string name="live_last_success">Last successful live reading: %1$s</string>
+    <string name="live_notification_settings">Notification settings</string>
     <string name="chart_empty_hint">Import or sync data to render charts.</string>
     <string name="stats_granularity">Granularity</string>
     <string name="stats_hour">Hour</string>

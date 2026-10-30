@@ -50,7 +50,7 @@ support.
 
 The yellow banner at the top of the app opens App, Location, or Bluetooth settings when something required is off.
 
-**Note:** The live poll window uses an *inexact* alarm. If the app is in the background when the window opens, Android does not allow that alarm to start the connected-device foreground service; the app posts a **Live monitor ready** notification instead. Tap it (or open the app) to resume. Android / OEM battery policies may delay the notification by a few minutes. Exact-alarm special access is intentionally not requested.
+**Note:** The live poll window uses an *inexact* alarm. On Android 12 and newer, that alarm generally cannot start the connected-device foreground service in the background; the app posts a **Live monitor ready** notification instead. Tap it or open the app to resume. On older Android versions, the app attempts to resume automatically. Android and manufacturer battery policies can delay execution. Exact-alarm special access is not requested.
 
 ## Add a device
 
@@ -86,6 +86,8 @@ While live runs you get a persistent **Live monitor** notification. Poll interva
 
 Allow **unrestricted battery** in Settings if the phone kills the service overnight. The poll window already skips night-time Bluetooth when inverters are offline.
 
+On **Start**, the monitoring status shows the last successful poll and whether the app is waiting for the poll window, home Wi-Fi, or an action. A saved timestamp alone does not mean monitoring is currently running. On Samsung devices, also check whether the app is listed among sleeping or deep sleeping apps. Android and manufacturer settings can delay or stop background work.
+
 Needs a saved MAC and PIN, and a working Bluetooth login.
 
 ## Archive, tariffs, events
@@ -119,6 +121,10 @@ On the expanded device card:
 Empty charts mean you still need a Sync or an SBFspot import.
 
 **Reports:** Period **CSV** includes the full series and events list for that query. Period **PDF** truncates series and event rows to the first **40** each (the PDF notes when truncated). Prefer CSV for complete exports.
+
+CSV reports prefix potentially executable text (such as a device name starting with `=`) with an apostrophe for spreadsheet safety. This prefix remains in the raw CSV text; numeric measurement columns remain numeric.
+
+When the selected devices or their tariff histories use different currencies, earnings are hidden instead of converted or added together. CSV earnings fields are left empty; energy and power values remain available. Select a device with a single tariff currency to see its earnings.
 
 ## Import SBFspot data
 

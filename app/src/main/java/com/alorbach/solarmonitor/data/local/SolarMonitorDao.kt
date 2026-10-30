@@ -77,6 +77,28 @@ interface SolarMonitorDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSpotSamples(samples: List<SpotSampleEntity>): List<Long>
 
+    @Query("SELECT * FROM spot_samples WHERE deviceId = :deviceId AND timestampEpochSeconds IN (:timestamps)")
+    suspend fun getSpotSamplesAtTimestamps(deviceId: Long, timestamps: List<Long>): List<SpotSampleEntity>
+
+    /** Keep the read/merge/write atomic across live reads, archives and CSV imports. */
+    @Transaction
+    suspend fun mergeSpotSamples(samples: List<SpotSampleEntity>) {
+        samples.groupBy { it.deviceId }.forEach { (deviceId, incoming) ->
+            val existing = incoming.map { it.timestampEpochSeconds }.distinct().chunked(400)
+                .flatMap { getSpotSamplesAtTimestamps(deviceId, it) }
+                .associateBy { it.timestampEpochSeconds }
+                .toMutableMap()
+            val merged = linkedMapOf<Long, SpotSampleEntity>()
+            incoming.forEach { sample ->
+                val timestamp = sample.timestampEpochSeconds
+                val combined = existing[timestamp]?.let { SpotSampleMerger.merge(it, sample) } ?: sample
+                existing[timestamp] = combined
+                merged[timestamp] = combined
+            }
+            if (merged.isNotEmpty()) upsertSpotSamples(merged.values.toList())
+        }
+    }
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDayAggregates(items: List<DayAggregateEntity>)
 
@@ -361,7 +383,7 @@ interface SolarMonitorDao {
         monthAggregates: List<MonthAggregateEntity>,
         events: List<DeviceEventEntity>,
     ) {
-        if (spotSamples.isNotEmpty()) upsertSpotSamples(spotSamples)
+        if (spotSamples.isNotEmpty()) mergeSpotSamples(spotSamples)
         if (dayAggregates.isNotEmpty()) mergeDayAggregates(dayAggregates)
         if (monthAggregates.isNotEmpty()) upsertMonthAggregates(monthAggregates)
         if (events.isNotEmpty()) upsertEvents(events)

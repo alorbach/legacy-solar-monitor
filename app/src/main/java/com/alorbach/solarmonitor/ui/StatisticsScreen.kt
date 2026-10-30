@@ -7,11 +7,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -64,6 +66,7 @@ import java.time.format.FormatStyle
 import java.util.Locale
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatisticsScreen(
     modifier: Modifier,
@@ -91,7 +94,7 @@ fun StatisticsScreen(
     var selectedBucketKey by remember { mutableStateOf<String?>(null) }
     var selectedBucketEvents by remember { mutableStateOf<List<DeviceEventEntity>?>(null) }
     var eventFilter by remember { mutableStateOf(EventFilter.ALL) }
-    var currency by remember { mutableStateOf("EUR") }
+    var currency by remember { mutableStateOf<String?>("EUR") }
     var seriesLoading by remember { mutableStateOf(false) }
     var exportMessage by remember { mutableStateOf<String?>(null) }
     var exportSuccess by remember { mutableStateOf(false) }
@@ -164,7 +167,7 @@ fun StatisticsScreen(
             StatsGranularity.MONTH -> container.repository.getMonthlySeries(ids, anchorDate.year)
             StatsGranularity.YEAR -> container.repository.getYearlySeries(ids)
         }
-        currency = container.repository.currencyForDevices(ids) ?: "EUR"
+        currency = container.repository.currencyForDevices(ids)
         periodEvents = container.repository.getEventsForLocalWindows(ids) { zone ->
             eventWindow(granularity, anchorDate, zone)
         }
@@ -319,8 +322,6 @@ fun StatisticsScreen(
                             periodLabel,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         IconButton(
                             onClick = {
@@ -336,7 +337,7 @@ fun StatisticsScreen(
                             Icon(Icons.Rounded.ChevronRight, contentDescription = stringResource(R.string.stats_next))
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AdaptivePairRow() {
                         MetricTile(
                             modifier = Modifier.weight(1f),
                             label = stringResource(R.string.stats_total_yield),
@@ -355,6 +356,9 @@ fun StatisticsScreen(
                         ),
                         color = colors.onSurfaceVariant,
                     )
+                    if (!seriesLoading && currency == null) {
+                        Text(stringResource(R.string.earnings_mixed_currencies), color = colors.onSurfaceVariant)
+                    }
                     if (seriesLoading) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             CircularProgressIndicator()
@@ -371,14 +375,14 @@ fun StatisticsScreen(
                             onBarClick = { key ->
                                 selectedBucketKey = if (selectedBucketKey == key) null else key
                             },
-                            onBarDoubleClick = { key -> drillInto(key) },
+                            onBarDoubleClick = if (granularity == StatsGranularity.HOUR) null else { key -> drillInto(key) },
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AdaptivePairRow() {
                         OutlinedButton(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(CompactButtonHeight),
+                                .heightIn(min = CompactButtonHeight),
                             contentPadding = CompactButtonContentPadding,
                             enabled = !seriesLoading,
                             onClick = {
@@ -390,6 +394,7 @@ fun StatisticsScreen(
                                                 points = points,
                                                 events = periodEvents,
                                                 eventZone = zoneId,
+                                                includeEarnings = currency != null,
                                             ),
                                             "text/csv",
                                         )
@@ -405,14 +410,12 @@ fun StatisticsScreen(
                         ) {
                             Text(
                                 stringResource(R.string.export_csv),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         OutlinedButton(
                             modifier = Modifier
                                 .weight(1f)
-                                .height(CompactButtonHeight),
+                                .heightIn(min = CompactButtonHeight),
                             contentPadding = CompactButtonContentPadding,
                             enabled = !seriesLoading,
                             onClick = {
@@ -445,8 +448,6 @@ fun StatisticsScreen(
                         ) {
                             Text(
                                 stringResource(R.string.export_pdf),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }

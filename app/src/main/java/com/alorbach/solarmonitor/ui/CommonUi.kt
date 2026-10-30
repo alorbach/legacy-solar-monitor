@@ -3,6 +3,11 @@ package com.alorbach.solarmonitor.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -28,6 +34,21 @@ val CompactButtonHeight: Dp = 40.dp
 
 val CompactButtonContentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AdaptivePairRow(content: @Composable FlowRowScope.() -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val singleColumn = maxWidth / LocalDensity.current.fontScale < 320.dp
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            maxItemsInEachRow = if (singleColumn) 1 else 2,
+            content = content,
+        )
+    }
+}
+
 @Composable
 fun MetricTile(modifier: Modifier = Modifier, label: String, value: String) {
     val colors = MaterialTheme.colorScheme
@@ -41,15 +62,11 @@ fun MetricTile(modifier: Modifier = Modifier, label: String, value: String) {
             label,
             color = colors.onSurfaceVariant,
             style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Text(
             value,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.titleMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

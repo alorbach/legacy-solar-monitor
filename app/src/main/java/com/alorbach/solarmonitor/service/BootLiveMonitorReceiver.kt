@@ -43,6 +43,7 @@ class BootLiveMonitorReceiver : BroadcastReceiver() {
                 )
             } catch (error: RuntimeException) {
                 Log.w("BootLiveMonitor", "Delayed live monitor start failed", error)
+                LivePollScheduler.recoverAfterResumeFailure(appContext)
             } finally {
                 pending.finish()
             }

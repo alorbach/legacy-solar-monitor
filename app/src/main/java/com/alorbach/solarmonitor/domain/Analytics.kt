@@ -117,7 +117,8 @@ object YieldFormatting {
         if (watts == null) "--"
         else "$watts W"
 
-    fun earningsLabel(amount: Double, currency: String?, locale: Locale = Locale.getDefault()): String {
+    fun earningsLabel(amount: Double?, currency: String?, locale: Locale = Locale.getDefault()): String {
+        if (amount == null || currency == null) return "—"
         val code = currency?.trim()?.takeIf { it.isNotEmpty() } ?: "EUR"
         return runCatching {
             NumberFormat.getCurrencyInstance(locale).apply {

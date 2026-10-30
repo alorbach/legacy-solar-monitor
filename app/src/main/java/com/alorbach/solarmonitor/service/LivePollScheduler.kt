@@ -106,12 +106,22 @@ object LivePollScheduler {
             return
         }
         val policy = loadPolicy(context, deviceIds)
-        scheduleAt(context, policy.earliestNextOpenEpochMillis(deviceIds))
+        val at = policy.earliestNextOpenEpochMillis(deviceIds)
+        LiveMonitoringStatusStore.update(context, LiveMonitoringPauseReason.WAITING_FOR_WINDOW, at)
+        scheduleAt(context, at)
     }
 
     /** Retry an FGS start that Android blocked from a background alarm/boot path. */
     fun scheduleRetry(context: Context, delayMs: Long = RETRY_DELAY_MS) {
         scheduleAt(context, System.currentTimeMillis() + delayMs)
+    }
+
+    /** Preserve a future opportunity after a receiver fails before it could schedule one. */
+    fun recoverAfterResumeFailure(context: Context) {
+        if (LiveMonitorService.persistedDeviceIds(context).isEmpty()) return
+        val at = System.currentTimeMillis() + RETRY_DELAY_MS
+        LiveMonitoringStatusStore.update(context, LiveMonitoringPauseReason.START_FAILED, at)
+        scheduleAt(context, at)
     }
 
     enum class FgsStartPolicy {
@@ -136,9 +146,15 @@ object LivePollScheduler {
         val bluetoothOk = BootLiveMonitorReceiver.hasBluetoothConnectPermission(appContext)
         if (!BootLiveMonitorReceiver.shouldRestartLiveMonitor(ids, bluetoothOk)) {
             cancel(appContext)
+            LiveMonitoringStatusStore.update(
+                appContext,
+                if (ids.isEmpty()) LiveMonitoringPauseReason.STOPPED
+                else LiveMonitoringPauseReason.BLUETOOTH_PERMISSION_REQUIRED,
+            )
             return
         }
         if (!homeWifiAllowed(appContext)) {
+            recordWifiWait(appContext)
             scheduleRetry(appContext)
             return
         }
@@ -151,6 +167,7 @@ object LivePollScheduler {
             return
         }
         if (!homeWifiAllowed(appContext)) {
+            recordWifiWait(appContext)
             scheduleRetry(appContext)
             return
         }
@@ -160,8 +177,8 @@ object LivePollScheduler {
                 scheduleResume(appContext, freshIds)
             }
             BootLiveMonitorReceiver.shouldStartForeground(freshIds, freshBt, inWindow) -> {
-                if (startPolicy == FgsStartPolicy.NOTIFICATION_ONLY && !isAppVisible()) {
-                    LiveResumeNotifier.post(appContext)
+                if (!canStartFromCurrentContext(startPolicy, isAppVisible(), android.os.Build.VERSION.SDK_INT)) {
+                    recordResumeRequired(appContext)
                     scheduleFollowingWindowResume(appContext, freshIds)
                     return
                 }
@@ -172,7 +189,8 @@ object LivePollScheduler {
                     )
                 } catch (error: RuntimeException) {
                     Log.w(TAG, "Live monitor FGS start blocked; retry later", error)
-                    scheduleRetry(appContext)
+                    recordResumeRequired(appContext)
+                    scheduleFollowingWindowResume(appContext, freshIds)
                 }
             }
         }
@@ -186,6 +204,27 @@ object LivePollScheduler {
     private fun isAppVisible(): Boolean {
         return ProcessLifecycleOwner.get().lifecycle.currentState
             .isAtLeast(Lifecycle.State.STARTED)
+    }
+
+    /** Before Android 12 an inexact alarm can start this foreground service directly. */
+    fun canStartFromCurrentContext(policy: FgsStartPolicy, appVisible: Boolean, sdkInt: Int): Boolean =
+        policy == FgsStartPolicy.ALLOW_BACKGROUND_START || appVisible || sdkInt < 31
+
+    private fun recordResumeRequired(context: Context) {
+        val posted = LiveResumeNotifier.post(context)
+        LiveMonitoringStatusStore.update(
+            context,
+            if (posted) LiveMonitoringPauseReason.NEEDS_RESUME
+            else LiveMonitoringPauseReason.NOTIFICATIONS_DISABLED,
+        )
+    }
+
+    private fun recordWifiWait(context: Context) {
+        LiveMonitoringStatusStore.update(
+            context,
+            LiveMonitoringPauseReason.WAITING_FOR_WIFI,
+            System.currentTimeMillis() + RETRY_DELAY_MS,
+        )
     }
 
     suspend fun syncAfterSettingsChange(context: Context) {
@@ -222,7 +261,8 @@ object LivePollScheduler {
                 )
             } catch (error: RuntimeException) {
                 Log.w(TAG, "Settings sync FGS start blocked; retry later", error)
-                scheduleRetry(appContext)
+                recordResumeRequired(appContext)
+                scheduleFollowingWindowResume(appContext, freshIds)
             }
         } else {
             scheduleResume(appContext, freshIds)
@@ -238,6 +278,7 @@ object LivePollScheduler {
      * active when this decision was made so a concurrent start is not torn down by a stale pause.
      */
     private fun deferForHomeWifi(context: Context, genAtDecision: Int) {
+        recordWifiWait(context)
         scheduleRetry(context)
         pauseActiveGenerationIfNeeded(context, genAtDecision)
     }
@@ -253,7 +294,8 @@ object LivePollScheduler {
         if (active && LiveMonitorService.currentRunGeneration() == genAtDecision) {
             appContext.startService(
                 LiveMonitorService.pauseIntent(appContext)
-                    .putExtra(LiveMonitorService.EXTRA_RUN_GENERATION, genAtDecision),
+                    .putExtra(LiveMonitorService.EXTRA_RUN_GENERATION, genAtDecision)
+                    .putExtra(LiveMonitorService.EXTRA_PRESERVE_RESUME_ALARM, true),
             )
         }
     }

@@ -285,7 +285,7 @@ data class DeviceDashboardSummary(
     val todayYieldWh: Long?,
     val monthYieldWh: Long?,
     val yearlyYieldWh: Long?,
-    val estimatedEarnings: Double,
+    val estimatedEarnings: Double?,
     val currency: String?,
     val status: String?,
     val lastUpdateEpochSeconds: Long?,
@@ -307,7 +307,7 @@ data class PortfolioSummary(
     val todayYieldWh: Long,
     val monthYieldWh: Long,
     val yearYieldWh: Long,
-    val estimatedEarnings: Double,
+    val estimatedEarnings: Double?,
     val currency: String?,
 )
 

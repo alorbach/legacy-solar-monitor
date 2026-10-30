@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="earnings_mixed_currencies">Die Vergütung wird ausgeblendet, da die Tarife unterschiedliche Währungen verwenden. Es erfolgt keine Währungsumrechnung.</string>
     <string name="app_name">Legacy Solar Monitor</string>
     <string name="widget_compact_name">Solar Kompaktstatistik</string>
     <string name="widget_medium_name">Solar Geräteübersicht</string>
@@ -176,7 +177,23 @@
     <string name="language_english">English</string>
     <string name="language_restart_hint">Auf älteren Android-Versionen die App nach dem Sprachwechsel neu starten.</string>
     <string name="chart_no_data">Keine Erzeugungsdaten</string>
-    <string name="chart_description">Erzeugungsdiagramm mit %1$d Tagen, Spitze %2$s</string>
+    <string name="chart_description">Erzeugungsdiagramm mit %1$d Werten, Spitze %2$s</string>
+    <string name="chart_show_values">Diagrammwerte anzeigen</string>
+    <string name="chart_hide_values">Diagrammwerte ausblenden</string>
+    <string name="chart_value">%1$s: %2$s</string>
+    <string name="chart_value_with_events">%1$s, Ereignisse: %2$d</string>
+    <string name="chart_selected_value">Ausgewählt: %1$s</string>
+    <string name="chart_open_period">%1$s öffnen</string>
+    <string name="live_resume_pending">Die Überwachung wartet auf ihre Fortsetzung. Öffne die App und starte sie, falls sie nicht fortgesetzt wird.</string>
+    <string name="live_waiting_window">Die Überwachung pausiert außerhalb des eingestellten Zeitfensters.</string>
+    <string name="live_waiting_wifi">Die Überwachung wartet auf ein erlaubtes WLAN. Prüfe bei Bedarf WLAN und Standortberechtigung.</string>
+    <string name="live_needs_resume">Android erfordert eine manuelle Fortsetzung. Starte die Überwachung unten oder tippe auf die Benachrichtigung.</string>
+    <string name="live_notifications_disabled">Die Überwachung muss fortgesetzt werden, aber Benachrichtigungen sind deaktiviert. Starte sie unten oder aktiviere Benachrichtigungen.</string>
+    <string name="live_bluetooth_permission_required">Zum Fortsetzen wird die Bluetooth-Berechtigung benötigt. Prüfe die App-Berechtigungen.</string>
+    <string name="live_start_failed">Die Überwachung konnte nicht starten. Prüfe Bluetooth und starte sie unten erneut.</string>
+    <string name="live_next_attempt">Nächster Versuch, ungefähr: %1$s</string>
+    <string name="live_last_success">Letzter erfolgreicher Live-Abruf: %1$s</string>
+    <string name="live_notification_settings">Benachrichtigungseinstellungen</string>
     <string name="chart_empty_hint">Daten importieren oder synchronisieren, um Diagramme anzuzeigen.</string>
     <string name="stats_granularity">Granularität</string>
     <string name="stats_hour">Stunde</string>

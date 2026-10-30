@@ -23,6 +23,7 @@ class LiveResumeReceiver : BroadcastReceiver() {
                 )
             } catch (error: RuntimeException) {
                 Log.w(TAG, "Live monitor did not resume from notification", error)
+                LivePollScheduler.recoverAfterResumeFailure(appContext)
             } finally {
                 pending.finish()
             }
