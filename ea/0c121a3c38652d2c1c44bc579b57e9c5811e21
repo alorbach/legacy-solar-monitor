@@ -1,0 +1,90 @@
+app/build.gradle.kts
+  s_abe1447c54baa5::t_ff7fc268e08460 30
+  s_abe1447c54baa5::t_99ff9ff3c0b75d 20
+app/src/main/java/com/alorbach/solarmonitor/data/repository/LiveMonitoringRepository.kt
+  s_abe1447c54baa5::t_74cda3bdcc8f43 242,249-252,254,259-267,269-278
+  s_abe1447c54baa5::t_7f091230258de3 239,279
+  s_abe1447c54baa5::t_b67fa6fd8ad058 12,14-15,89,155-159,207,240-241,253,280-282
+  s_abe1447c54baa5::t_ecc32aaec6df32 243,246,255-258
+  s_abe1447c54baa5::t_8c305a4f90ccf3 13,244-245,247-248,268
+docs/USER-GUIDE.md
+  s_abe1447c54baa5::t_2a55dfb945b27e 87
+  s_abe1447c54baa5::t_054e2b90738503 88,99
+app/src/main/java/com/alorbach/solarmonitor/data/model/Models.kt
+  s_abe1447c54baa5::t_2ac29452488f5a 13-25
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDatabase.kt
+  s_abe1447c54baa5::t_2ac29452488f5a 10,31,33,40-53,113
+app/src/test/java/com/alorbach/solarmonitor/CloudBackupPolicyTest.kt
+  s_abe1447c54baa5::t_78e5e6f82ea04f 122,127
+app/src/androidTest/java/com/alorbach/solarmonitor/ArchiveProgressMigrationTest.kt
+  s_abe1447c54baa5::t_a72f69f3a46e5d 43
+  s_abe1447c54baa5::t_99ff9ff3c0b75d 1-42,44-68
+app/src/main/java/com/alorbach/solarmonitor/data/repository/SolarRepository.kt
+  s_abe1447c54baa5::t_b67fa6fd8ad058 5-6,214-217,223-230,252-254,438-439
+  s_abe1447c54baa5::t_618295c697d947 231-251,413,417-422
+  s_abe1447c54baa5::t_1e15cdca5fc900 423-437
+app/src/main/java/com/alorbach/solarmonitor/service/LiveMonitorService.kt
+  s_abe1447c54baa5::t_b67fa6fd8ad058 199-204
+docs/USER-GUIDE-DE.md
+  s_abe1447c54baa5::t_054e2b90738503 85,92
+  s_abe1447c54baa5::t_eba50c535355ac 84
+app/src/main/java/com/alorbach/solarmonitor/data/local/SolarMonitorDao.kt
+  s_abe1447c54baa5::t_2ac29452488f5a 9,24-34
+app/schemas/com.alorbach.solarmonitor.data.local.SolarMonitorDatabase/6.json
+  s_abe1447c54baa5::t_af8d760df111c3 1-901
+app/src/test/java/com/alorbach/solarmonitor/ArchiveCatchUpPolicyTest.kt
+  s_abe1447c54baa5::t_a1c02237cf6c1d 1-43,45-49,54-88
+  s_abe1447c54baa5::t_46f14dd1b4c189 44,50-53
+app/src/main/java/com/alorbach/solarmonitor/domain/ArchiveCatchUpPolicy.kt
+  s_abe1447c54baa5::t_2ac29452488f5a 1-19,25-33
+  s_abe1447c54baa5::t_46f14dd1b4c189 20-24
+app/src/main/java/com/alorbach/solarmonitor/device/SmaLegacyBluetoothGateway.kt
+  s_abe1447c54baa5::t_b67fa6fd8ad058 135,293-307
+app/src/main/res/values-de/strings.xml
+  s_abe1447c54baa5::t_35dc750b084a1c 229-232
+app/src/main/java/com/alorbach/solarmonitor/data/cloud/CloudBackupPolicy.kt
+  s_abe1447c54baa5::t_20ae6ec73f7b49 49
+app/src/androidTest/java/com/alorbach/solarmonitor/SpotSamplePersistenceTest.kt
+  s_abe1447c54baa5::t_5cda01a399cedd 12-13,24,113-148
+  s_08fe4b60ab8770::t_531c91e16d5ea3 149
+app/src/main/res/values/strings.xml
+  s_abe1447c54baa5::t_35dc750b084a1c 229-232
+app/src/main/java/com/alorbach/solarmonitor/domain/ArchiveCatchUpBatch.kt
+  s_31cc7de9b87ae7::t_7d56467fc8a8de 1-31
+app/src/test/java/com/alorbach/solarmonitor/ArchiveCatchUpBatchTest.kt
+  s_31cc7de9b87ae7::t_0eb89e599d5ce1 1-120
+docs/ARCHITECTURE.md
+  s_abe1447c54baa5::t_2ec09da9833a2a 102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea0c121a3c38652d2c1c44bc579b57e9c5811e21",
+  "prompts": {},
+  "sessions": {
+    "s_08fe4b60ab8770": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18b72-34b4-7de1-8043-94f3ac989dc2",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_31cc7de9b87ae7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17d30-51bb-7303-9abc-6da6436b2450",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    },
+    "s_abe1447c54baa5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18b64-22bd-77a0-9182-716d09b7c04e",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
