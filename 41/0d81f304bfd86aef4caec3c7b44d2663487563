@@ -1,0 +1,47 @@
+app/src/main/java/com/alorbach/solarmonitor/ui/ImportTab.kt
+  s_08fe4b60ab8770::t_dd5d0c66f55223 223,259,263,267,296
+app/src/main/java/com/alorbach/solarmonitor/MainActivity.kt
+  s_08fe4b60ab8770::t_1a6d5742b88649 22,72-73,94,356-383,445-446,462,464,497-506,537-552,638,641
+app/src/main/java/com/alorbach/solarmonitor/ui/RemoteImportWizard.kt
+  s_08fe4b60ab8770::t_dd5d0c66f55223 785,810
+  s_08fe4b60ab8770::t_ed381f63761345 6-7
+app/src/main/java/com/alorbach/solarmonitor/ui/SettingsTab.kt
+  s_08fe4b60ab8770::t_dd5d0c66f55223 426,482,601
+  s_08fe4b60ab8770::t_ed381f63761345 15-16
+app/src/main/java/com/alorbach/solarmonitor/ui/DevicesTab.kt
+  s_08fe4b60ab8770::t_dd5d0c66f55223 74-75,177,185,187,191,379-380,382,397-400
+  s_08fe4b60ab8770::t_ed381f63761345 123
+app/src/main/java/com/alorbach/solarmonitor/ui/TariffSection.kt
+  s_08fe4b60ab8770::t_dd5d0c66f55223 7-8,21,37,92-94,97
+  s_08fe4b60ab8770::t_ed381f63761345 98-109,111-155
+.github/workflows/ci.yml
+  s_08fe4b60ab8770::t_dc4b5fb4c41a05 34-46
+app/build.gradle.kts
+  s_08fe4b60ab8770::t_8e8c86e9e576f5 31
+app/src/main/java/com/alorbach/solarmonitor/ui/Charts.kt
+  s_08fe4b60ab8770::t_eaa784cee241f7 72,100,115,117,134,137-138,315,322,327,357,373,379
+app/src/main/java/com/alorbach/solarmonitor/ui/CommonUi.kt
+  s_08fe4b60ab8770::t_7db23656cec100 33,69
+app/src/main/java/com/alorbach/solarmonitor/ui/DashboardTab.kt
+  s_08fe4b60ab8770::t_df83c77e78b43d 211,213-214,659-675
+app/src/main/java/com/alorbach/solarmonitor/ui/StatisticsScreen.kt
+  s_08fe4b60ab8770::t_adef9afbda3a73 45-51,302-306,333,489,491-493,499-512
+app/src/main/java/com/alorbach/solarmonitor/widget/SolarWidgets.kt
+  s_08fe4b60ab8770::t_398ac35b0bca88 87,95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "410d81f304bfd86aef4caec3c7b44d2663487563",
+  "prompts": {},
+  "sessions": {
+    "s_08fe4b60ab8770": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a18b72-34b4-7de1-8043-94f3ac989dc2",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Andre Lorbach <alorbach@adiscon.com>"
+    }
+  }
+}
